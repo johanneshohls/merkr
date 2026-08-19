@@ -28,6 +28,10 @@ const VORHALT_TAGE = 60;
 // unverschlüsselten Export mit hinaus.
 const SCHLUESSEL_NAME = "merkr.anthropic";
 
+// Das Wort, mit dem merkr die Stoffverteilung aus planr holt (PLANR_API_TOKEN).
+// Auch das gehört in den Schlüsselbund und nicht in die Datendatei.
+const SCHLUESSEL_PLANR = "merkr.planr";
+
 /**
  * Wo die Daten liegen. iCloud, wenn erreichbar und beschreibbar - die
  * Schreibprobe ist nötig, weil FileManager.iCloud() auch dann ein Objekt
@@ -167,6 +171,7 @@ try {
 }
 
 const schluesselDa = Keychain.contains(SCHLUESSEL_NAME);
+const planrDa = Keychain.contains(SCHLUESSEL_PLANR);
 
 // Daten als Zeichenkette uebergeben und in der Seite parsen: so kann weder ein
 // </script> noch ein Zeilentrenner in einem Namen die Seite zerlegen.
@@ -178,6 +183,7 @@ function baueHtml(datenText) {
   return KURSBUCH_HTML
     .replace('/*__KURSBUCH_MODE__*/"standalone"', function () { return '"scriptable"'; })
     .replace('/*__KURSBUCH_SCHLUESSEL__*/false', function () { return schluesselDa ? "true" : "false"; })
+    .replace('/*__KURSBUCH_PLANR__*/false', function () { return planrDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_DATA__*/null', function () { return "JSON.parse(" + literal + ")"; });
 }
 
@@ -280,12 +286,33 @@ async function bruecke() {
       } catch (e) { /* abgebrochen */ }
     } else if (msg.typ === "schluesselSetzen") {
       try {
-        Keychain.set(SCHLUESSEL_NAME, String(msg.key || ""));
+        Keychain.set(msg.name === "planr" ? SCHLUESSEL_PLANR : SCHLUESSEL_NAME, String(msg.key || ""));
       } catch (e) { console.error("Schlüssel nicht abgelegt: " + e); }
     } else if (msg.typ === "schluesselEntfernen") {
       try {
-        if (Keychain.contains(SCHLUESSEL_NAME)) Keychain.remove(SCHLUESSEL_NAME);
+        const name = msg.name === "planr" ? SCHLUESSEL_PLANR : SCHLUESSEL_NAME;
+        if (Keychain.contains(name)) Keychain.remove(name);
       } catch (e) { console.error("Schlüssel nicht entfernt: " + e); }
+    } else if (msg.typ === "planrAbruf") {
+      // Die Stoffverteilung aus planr holen. Die Adresse kommt aus den
+      // Einstellungen (kein Geheimnis), das Wort aus dem Schlüsselbund.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_PLANR)) throw new Error("Kein planr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine planr-Adresse eingetragen.");
+        const req = new Request(basis + "/api/stoffverteilung");
+        req.headers = { authorization: "Bearer " + Keychain.get(SCHLUESSEL_PLANR) };
+        antwort = await req.loadString();
+        // Kommt die Anmeldeseite zurück statt der Planung, ist die Adresse falsch
+        // oder das Wort abgelaufen - dann ist das hier kein JSON.
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_planrAntwort(" + JSON.stringify(antwort) + ")", false);
+      } catch (e) { console.error("planr-Antwort nicht zugestellt: " + e); }
     } else if (msg.typ === "anthropic") {
       try {
         if (!Keychain.contains(SCHLUESSEL_NAME)) throw new Error("Kein API-Schlüssel im Schlüsselbund.");

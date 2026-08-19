@@ -198,6 +198,8 @@ const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
    Seite: er lag früher in S.einstellungen.apiKey und wanderte damit in jeden
    unverschlüsselten Export - zusammen mit den Schülerdaten. */
 let schluesselDa = /*__KURSBUCH_SCHLUESSEL__*/false;
+/* Ob ein planr-Wort im Schlüsselbund liegt. */
+let planrDa = /*__KURSBUCH_PLANR__*/false;
 /* Rückfall für den Browser, der keinen Keychain hat: nur im Arbeitsspeicher, nie gespeichert. */
 let browserSchluessel = "";
 const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
@@ -1976,6 +1978,7 @@ function viewKursCfg(k){
     '<button class="primar" data-a="kursSpeichern" data-id="'+k.id+'">Kurs speichern</button> '+
     '<button class="gefahr" data-a="kursLoeschen" data-id="'+k.id+'">Kurs löschen</button></div>';
 
+  html += planrKarte(k);
   html += kuerzelKarte(k);
 
   /* Stundenplan-Slots */
@@ -2741,6 +2744,195 @@ document.addEventListener("click", ev=>{
     zeichne(); toast("Schlüssel entfernt");
   }
 });
+
+/* ================= Stoffverteilung aus planr =================
+   planr plant, merkr hält fest, was war. Hierher kommt nur das Soll: Datum,
+   Thema, Einheit. Es landet in st.geplant und lässt st.thema unberührt - was
+   im Unterricht wirklich lief, schreibt niemand von außen.
+
+   Diese Fassung von planImportieren ersetzt die frühere; sie ordnet zusätzlich
+   über das Feld planrKlasse zu und übernimmt die Halbjahresgrenze. */
+
+function planrBasis(){ return String(S.einstellungen.planrUrl || "").trim(); }
+
+function planrKarte(k){
+  return '<div class="karte"><h2>Verbindung zu planr</h2>'+
+    '<p class="hinweis">Der Name dieses Kurses in planr, z. B. „Mathematik 9d". '+
+    'Eigenes Feld, weil Kursnamen hier und dort auseinanderlaufen dürfen.</p>'+
+    '<div class="zeile"><div class="feld" style="flex:1"><label>planr-Kurs</label>'+
+    '<input id="planrKlasse" value="'+esc(k.planrKlasse||"")+'" placeholder="'+esc((k.fach?k.fach+" ":"")+k.name)+'"></div>'+
+    '<button class="primar" data-a="planrKlasseSpeichern" data-id="'+k.id+'">Speichern</button></div></div>';
+}
+
+function planImportieren(text){
+  let plan;
+  try { plan = JSON.parse(text); }
+  catch(e){ return {fehler:"Das ist kein gültiges JSON."}; }
+
+  const fv = plan && plan.formatVersion;
+  if (fv!=="kursbuch-plan-1" && fv!=="kursbuch-plan-2")
+    return {fehler:'Format nicht erkannt – erwartet wird formatVersion "kursbuch-plan-1" oder "kursbuch-plan-2".'};
+
+  const sj = aktivesSchuljahr();
+  if (!sj) return {fehler:"Kein aktives Schuljahr."};
+
+  let ferienNeu=0, themen=0, mitReihe=0, grenzeNeu=false;
+  const unbekannt=[];
+
+  /* planr führt den Beginn des zweiten Halbjahres ohnehin. Ihn hier zu
+     übernehmen erspart das Nachtragen von Hand - und ohne ihn greift die harte
+     Grenze im Notenvorschlag nie. */
+  if (plan.schuljahr && plan.schuljahr.halbjahrGrenze && sj.halbjahrGrenze !== plan.schuljahr.halbjahrGrenze){
+    sj.halbjahrGrenze = String(plan.schuljahr.halbjahrGrenze);
+    grenzeNeu = true;
+  }
+
+  if (Array.isArray(plan.ferien)){
+    sj.ferien = sj.ferien || [];
+    for (const f of plan.ferien){
+      if (f && f.von && f.bis && !sj.ferien.some(x=>x.von===f.von && x.bis===f.bis)){
+        sj.ferien.push({name:String(f.name||"Ferien"), von:f.von, bis:f.bis});
+        ferienNeu++;
+      }
+    }
+  }
+
+  if (Array.isArray(plan.plaene)){
+    for (const p of plan.plaene){
+      const kurs = MerkrPlanr.kursFuer(S.kurse, p, sj.id);
+      if (!kurs){ unbekannt.push(String(p.kurs||"?")); continue; }
+      if (!kurs.reihenFarben || typeof kurs.reihenFarben!=="object") kurs.reihenFarben = {};
+
+      for (const th of p.themen||[]){
+        if (!th || !th.datum || !/^\d{4}-\d{2}-\d{2}$/.test(th.datum)) continue;
+        const st = ensureStunde(kurs.id, th.datum);
+        st.geplant = String(th.thema||"");
+        if (th.reihe!=null && String(th.reihe).trim()){
+          st.reihe = String(th.reihe).trim();
+          jahrFarbe(kurs, st.reihe);
+          mitReihe++;
+        } else if (st.reihe==null) st.reihe = "";
+        themen++;
+      }
+    }
+  }
+
+  speichern();
+  return {ferienNeu, themen, unbekannt, mitReihe, grenzeNeu};
+}
+
+/* Abruf anstoßen. Das Wort liegt im Schlüsselbund, der Rahmen holt die Daten. */
+function planrHolen(still){
+  if (KB_MODE!=="scriptable") return alertBox("Der Abruf läuft nur in Scriptable.");
+  if (!planrDa) { if (!still) alertBox("Bitte zuerst das planr-Wort in den Schlüsselbund legen."); return; }
+  if (!planrBasis()) { if (!still) alertBox("Bitte zuerst die planr-Adresse eintragen."); return; }
+  planrStill = !!still;
+  if (!still) toast("Stoffverteilung wird geholt …");
+  sendeAnBridge({typ:"planrAbruf", url: planrBasis()});
+}
+let planrStill = false;
+
+window.__KB_planrAntwort = function(text){
+  let plan = null;
+  try { plan = JSON.parse(text); } catch(e){ plan = null; }
+  if (plan && plan.fehler){
+    if (!planrStill) alertBox("Abruf aus planr fehlgeschlagen: "+plan.fehler);
+    return "fehler";
+  }
+  const erg = planImportieren(text);
+  if (erg.fehler){
+    if (!planrStill) alertBox("Abruf aus planr fehlgeschlagen: "+erg.fehler);
+    return "fehler";
+  }
+  S.einstellungen.planrZuletzt = new Date().toISOString();
+  speichern(); zeichne();
+  const teile = [erg.themen+" Stunden"];
+  if (erg.ferienNeu) teile.push(erg.ferienNeu+" Ferienzeiträume");
+  if (erg.grenzeNeu) teile.push("Halbjahresgrenze");
+  if (erg.unbekannt.length) teile.push("ohne Zuordnung: "+erg.unbekannt.join(", "));
+  toast("Aus planr: "+teile.join(" · "));
+  return "ok";
+};
+
+/* Die Karte in den Einstellungen, hinter der bestehenden. */
+const planrEinstellungenVorher = einstellungenZusatz;
+einstellungenZusatz = function(){
+  const zuletzt = S.einstellungen.planrZuletzt;
+  return planrEinstellungenVorher() +
+    '<div class="karte"><h2>Stoffverteilung aus planr</h2>'+
+    '<p class="hinweis">merkr holt die geplanten Stunden mit Datum, Thema und Einheit. '+
+    'Sie landen im Soll-Feld; was tatsächlich lief, bleibt unberührt. '+
+    'Der Abruf läuft beim Start von selbst, höchstens einmal am Tag.</p>'+
+    '<div class="feld"><label>planr-Adresse</label>'+
+    '<input id="planrUrl" value="'+esc(S.einstellungen.planrUrl||"")+'" placeholder="https://planr-ten.vercel.app"></div>'+
+    (KB_MODE==="scriptable"
+      ? '<div class="feld"><label>Wort für den Abruf (PLANR_API_TOKEN)</label>'+
+        (planrDa
+          ? '<p class="hinweis">Liegt im Schlüsselbund des Geräts. '+
+            '<button class="klein gefahr" data-a="planrWortEntfernen">Entfernen</button></p>'
+          : '<div class="zeile"><input type="password" id="planrKey" placeholder="…">'+
+            '<button class="klein primar" data-a="planrWortSetzen">In den Schlüsselbund</button></div>')+
+        '</div>'
+      : '<p class="hinweis">Der Abruf läuft nur in Scriptable.</p>')+
+    '<div class="zeile"><button class="primar" data-a="planrJetzt">Jetzt holen</button>'+
+    '<button data-a="planrUrlSpeichern">Adresse speichern</button>'+
+    '<span class="hinweis">'+(zuletzt ? "zuletzt "+fmtDatum(String(zuletzt).slice(0,10)) : "noch nie abgerufen")+'</span></div></div>';
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+
+  if (a==="planrKlasseSpeichern"){
+    const kurs = kursVon(el.dataset.id);
+    const feld = document.getElementById("planrKlasse");
+    if (!kurs || !feld) return;
+    kurs.planrKlasse = feld.value.trim();
+    speichern(); zeichne(); toast(kurs.planrKlasse ? "planr-Kurs gesetzt" : "Zuordnung entfernt");
+  }
+  else if (a==="planrUrlSpeichern"){
+    const feld = document.getElementById("planrUrl");
+    if (!feld) return;
+    S.einstellungen.planrUrl = feld.value.trim().replace(/\/+$/,"");
+    speichern(); zeichne(); toast("Adresse gespeichert");
+  }
+  else if (a==="planrWortSetzen"){
+    const feld = document.getElementById("planrKey");
+    const key = feld ? feld.value.trim() : "";
+    if (!key) return alertBox("Bitte das Wort eintragen.");
+    /* Die Adresse mitspeichern, sonst geht sie beim Neuzeichnen verloren. */
+    const urlFeld = document.getElementById("planrUrl");
+    if (urlFeld) S.einstellungen.planrUrl = urlFeld.value.trim().replace(/\/+$/,"");
+    sendeAnBridge({typ:"schluesselSetzen", name:"planr", key});
+    planrDa = true;
+    speichern(); zeichne(); toast("Wort im Schlüsselbund abgelegt");
+  }
+  else if (a==="planrWortEntfernen"){
+    sendeAnBridge({typ:"schluesselEntfernen", name:"planr"});
+    planrDa = false;
+    zeichne(); toast("Wort entfernt");
+  }
+  else if (a==="planrJetzt"){
+    const feld = document.getElementById("planrUrl");
+    if (feld){ S.einstellungen.planrUrl = feld.value.trim().replace(/\/+$/,""); speichern(); }
+    planrHolen(false);
+  }
+});
+
+/* Automatik: beim Start holen, höchstens einmal in zwölf Stunden. Still - wer
+   das Klassenbuch aufschlägt, will keine Meldung über einen Abruf, der ohnehin
+   nichts geändert hat. Ohne Netz passiert nichts und der Zeitstempel bleibt
+   stehen, der nächste Start versucht es wieder. */
+(function planrAutomatik(){
+  if (KB_MODE!=="scriptable" || !planrDa || !planrBasis()) return;
+  const zuletzt = S.einstellungen.planrZuletzt;
+  if (zuletzt){
+    const stunden = (Date.now() - new Date(zuletzt).getTime()) / 3600000;
+    if (!(stunden >= 12)) return;
+  }
+  planrHolen(true);
+})();
 
 </script>
 </body>

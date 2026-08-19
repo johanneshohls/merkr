@@ -24,7 +24,8 @@ node bau.mjs
 node --test test/*.mjs
 ```
 
-`src/kern/` enthält die Rechenteile ohne DOM - Notenvorschlag und Kürzelvergabe. bau.mjs setzt sie
+`src/kern/` enthält die Rechenteile ohne DOM - Notenvorschlag, Kürzelvergabe und die Zuordnung der
+planr-Kurse. bau.mjs setzt sie
 an der Stelle `/*__KERN__*/` in die Oberfläche, damit dieselben Zeilen im WebView und unter node
 laufen. Wer dort etwas ändert, ändert es an einer Stelle und kann es prüfen, ohne ein iPad in die
 Hand zu nehmen.
@@ -49,6 +50,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Notenvorschlag mit Halbjahresgrenze und Zeitgewichtung | fertig, 8 Tests |
 | Kürzel und checkr-Ausgabe | fertig, 5 Tests |
 | Anthropic-Schlüssel in den Schlüsselbund | gebaut, auf dem Gerät ungetestet |
+| Stoffverteilung aus planr, automatisch | gebaut, gegen echte planr-Daten geprüft |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
