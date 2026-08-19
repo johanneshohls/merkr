@@ -23,6 +23,11 @@ const ALT_DATEI = fmLokal.joinPath(ALT_ORDNER, "kursbuch-daten.json");
 // rückholbar.
 const VORHALT_TAGE = 60;
 
+// Der API-Schlüssel gehört in den Schlüsselbund des Geräts, nicht in die
+// Datendatei: dort lag er neben den Schülerdaten und wanderte bei jedem
+// unverschlüsselten Export mit hinaus.
+const SCHLUESSEL_NAME = "merkr.anthropic";
+
 /**
  * Wo die Daten liegen. iCloud, wenn erreichbar und beschreibbar - die
  * Schreibprobe ist nötig, weil FileManager.iCloud() auch dann ein Objekt
@@ -146,6 +151,23 @@ if (await bereitstellen(fm, DATEN_DATEI)) {
 }
 sicherungAnlegen();
 
+// Einmalige Übernahme: lag der Schlüssel noch in den Daten, wandert er in den
+// Schlüsselbund und wird aus der Datei entfernt - bevor sie die Seite erreicht.
+try {
+  const stand = JSON.parse(daten);
+  if (stand && stand.einstellungen && stand.einstellungen.apiKey) {
+    Keychain.set(SCHLUESSEL_NAME, String(stand.einstellungen.apiKey));
+    delete stand.einstellungen.apiKey;
+    daten = JSON.stringify(stand);
+    datenSchreiben(daten);
+    console.log("API-Schlüssel in den Schlüsselbund übernommen.");
+  }
+} catch (e) {
+  // Kein verwertbarer Stand - dann gibt es auch nichts zu übernehmen.
+}
+
+const schluesselDa = Keychain.contains(SCHLUESSEL_NAME);
+
 // Daten als Zeichenkette uebergeben und in der Seite parsen: so kann weder ein
 // </script> noch ein Zeilentrenner in einem Namen die Seite zerlegen.
 function baueHtml(datenText) {
@@ -155,6 +177,7 @@ function baueHtml(datenText) {
     .replace(/\u2029/g, "\\u2029");
   return KURSBUCH_HTML
     .replace('/*__KURSBUCH_MODE__*/"standalone"', function () { return '"scriptable"'; })
+    .replace('/*__KURSBUCH_SCHLUESSEL__*/false', function () { return schluesselDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_DATA__*/null', function () { return "JSON.parse(" + literal + ")"; });
 }
 
@@ -255,11 +278,24 @@ async function bruecke() {
           await wv.evaluateJavaScript("window.__KB_planImport(" + JSON.stringify(inhalt) + ")", false);
         }
       } catch (e) { /* abgebrochen */ }
+    } else if (msg.typ === "schluesselSetzen") {
+      try {
+        Keychain.set(SCHLUESSEL_NAME, String(msg.key || ""));
+      } catch (e) { console.error("Schlüssel nicht abgelegt: " + e); }
+    } else if (msg.typ === "schluesselEntfernen") {
+      try {
+        if (Keychain.contains(SCHLUESSEL_NAME)) Keychain.remove(SCHLUESSEL_NAME);
+      } catch (e) { console.error("Schlüssel nicht entfernt: " + e); }
     } else if (msg.typ === "anthropic") {
       try {
+        if (!Keychain.contains(SCHLUESSEL_NAME)) throw new Error("Kein API-Schlüssel im Schlüsselbund.");
         const req = new Request("https://api.anthropic.com/v1/messages");
         req.method = "POST";
-        req.headers = { "content-type": "application/json", "x-api-key": msg.key, "anthropic-version": "2023-06-01" };
+        req.headers = {
+          "content-type": "application/json",
+          "x-api-key": Keychain.get(SCHLUESSEL_NAME),
+          "anthropic-version": "2023-06-01"
+        };
         req.body = JSON.stringify(msg.body);
         const antwort = await req.loadJSON();
         await wv.evaluateJavaScript("window.__KB_kiAntwort(" + JSON.stringify(JSON.stringify(antwort)) + ")", false);

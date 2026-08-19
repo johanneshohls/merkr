@@ -194,6 +194,12 @@ window.__KB_startOk = false;
 /* ============ Injektion durch Scriptable ============ */
 /*__KERN__*/
 const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
+/* Ob im Keychain ein API-Schlüssel liegt. Der Schlüssel selbst kommt nie in die
+   Seite: er lag früher in S.einstellungen.apiKey und wanderte damit in jeden
+   unverschlüsselten Export - zusammen mit den Schülerdaten. */
+let schluesselDa = /*__KURSBUCH_SCHLUESSEL__*/false;
+/* Rückfall für den Browser, der keinen Keychain hat: nur im Arbeitsspeicher, nie gespeichert. */
+let browserSchluessel = "";
 const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
 /* ============ Konstanten ============ */
 const MITARBEIT_KATEGORIEN = [
@@ -2477,8 +2483,19 @@ einstellungenZusatz = function(){
   const sj = aktivesSchuljahr();
   const kurse = sj ? S.kurse.filter(k=>k.schuljahrId===sj.id) : [];
   return '<div class="karte"><h2>KI-Planung direkt erzeugen (Claude-API)</h2>'+
-    '<p class="hinweis">Alternative zum Plandatei-Import: Kursbuch schickt Ferienkalender, Curriculum und Ihren Stundenplan an die Claude-API und übernimmt die erzeugte Planung direkt. Übertragen werden ausschließlich diese Angaben – nie Schülerdaten. Der API-Schlüssel (console.anthropic.com) wird lokal in Ihren Kursbuch-Daten gespeichert; die Nutzung ist kostenpflichtig (wenige Cent pro Planung).</p>'+
-    '<div class="feld"><label>API-Schlüssel</label><input type="password" id="kiKey" value="'+esc(S.einstellungen.apiKey||"")+'" placeholder="sk-ant-…"></div>'+
+    '<p class="hinweis">Alternative zum Plandatei-Import: merkr schickt Ferienkalender, Curriculum und Ihren Stundenplan an die Claude-API und übernimmt die erzeugte Planung direkt. Übertragen werden ausschließlich diese Angaben – nie Schülerdaten. Die Nutzung ist kostenpflichtig (wenige Cent pro Planung).</p>'+
+    (KB_MODE==="scriptable"
+      ? '<div class="feld"><label>API-Schlüssel (console.anthropic.com)</label>'+
+        (schluesselDa
+          ? '<p class="hinweis">Ein Schlüssel liegt im Schlüsselbund des Geräts. '+
+            'Er steht nicht in Ihren Daten und geht bei einem Export nicht mit. '+
+            '<button class="klein gefahr" data-a="schluesselEntfernen">Entfernen</button></p>'
+          : '<div class="zeile"><input type="password" id="kiKey" placeholder="sk-ant-…">'+
+            '<button class="klein primar" data-a="schluesselSetzen">In den Schlüsselbund</button></div>')+
+        '</div>'
+      : '<div class="feld"><label>API-Schlüssel</label>'+
+        '<input type="password" id="kiKey" placeholder="sk-ant-…">'+
+        '<p class="hinweis">Im Browser gibt es keinen Schlüsselbund; der Schlüssel bleibt im Arbeitsspeicher und ist nach dem Neuladen weg.</p></div>')+
     '<div class="feld"><label>Kurs</label><select id="kiKurs">'+kurse.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join("")+'</select></div>'+
     '<div class="feld"><label>Ferien & Feiertage (Freitext, z. B. aus dem Ferienkalender MV kopiert)</label><textarea id="kiFerien" placeholder="Herbstferien: 05.10.–17.10.2026&#10;Weihnachtsferien: …"></textarea></div>'+
     '<div class="feld"><label>Curriculum / Stoffverteilung (Themen in gewünschter Reihenfolge, Freitext)</label><textarea id="kiCurriculum" placeholder="1. Kreisbewegung (ca. 6 Stunden)&#10;2. Gravitation (ca. 8 Stunden)&#10;…"></textarea></div>'+
@@ -2515,16 +2532,21 @@ window.__KB_kiAntwort = function(jsonText){
   }
 };
 async function kiPlanungStarten(){
-  const key = document.getElementById("kiKey").value.trim();
+  const feld = document.getElementById("kiKey");
+  const key = feld ? feld.value.trim() : "";
   const kurs = kursVon(document.getElementById("kiKurs").value);
   const ferienText = document.getElementById("kiFerien").value.trim();
   const curriculumText = document.getElementById("kiCurriculum").value.trim();
   const status = document.getElementById("kiStatus");
-  if (!key) return alertBox("Bitte zuerst den API-Schlüssel eintragen.");
+  if (KB_MODE==="scriptable"){
+    if (!schluesselDa) return alertBox("Bitte zuerst einen API-Schlüssel in den Schlüsselbund legen.");
+  } else {
+    if (key) browserSchluessel = key;
+    if (!browserSchluessel) return alertBox("Bitte zuerst den API-Schlüssel eintragen.");
+  }
   if (!kurs) return alertBox("Bitte einen Kurs wählen.");
   if (!(kurs.slots||[]).length) return alertBox("Bitte zuerst den Stundenplan des Kurses pflegen (Tab Kurs) – sonst kennt die KI die Unterrichtstage nicht.");
   if (!ferienText || !curriculumText) return alertBox("Bitte Ferien und Curriculum eintragen.");
-  S.einstellungen.apiKey = key; speichern();
   const body = {
     model: "claude-sonnet-4-5",
     max_tokens: 8000,
@@ -2532,12 +2554,12 @@ async function kiPlanungStarten(){
   };
   if (status) status.textContent = "Planung wird erzeugt …";
   if (KB_MODE==="scriptable"){
-    sendeAnBridge({typ:"anthropic", key, body});
+    sendeAnBridge({typ:"anthropic", body});
   } else {
     try{
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"content-type":"application/json","x-api-key":key,
+        headers:{"content-type":"application/json","x-api-key":browserSchluessel,
           "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify(body)
       });
@@ -2697,6 +2719,26 @@ document.addEventListener("click", ev=>{
         kuerzellistePdf(kurs.id), "application/pdf");
       toast("Kürzelliste wird exportiert …");
     }catch(e){ alertBox("PDF fehlgeschlagen: "+e.message); }
+  }
+});
+
+/* ---------- API-Schlüssel im Schlüsselbund ---------- */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  if (el.dataset.a === "schluesselSetzen"){
+    const feld = document.getElementById("kiKey");
+    const key = feld ? feld.value.trim() : "";
+    if (!key) return alertBox("Bitte den Schlüssel eintragen.");
+    sendeAnBridge({typ:"schluesselSetzen", key});
+    schluesselDa = true;
+    if (feld) feld.value = "";
+    zeichne(); toast("Schlüssel im Schlüsselbund abgelegt");
+  }
+  else if (el.dataset.a === "schluesselEntfernen"){
+    sendeAnBridge({typ:"schluesselEntfernen"});
+    schluesselDa = false;
+    zeichne(); toast("Schlüssel entfernt");
   }
 });
 

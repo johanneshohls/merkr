@@ -48,7 +48,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | iCloud-Ablage, Sicherung je Kalendertag | gebaut, auf dem Gerät ungetestet |
 | Notenvorschlag mit Halbjahresgrenze und Zeitgewichtung | fertig, 8 Tests |
 | Kürzel und checkr-Ausgabe | fertig, 5 Tests |
-| Anthropic-Schlüssel in den Keychain | offen |
+| Anthropic-Schlüssel in den Schlüsselbund | gebaut, auf dem Gerät ungetestet |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
