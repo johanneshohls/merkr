@@ -4513,6 +4513,57 @@ anwesenheitDialogHtml = function(k, alsTab){
 
 zeichne();
 
+/* ================= Freiraum oben, gemessen statt geraten =================
+   Zweimal einen festen Abstand gesetzt, zweimal lag Scriptables Schliessen-
+   Knopf trotzdem auf dem ersten Eintrag. Feste Pixel helfen nur, wenn man die
+   Geometrie der WebView kennt - und die kennt nur das Geraet.
+
+   Deshalb: der Freiraum richtet sich nach der Anzeigehoehe, und eine Zeile in
+   den Einstellungen sagt, womit merkr gerade rechnet. */
+
+function anzeigeMasse(){
+  const leiste = document.getElementById("seitenleiste");
+  const erster = leiste ? leiste.querySelector("button") : null;
+  return {
+    breite: Math.round(window.innerWidth),
+    hoehe: Math.round(window.innerHeight),
+    dpr: window.devicePixelRatio || 1,
+    sicherOben: getComputedStyle(document.documentElement).getPropertyValue("--sicher-oben").trim() || "0px",
+    leisteOben: erster ? Math.round(erster.getBoundingClientRect().top) : null,
+  };
+}
+
+const zeichneMitMass = zeichne;
+zeichne = function(){
+  zeichneMitMass();
+  /* Der Freiraum wird nach dem Zeichnen gesetzt: 14 Prozent der Hoehe, aber
+     nie weniger als 110 und nie mehr als 220 Pixel. Auf einer hoch
+     aufgeloesten WebView waechst er damit mit. */
+  const leiste = document.getElementById("seitenleiste");
+  if (leiste && window.innerWidth > 700){
+    const frei = Math.min(220, Math.max(110, Math.round(window.innerHeight * 0.14)));
+    leiste.style.paddingTop = frei + "px";
+  } else if (leiste){
+    leiste.style.paddingTop = "6px";
+  }
+};
+
+/* Eine Zeile in den Einstellungen, die die Geometrie nennt. */
+const einstellungenOhneMass = viewEinstellungen;
+viewEinstellungen = function(){
+  const m = anzeigeMasse();
+  return einstellungenOhneMass() +
+    '<div class="karte"><h2>Anzeige</h2>'+
+    '<p class="hinweis">Womit merkr gerade rechnet - hilfreich, wenn etwas verdeckt aussieht.</p>'+
+    '<table class="tab">'+
+    '<tr><td>Fläche</td><td><b>'+m.breite+' × '+m.hoehe+'</b> Punkte</td></tr>'+
+    '<tr><td>Bildpunkte je Punkt</td><td><b>'+m.dpr+'</b></td></tr>'+
+    '<tr><td>Leiste beginnt bei</td><td><b>'+(m.leisteOben==null?"–":m.leisteOben+" px")+'</b></td></tr>'+
+    '</table></div>';
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
