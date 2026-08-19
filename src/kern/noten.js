@@ -66,6 +66,19 @@ const MerkrNoten = (function () {
   }
 
   /**
+   * Derselbe Wert ohne Rundung, auf eine Nachkommastelle.
+   *
+   * Für die Anzeige: "2,1" sagt mehr als "2" - man sieht, ob es knapp war. Zum
+   * Eintragen taugt nur die ganze Note, die Rundung fällt also nicht weg, sie
+   * kommt nur später.
+   */
+  function genauAusMittel(mittel, typ) {
+    const roh = typ === "punkte" ? 7.5 + 3.75 * mittel : NULLPUNKT - SPANNE * mittel;
+    const grenzen = typ === "punkte" ? [0, 15] : [1, 6];
+    return Math.round(begrenzen(roh, grenzen[0], grenzen[1]) * 10) / 10;
+  }
+
+  /**
    * @param ereignisse [{ts, stufe}] - ts als ISO-Zeitstempel, stufe -2..+2
    * @param opt {jetzt, ab, typ, halbwertszeitWochen}
    * @returns null ohne verwertbare Notiz, sonst
@@ -97,6 +110,7 @@ const MerkrNoten = (function () {
     const mittel = summe / gewichtSumme;
     return {
       wert: noteAusMittel(mittel, o.typ),
+      genau: genauAusMittel(mittel, o.typ),
       mittel: mittel,
       anzahl: anzahl,
       anzahlFrisch: anzahlFrisch,
@@ -111,6 +125,7 @@ const MerkrNoten = (function () {
     gewicht: gewicht,
     halbjahrBeginn: halbjahrBeginn,
     noteAusMittel: noteAusMittel,
+    genauAusMittel: genauAusMittel,
     vorschlag: vorschlag
   };
 })();

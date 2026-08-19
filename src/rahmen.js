@@ -203,7 +203,10 @@ function baueHtml(datenText) {
 // Zuerst eine winzige Startseite zeigen und praesentieren. Erscheint sie nicht,
 // liegt es an Scriptable/der WebView; erscheint sie und bleibt dann stehen,
 // liegt es am Laden der grossen Seite.
-const VERSION = "2026-08-19 merkr";
+// Die Fassung stempelt bau.mjs beim Bauen ein. Ohne sie sieht man auf dem
+// Startbildschirm nicht, ob gerade der neue oder der alte Stand läuft - und
+// genau das war am 19.08. die Frage.
+const VERSION = /*__FASSUNG__*/"ungebaut";
 const ABLAGE_TEXT = ablage.icloud
   ? "Daten in iCloud Drive → Scriptable → " + ORDNER_NAME
   : "<b style='color:#e8b25a'>Achtung: iCloud nicht erreichbar, Daten liegen nur auf diesem Gerät.</b>"

@@ -1685,7 +1685,7 @@ function notenvorschlag(schuelerId, kursId){
     ab: MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), todayISO())
   });
   if (!erg) return null;
-  return {wert: erg.wert, avg: erg.mittel, anzahl: erg.anzahl, frisch: erg.anzahlFrisch};
+  return {wert: erg.wert, genau: erg.genau, avg: erg.mittel, anzahl: erg.anzahl, frisch: erg.anzahlFrisch};
 }
 
 /* ---------- Plandatei-Import (KI-Workflow Stufe 1) ---------- */
@@ -3204,6 +3204,201 @@ function viewHome(){
   html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">Kurs anlegen</button>';
   return html;
 }
+
+/* ================= Anwesenheit, Profil und Arbeiten im neuen Design =================
+   Nach dem Entwurf von Claude Design. Die Datenschicht bleibt unverändert, nur
+   die Darstellung ist neu - jede Aktion trägt dieselbe data-a wie vorher. */
+
+/* --- Anwesenheit: alle sind da, angetippt wird die Abweichung --- */
+anwesenheitDialogHtml = function(k){
+  const st = ensureStunde(k.id, R.datum);
+  const schueler = kursSchueler(k.id).slice()
+    .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
+
+  const zustaende = [["fehlt","fehlt","var(--rot)"],["verspaetet","verspätet","var(--sm1)"],["beurlaubt","beurlaubt","var(--text2)"]];
+  let html = '<h2>Anwesenheit</h2>'+
+    '<p class="hinweis">'+fmtDatum(R.datum)+' · '+esc(k.name)+' · alle sind da, angetippt wird die Abweichung.</p>';
+
+  if (!schueler.length) return html + leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
+
+  const zaehler = {fehlt:0, verspaetet:0, beurlaubt:0};
+  for (const s of schueler){
+    const a = anwesenheitVon(s.id, st.id);
+    if (a && zaehler[a.status]!=null) zaehler[a.status]++;
+  }
+  html += '<div class="karte" style="padding:10px 14px;margin-bottom:12px;display:flex;gap:22px">'+
+    '<div><b style="font-size:20px">'+(schueler.length - zaehler.fehlt - zaehler.beurlaubt)+'</b> <span class="hinweis">da</span></div>'+
+    '<div><b style="font-size:20px;color:var(--rot)">'+zaehler.fehlt+'</b> <span class="hinweis">fehlt</span></div>'+
+    '<div><b style="font-size:20px;color:var(--sm1)">'+zaehler.verspaetet+'</b> <span class="hinweis">verspätet</span></div>'+
+    '<div><b style="font-size:20px">'+zaehler.beurlaubt+'</b> <span class="hinweis">beurlaubt</span></div></div>';
+
+  for (const s of schueler){
+    const a = anwesenheitVon(s.id, st.id);
+    const stat = a ? a.status : "anwesend";
+    html += '<div class="karte" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:7px">'+
+      '<div style="flex:1"><b>'+esc(s.name)+', '+esc(s.vorname)+'</b>'+
+      /* Nur die Minuten sind eine Zusatzangabe. "fehlt" unter einem Knopf, der
+         schon "fehlt" heißt und hervorgehoben ist, sagt nichts Neues. */
+      (stat==="verspaetet" ? '<div class="hinweis">'+(a.minuten||5)+' Minuten</div>' : '')+'</div>';
+    for (const [wert, label, farbe] of zustaende){
+      const an = stat===wert;
+      html += '<button class="klein" style="border-radius:999px;padding:7px 14px;font-weight:800;'+
+        (an ? 'background:'+farbe+';color:#fff' : '')+'" data-a="anwSetzen" data-id="'+s.id+'" data-stunde="'+st.id+
+        '" data-status="'+(an?"anwesend":wert)+'">'+label+'</button>';
+    }
+    if (stat==="verspaetet")
+      html += '<button class="klein" data-a="anwMinuten" data-id="'+s.id+'" data-stunde="'+st.id+'">+5 min</button>';
+    html += '</div>';
+  }
+  return html + '<div class="abstand"></div><button class="primar" data-a="modalZu">Fertig</button>';
+};
+
+/* --- Schülerprofil: die Zahl und woher sie kommt --- */
+const profilVorher = viewProfil;
+viewProfil = function(){
+  const s = schuelerVon(R.schuelerId); if(!s){ R.view="home"; return viewHome(); }
+  const k = kursVon(R.kursId); if(!k){ R.view="home"; return viewHome(); }
+  const sys = notensystem(k);
+  const ns = notenstand(s.id, k.id);
+  const vs = notenvorschlag(s.id, k.id);
+  const mz = mitarbeitZusammenfassung(s.id, k.id);
+  const fz = fehlzeiten(s.id, k.id);
+  const evs = S.ereignisse.filter(e=>e.schuelerId===s.id && e.kursId===k.id).sort((a,b)=>b.ts.localeCompare(a.ts));
+  const initialen = ((s.vorname||"?")[0]+(s.name||"?")[0]).toUpperCase();
+
+  let html = '<div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">'+
+    '<div style="width:56px;height:56px;border-radius:16px;background:var(--akzent);color:#fff;'+
+    'display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900">'+esc(initialen)+'</div>'+
+    '<div style="flex:1"><h1 style="font-size:26px;font-weight:900;margin:0">'+esc(s.vorname)+' '+esc(s.name)+'</h1>'+
+    '<div class="hinweis">'+esc(k.name)+' · '+(vs?vs.anzahl:0)+((vs?vs.anzahl:0)===1?" Notiz":" Notizen")+
+    ' in diesem Halbjahr</div></div>'+
+    '<button data-a="profilPdf" data-id="'+s.id+'">Als PDF</button>'+
+    '<button class="primar" data-a="tab" data-id="sitzplan">Zurück zum Sitzplan</button></div>';
+
+  /* Der Vorschlag - groß, mit seiner Grundlage darunter. */
+  html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">'+
+    'Notenvorschlag Halbjahr</div>';
+  if (vs){
+    html += '<div style="display:flex;align-items:baseline;gap:12px;margin:6px 0 4px">'+
+      '<div style="font-size:46px;font-weight:900;line-height:1">'+fmtZahl(vs.genau,1)+'</div>'+
+      '<div class="hinweis" style="font-size:15px">Vorschlag — du entscheidest</div></div>'+
+      '<p class="hinweis">Aus '+vs.anzahl+(vs.anzahl===1?' Notiz':' Notizen')+' dieses Halbjahres, davon '+vs.frisch+
+      ' aus den letzten vier Wochen. Ältere zählen weiter, aber leiser: nach acht Wochen halb. '+
+      'Eingetragen würde '+(sys.typ==="punkte"? vs.wert+" Punkte" : "eine "+vs.wert)+'.</p>'+
+      '<div class="zeile"><button class="primar" data-a="noteDialog" data-id="'+s.id+'">Als Halbjahresnote übernehmen</button>'+
+      '<button data-a="noteDialog" data-id="'+s.id+'">Abweichen und begründen</button></div>';
+  } else {
+    html += '<p class="hinweis" style="margin-top:8px">Noch keine Mitarbeitsnotiz in diesem Halbjahr - ohne sie gibt es keinen Vorschlag.</p>';
+  }
+  html += '</div>';
+
+  /* Notenstand und Mitarbeit nebeneinander */
+  html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Mitarbeit nach Kategorie</div>';
+  for (const kat of MITARBEIT_KATEGORIEN){
+    const z = mz[kat.id];
+    html += '<div style="margin-top:12px"><div class="zeile raum"><b>'+esc(kat.name)+'</b>'+
+      '<span class="hinweis">'+z.anzahl+(z.anzahl===1?" Notiz":" Notizen")+'</span></div>'+
+      '<div style="display:flex;gap:3px;margin-top:5px">';
+    for (const stufe of STUFEN){
+      const n = z.counts[stufe.v] || 0;
+      const breite = z.anzahl ? Math.round(n / z.anzahl * 100) : 0;
+      if (n) html += '<div style="flex:'+n+';height:14px;border-radius:5px;background:'+stufe.hex+'" title="'+
+        n+"x "+stufe.label+' ('+breite+' %)"></div>';
+    }
+    if (!z.anzahl) html += '<div style="flex:1;height:14px;border-radius:5px;background:var(--akzent-hell)"></div>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+
+  /* Fehlzeiten */
+  html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Fehlzeiten</div>'+
+    '<div style="display:flex;gap:26px;margin-top:10px">'+
+    '<div><div style="font-size:26px;font-weight:900">'+(fz.fehltGesamt - fz.unentschuldigt - fz.offen)+'</div><div class="hinweis">entschuldigt</div></div>'+
+    '<div><div style="font-size:26px;font-weight:900;color:'+(fz.unentschuldigt?'var(--rot)':'inherit')+'">'+fz.unentschuldigt+'</div><div class="hinweis">unentschuldigt</div></div>'+
+    '<div><div style="font-size:26px;font-weight:900;color:'+(fz.offen?'var(--rot)':'inherit')+'">'+fz.offen+'</div><div class="hinweis">offen</div></div>'+
+    '<div><div style="font-size:26px;font-weight:900">'+fz.verspaetungen+'</div><div class="hinweis">verspätet, '+fz.minuten+' min</div></div></div>';
+  if (fz.offen) html += '<div class="abstand"></div><button data-a="tab" data-id="liste">'+fz.offen+
+    (fz.offen===1?' offene Fehlzeit klären':' offene Fehlzeiten klären')+'</button>';
+  html += '</div>';
+
+  /* Notenstand */
+  html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Stand</div>'+
+    '<div style="display:flex;gap:26px;margin-top:10px">'+
+    '<div><div style="font-size:26px;font-weight:900">'+fmtZahl(ns.gesamt)+'</div><div class="hinweis">gesamt</div></div>'+
+    '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(ns.arb)+'</div><div class="hinweis">Klassenarbeiten</div></div>'+
+    '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(ns.son)+'</div><div class="hinweis">sonstige</div></div>'+
+    '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(ns.m)+'</div><div class="hinweis">davon mündlich</div></div></div>'+
+    '<p class="hinweis" style="margin-top:10px">'+esc(gewichtungsText(k))+'</p></div>';
+
+  /* Die Notizen, aus denen die Zahlen kommen */
+  html += '<div class="karte"><div class="zeile raum">'+
+    '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Letzte Notizen</div>'+
+    '<span class="hinweis">jede Zahl oben stammt aus dieser Liste</span></div>';
+  if (!evs.length) html += '<p class="hinweis" style="margin-top:8px">Noch keine Notiz.</p>';
+  else {
+    for (const e of evs.slice(0,12)){
+      const st = stundeVon(e.stundeId);
+      const si = e.stufe==null ? null : stufeInfo(e.stufe);
+      html += '<div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--linie)">'+
+        (si ? '<span style="width:26px;height:22px;border-radius:6px;background:'+si.hex+';color:#fff;display:flex;'+
+          'align-items:center;justify-content:center;font-size:11px;font-weight:900">'+si.label+'</span>'
+            : '<span style="width:26px"></span>')+
+        '<b style="min-width:150px">'+esc(ereignisName(e))+'</b>'+
+        '<span style="flex:1" class="hinweis">'+esc(e.text || (st && st.thema ? st.thema : ""))+'</span>'+
+        '<span class="hinweis">'+(st?fmtDatumKurz(st.datum):"")+'</span></div>';
+    }
+    if (evs.length>12) html += '<p class="hinweis" style="margin-top:8px">'+(evs.length-12)+' weitere.</p>';
+  }
+  html += '</div>';
+
+  if (s.notizen) html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Notiz zum Schüler</div><p>'+esc(s.notizen)+'</p></div>';
+  return html;
+};
+
+/* --- Arbeiten: Kennzahlen als Kacheln, Verteilung wie gehabt --- */
+const arbeitenVorher = viewArbeiten;
+viewArbeiten = function(k){
+  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
+  const sys = notensystem(k);
+
+  let html = '<div class="zeile raum" style="margin-bottom:14px">'+
+    '<div><h2 style="margin:0">Arbeiten und Tests</h2>'+
+    '<div class="hinweis">'+esc(k.name)+' · '+(sys.typ==="punkte"?"0 bis 15 Punkte":"Noten 1 bis 6")+'</div></div>'+
+    '<div class="zeile"><button data-a="checkrDialog">Aus checkr holen</button>'+
+    '<button class="primar" data-a="arbeitNeuDialog">Arbeit anlegen</button></div></div>';
+
+  if (!arbeiten.length)
+    return html + leer("Noch keine Arbeit oder LEK erfasst. Ergebnisse kommen von Hand oder aus checkr.", "Arbeit anlegen", "arbeitNeuDialog");
+
+  for (const a of arbeiten){
+    const stat = arbeitStatistik(a, k);
+    const ab = bereichNorm(a.bereich||artBereich(a.art));
+    html += '<div class="karte"><div class="zeile raum">'+
+      '<div><b style="font-size:17px">'+esc(a.titel)+'</b>'+
+      '<div class="hinweis">'+esc(a.art)+' · '+fmtDatum(a.datum)+' · '+
+      (ab==="arbeit"?"zählt zu den Klassenarbeiten":"zählt zu den sonstigen Leistungen")+
+      (gew(a.gewicht)===0?' · Zwischenstand, zählt nicht':' · Gewicht '+gew(a.gewicht))+
+      (a.checkrJob?' · aus checkr':'')+'</div></div>'+
+      '<div class="zeile"><button class="klein" data-a="arbeitEingabe" data-id="'+a.id+'">Punkte eintragen</button>'+
+      '<button class="klein" data-a="arbeitBereichWechseln" data-id="'+a.id+'">Bereich</button>'+
+      '<button class="klein gefahr" data-a="arbeitLoeschen" data-id="'+a.id+'">Löschen</button></div></div>';
+
+    if (stat.n){
+      html += '<div style="display:flex;gap:26px;margin:14px 0 4px">'+
+        '<div><div style="font-size:26px;font-weight:900">'+fmtZahl(stat.mittel,2)+'</div>'+
+        '<div class="hinweis">Mittel aus '+stat.n+(stat.n===1?" Wert":" Werten")+'</div></div>'+
+        '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(stat.median,1)+'</div><div class="hinweis">Median</div></div>'+
+        '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(stat.q1,1)+' / '+fmtZahl(stat.q3,1)+'</div>'+
+        '<div class="hinweis">Quartile</div></div></div>'+
+        svgBoxplot(stat, sys) + svgVerteilung(stat, sys) +
+        '<p class="hinweis">Box: die mittleren 50 Prozent, Linie: Median, Antennen: bester und schlechtester Wert.</p>';
+    } else {
+      html += '<p class="hinweis" style="margin-top:10px">Noch kein Ergebnis eingetragen.</p>';
+    }
+    html += '</div>';
+  }
+  return html;
+};
 
 </script>
 </body>

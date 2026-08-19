@@ -71,3 +71,20 @@ test("Ohne verwertbare Notiz kommt kein Vorschlag", () => {
   assert.equal(N.vorschlag([], { jetzt: JETZT }), null);
   assert.equal(N.vorschlag([{ ts: vorTagen(3), stufe: null }], { jetzt: JETZT }), null);
 });
+
+test("Der ungerundete Wert zeigt, wie knapp es war", () => {
+  // Stufenmittel 0,7 liegt zwischen 2 und 3, näher an 2.
+  assert.equal(E_genau(0.7), 2.1);
+  assert.equal(N.noteAusMittel(0.7, "noten"), 2, "eingetragen wird die ganze Note");
+  assert.equal(E_genau(0), 3);
+  assert.equal(E_genau(2), 1, "nach unten gedeckelt auf 1");
+  assert.equal(E_genau(-2), 5.5);
+});
+
+function E_genau(mittel) { return N.genauAusMittel(mittel, "noten"); }
+
+test("Der Vorschlag trägt beide Zahlen", () => {
+  const erg = N.vorschlag([{ ts: "2026-05-01T09:00:00Z", stufe: 1 }], { jetzt: new Date("2026-05-01T12:00:00Z"), typ: "noten" });
+  assert.equal(erg.wert, 2);
+  assert.equal(erg.genau, 1.8);
+});

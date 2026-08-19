@@ -12,6 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const hier = path.dirname(fileURLToPath(import.meta.url));
 const PLATZHALTER = '"__OBERFLAECHE__"';
@@ -69,7 +70,14 @@ if (!rahmen.includes(PLATZHALTER)) {
 }
 
 // Ersatz als Funktion: sonst deutet String.replace $-Zeichen im HTML als Rückverweis.
-const ergebnis = rahmen.replace(PLATZHALTER, () => JSON.stringify(html));
+let ergebnis = rahmen.replace(PLATZHALTER, () => JSON.stringify(html));
+
+// Fassung: Datum und Uhrzeit des Baus, damit auf dem Gerät ablesbar ist,
+// welcher Stand läuft.
+const jetzt = new Date();
+const zz = (n) => String(n).padStart(2, "0");
+const fassung = `${jetzt.getFullYear()}-${zz(jetzt.getMonth() + 1)}-${zz(jetzt.getDate())} ${zz(jetzt.getHours())}:${zz(jetzt.getMinutes())}`;
+ergebnis = ergebnis.replace('/*__FASSUNG__*/"ungebaut"', () => JSON.stringify(fassung));
 
 // Die zusammengesetzte Oberfläche auch einzeln ablegen: so lässt sie sich im
 // Browser öffnen und prüfen, ohne ein iPad. Im Standalone-Modus speichert sie
@@ -77,6 +85,27 @@ const ergebnis = rahmen.replace(PLATZHALTER, () => JSON.stringify(html));
 const vorschau = path.join(hier, "dist/oberflaeche.html");
 fs.mkdirSync(path.dirname(vorschau), { recursive: true });
 fs.writeFileSync(vorschau, html);
+
+// Die Oberfläche syntaktisch prüfen, bevor sie in den Rahmen wandert.
+//
+// `node --check dist/merkr.js` sieht sie NICHT: dort steckt sie in einem
+// String-Literal, und ein Fehler darin fällt erst auf dem Gerät auf - als
+// weißer Bildschirm. Am 19.08. ist genau das passiert.
+const bloecke = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+let fehler = 0;
+for (const [i, code] of bloecke.entries()) {
+  try {
+    new vm.Script(code);
+  } catch (e) {
+    console.error(`Skriptblock ${i + 1} in src/oberflaeche.html: ${e.message}`);
+    fehler++;
+  }
+}
+if (fehler) {
+  console.error("Bau abgebrochen - die Oberfläche würde auf dem Gerät nicht starten.");
+  process.exit(1);
+}
+console.log(`Oberfläche geprüft: ${bloecke.length} Skriptblöcke, keine Syntaxfehler`);
 
 const ziel = path.join(hier, "dist/merkr.js");
 fs.mkdirSync(path.dirname(ziel), { recursive: true });
