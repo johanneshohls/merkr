@@ -108,11 +108,18 @@ body.mitleiste #app{padding-left:108px;}
 .tabs button.aktiv{background:var(--akzent); color:#fff; border-color:var(--akzent);}
 
 /* Sitzplan */
-#sitzflaeche{position:relative; background:
-  repeating-linear-gradient(0deg,transparent,transparent 27px,#eef1ec 27px,#eef1ec 28px),
-  repeating-linear-gradient(90deg,transparent,transparent 27px,#eef1ec 27px,#eef1ec 28px),
-  #fbfcfa;
-  border:1px solid var(--linie); border-radius:var(--radius); height:600px; overflow:hidden; touch-action:none;}
+/* Der Raum, nicht ein Karopapier: drei Zweiertische nebeneinander, fünf Reihen
+   hintereinander. Das Karo hat nichts abgebildet - dieser Grundriss schon, und
+   Kacheln lassen sich weiter frei darauf schieben. */
+#sitzflaeche{position:relative; background:var(--karte);
+  border:1px solid var(--linie); border-radius:var(--radius); height:620px; overflow:hidden; touch-action:none;}
+#sitzflaeche .tisch{position:absolute; border-radius:10px; background:#f6f1f7;
+  border:1px solid var(--linie); pointer-events:none;}
+#sitzflaeche .tisch::after{content:""; position:absolute; top:8px; bottom:8px; left:50%;
+  border-left:1px dashed var(--linie);}
+#sitzflaeche .tafel{position:absolute; border-radius:8px; background:var(--akzent-hell);
+  border:1px solid var(--linie); pointer-events:none; display:flex; align-items:center;
+  justify-content:center; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.1em;}
 .stile{position:absolute; width:112px; min-height:72px; border-radius:14px; background:var(--karte);
   box-shadow:0 1px 3px rgba(59,31,62,.09); border:1px solid var(--linie); padding:9px 10px 8px;
   cursor:pointer; touch-action:none;}
@@ -4640,6 +4647,176 @@ document.addEventListener("click", ev=>{
   toast(neu ? neu+(neu===1?" Schüler übernommen":" Schüler übernommen")+(schon?", "+schon+" waren schon da":"")
             : "Alle waren schon in diesem Kurs");
 });
+
+zeichne();
+
+/* ================= Der Raum: 15 Zweiertische =================
+   Drei nebeneinander, fünf Reihen hintereinander, vorne die Tafel. Die Plätze
+   ergeben sich daraus - Platz 1 und 2 sitzen am ersten Tisch, 3 und 4 am
+   zweiten. Wer umsetzt, zieht die Kachel trotzdem frei; gespeichert wird die
+   Position wie bisher am Schüler. */
+
+const RAUM = {
+  spalten: 3, reihen: 5,
+  tischBreite: 250, tischHoehe: 82,
+  luecke: 26, reihenLuecke: 22,
+  randOben: 62, randLinks: 24,
+};
+
+function platzPosition(nr){
+  const tisch = Math.floor(nr / 2);
+  const seite = nr % 2;
+  const spalte = tisch % RAUM.spalten;
+  const reihe = Math.floor(tisch / RAUM.spalten);
+  return {
+    x: RAUM.randLinks + spalte * (RAUM.tischBreite + RAUM.luecke) + seite * (RAUM.tischBreite / 2) + 6,
+    y: RAUM.randOben + reihe * (RAUM.tischHoehe + RAUM.reihenLuecke) + 5,
+  };
+}
+
+function raumHintergrund(){
+  let html = '<div class="tafel" style="left:'+RAUM.randLinks+'px;top:14px;width:'+
+    (RAUM.spalten * RAUM.tischBreite + (RAUM.spalten-1) * RAUM.luecke)+'px;height:30px">TAFEL</div>';
+  for (let r = 0; r < RAUM.reihen; r++)
+    for (let s = 0; s < RAUM.spalten; s++)
+      html += '<div class="tisch" style="left:'+
+        (RAUM.randLinks + s * (RAUM.tischBreite + RAUM.luecke))+'px;top:'+
+        (RAUM.randOben + r * (RAUM.tischHoehe + RAUM.reihenLuecke))+'px;width:'+
+        RAUM.tischBreite+'px;height:'+RAUM.tischHoehe+'px"></div>';
+  return html;
+}
+
+const sitzplanOhneRaum = viewSitzplan;
+viewSitzplan = function(k){
+  const html = sitzplanOhneRaum(k);
+  const marke = '<div id="sitzflaeche">';
+  if (!html.includes(marke)) return html;
+
+  /* Die Kacheln ohne eigene Position auf die Plätze setzen. */
+  const schueler = kursSchueler(k.id);
+  let nr = 0;
+  for (const s of schueler){
+    if (s.sitz && s.sitz[k.id]) continue;
+    const pos = platzPosition(nr++);
+    if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
+    s.sitz[k.id] = pos;
+  }
+  /* Erst nach dem Setzen neu bauen, sonst stehen die alten Koordinaten drin. */
+  const neu = sitzplanOhneRaum(k);
+  return neu.replace(marke, marke + raumHintergrund());
+};
+
+zeichne();
+
+/* ================= Aufrufen =================
+   Zufällig, aber gerecht: erst wenn alle einmal dran waren, beginnt eine neue
+   Runde. Wer heute fehlt, wird nicht gezogen - ein Name, der nicht antworten
+   kann, kostet im Unterricht mehr Zeit als der ganze Griff spart.
+
+   Gerechnet wird in kern/aufrufen.js, der Topf liegt am Kurs. */
+
+function aufrufTopf(k){
+  if (!Array.isArray(k.aufrufTopf)) k.aufrufTopf = [];
+  return k.aufrufTopf;
+}
+
+/** Wer heute in Frage kommt: im Kurs und nicht als fehlend eingetragen. */
+function aufrufbare(k){
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  return kursSchueler(k.id).filter(s=>{
+    if (!st) return true;
+    const a = anwesenheitVon(s.id, st.id);
+    return !a || a.status !== "fehlt";
+  });
+}
+
+function aufrufDialog(k, gezogenId, neueRunde){
+  const s = gezogenId ? schuelerVon(gezogenId) : null;
+  const kandidaten = aufrufbare(k);
+  const topf = aufrufTopf(k);
+  const offen = topf.length ? MerkrAufrufen.offen(topf, kandidaten.map(x=>x.id)) : kandidaten.length;
+
+  if (!s)
+    return '<h2>Aufrufen</h2>'+
+      '<p class="hinweis">Niemand, der aufgerufen werden könnte - alle sind als fehlend eingetragen oder der Kurs ist leer.</p>'+
+      '<div class="zeile"><button class="primar" data-a="modalZu">Schließen</button></div>';
+
+  let html = '<div style="text-align:center;padding:6px 0 2px">'+
+    (neueRunde ? '<div class="hinweis" style="margin-bottom:8px">Neue Runde - alle waren einmal dran.</div>' : '')+
+    '<div style="font-size:34px;font-weight:900;line-height:1.1">'+esc(s.vorname)+'</div>'+
+    '<div style="font-size:20px;font-weight:700;color:var(--text2)">'+esc(s.name)+'</div>'+
+    '<p class="hinweis" style="margin:10px 0 0">noch '+offen+(offen===1?' Schüler':' Schüler')+' bis zur nächsten Runde</p></div>';
+
+  /* Direkt bewerten, ohne den Dialog zu verlassen - dafür wird aufgerufen. */
+  html += '<div class="abstand"></div><div class="hinweis" style="text-align:center;margin-bottom:6px">Qualität mündlich</div>'+
+    '<div class="zeile" style="justify-content:center">';
+  for (const stufe of STUFEN)
+    html += '<button data-a="aufrufStufe" data-id="'+s.id+'" data-stufe="'+stufe.v+'" '+
+      'style="background:'+stufe.hex+';color:#fff;font-weight:900;min-width:56px">'+stufe.label+'</button>';
+  html += '</div>';
+
+  html += '<div class="abstand"></div><div class="zeile" style="justify-content:center">'+
+    '<button class="primar" data-a="aufrufNaechster" data-id="'+k.id+'">Nächster</button>'+
+    '<button data-a="modalZu">Fertig</button></div>';
+  return html;
+}
+
+function aufrufZiehen(k){
+  const kandidaten = aufrufbare(k).map(s=>s.id);
+  const e = MerkrAufrufen.ziehen(kandidaten, aufrufTopf(k), k.aufrufZuletzt || null);
+  if (!e){ zeigeModal(aufrufDialog(k, null)); return; }
+  k.aufrufTopf = e.topf;
+  k.aufrufZuletzt = e.gezogen;
+  speichern();
+  zeigeModal(aufrufDialog(k, e.gezogen, e.neueRunde));
+}
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+
+  if (a==="aufrufen" || a==="aufrufNaechster"){
+    const k = kursVon(a==="aufrufen" ? el.dataset.id : el.dataset.id);
+    if (k) aufrufZiehen(k);
+  }
+  else if (a==="aufrufStufe"){
+    const k = kursVon(R.kursId);
+    if (!k) return;
+    addEreignis(el.dataset.id, k.id, "qual_m", Number(el.dataset.stufe), "");
+    const s = schuelerVon(el.dataset.id);
+    toast((s?s.vorname+": ":"")+stufeInfo(Number(el.dataset.stufe)).label+" notiert");
+    aufrufZiehen(k);
+  }
+  else if (a==="aufrufZuruecksetzen"){
+    const k = kursVon(el.dataset.id);
+    if (!k) return;
+    k.aufrufTopf = []; k.aufrufZuletzt = null;
+    speichern(); zeichne(); toast("Runde zurückgesetzt");
+  }
+});
+
+/* Der Knopf über dem Sitzplan. */
+const sitzplanOhneAufruf = viewSitzplan;
+viewSitzplan = function(k){
+  const html = sitzplanOhneAufruf(k);
+  if (!html.includes('<div id="sitzflaeche">')) return html;
+  const kandidaten = aufrufbare(k);
+  const topf = aufrufTopf(k);
+  const begonnen = topf.length > 0 || !!k.aufrufZuletzt;
+  const offen = topf.length ? MerkrAufrufen.offen(topf, kandidaten.map(x=>x.id)) : kandidaten.length;
+  const kopf = '<div class="zeile raum" style="margin-bottom:10px">'+
+    '<button class="primar" data-a="aufrufen" data-id="'+k.id+'">Aufrufen</button>'+
+    '<span class="hinweis">'+
+    (kandidaten.length
+      ? (!begonnen ? kandidaten.length+' Schüler anwesend'
+        : !topf.length ? 'alle waren dran, der nächste Aufruf beginnt neu'
+        : offen+' von '+kandidaten.length+' noch nicht dran')
+      : 'niemand anwesend')+
+    (begonnen ? ' · <button class="klein" data-a="aufrufZuruecksetzen" data-id="'+k.id+'">Runde neu</button>' : '')+
+    '</span></div>';
+  return kopf + html;
+};
 
 zeichne();
 
