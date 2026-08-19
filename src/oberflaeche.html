@@ -1758,24 +1758,74 @@ function viewHome(){
 }
 
 /* ---------- Notenvorschlag aus Mitarbeit ---------- */
-/* Vorschlag für die mündliche Note. Rechnet in MerkrNoten (src/kern/noten.js),
-   damit die Kurve und die Zeitgewichtung ohne Gerät prüfbar bleiben.
+/* Vorschlag für die Mitarbeitsnote. Rechnet in MerkrMitarbeit
+   (src/kern/mitarbeit.js), damit die Kurve ohne Gerät prüfbar bleibt.
 
-   Zwei Regeln stecken darin: die Halbjahresgrenze ist hart, und innerhalb des
-   Halbjahres wiegen frische Notizen schwerer. Vorher war es das arithmetische
-   Mittel über das ganze Jahr - wer im September stumm war und seit Februar
-   trägt, schleppte den September voll mit. */
+   Das Modell ist Basis und zwei Ausschläge: wer nicht auffällt, steht bei 3,5,
+   Beteiligung zieht nach oben, Stören nach unten. Vorher war es das Mittel der
+   Stufen - darin kürzt sich die Anzahl heraus, und eine einzige Notiz "++" wog
+   so schwer wie zwanzig. Damit ließ sich Quantität nicht bewerten.
+
+   Ohne gehaltene Stunde gibt es weiter keinen Vorschlag. Die Basis ist eine
+   Aussage über einen stillen Schüler, keine über ein leeres Halbjahr. */
 function notenvorschlag(schuelerId, kursId){
-  const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId &&
-    (MITARBEIT_KATEGORIEN.some(k=>k.id===e.typ) || (S.einstellungen.eigeneEreignisse.some(x=>x.id===e.typ && x.mitStufen))) && e.stufe!=null);
-  if (!evs.length) return null;
   const kurs = kursVon(kursId), sys = notensystem(kurs);
-  const erg = MerkrNoten.vorschlag(evs, {
-    typ: sys.typ,
-    ab: MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), todayISO())
-  });
-  if (!erg) return null;
-  return {wert: erg.wert, genau: erg.genau, avg: erg.mittel, anzahl: erg.anzahl, frisch: erg.anzahlFrisch};
+  const heute = todayISO();
+  const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId);
+  const erg = MerkrMitarbeit.vorschlag(
+    S.stunden.filter(x=>x.kursId===kursId),
+    evs,
+    Object.assign({
+      typ: sys.typ,
+      jetzt: new Date(),
+      ab: MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), heute),
+      bis: heute
+    }, S.einstellungen.mitarbeitKurve || {})
+  );
+  if (!erg || !erg.stunden) return null;
+  return {
+    wert: erg.wert, genau: erg.genau, note: erg.note,
+    avg: erg.anteile.m.mittel, anzahl: erg.anzahl, frisch: erg.anteile.m.anzahl,
+    basis: erg.basis, muendlich: erg.muendlich, schriftlich: erg.schriftlich,
+    stoerung: erg.stoerung, gedeckelt: erg.gedeckelt,
+    quoteM: erg.anteile.m.quote, quoteS: erg.anteile.s.quote,
+    stoerAnzahl: erg.anteile.stoer.anzahl, stunden: erg.stunden
+  };
+}
+
+/* Die Herkunft einer Vorschlagszahl in einem Satz. Ohne sie ist der Vorschlag im
+   Elterngespräch wertlos - "3,1" beantwortet keine Frage, "aus 12 Beteiligungen
+   in 20 Stunden, dazu 3 Störungen" schon. */
+function vorschlagHerkunft(vs){
+  if (!vs) return "";
+  const teile = [];
+  const proz = q => Math.round(q*100)+" %";
+  teile.push("Basis "+fmtZahl(vs.basis));
+  if (vs.muendlich > 0.005) teile.push("mündlich −"+fmtZahl(vs.muendlich)+" (in "+proz(vs.quoteM)+" der Stunden)");
+  if (vs.schriftlich > 0.005) teile.push("schriftlich −"+fmtZahl(vs.schriftlich));
+  if (vs.stoerung > 0.005) teile.push("Störungen +"+fmtZahl(vs.stoerung)+" ("+vs.stoerAnzahl+"×"+(vs.gedeckelt?", gedeckelt":"")+")");
+  return teile.join(" · ")+" · aus "+vs.stunden+" Stunden";
+}
+
+/* Dieselbe Herkunft als Aufstellung. Jede Zeile ist ein Summand der Rechnung,
+   damit im Gespräch nicht die Zahl verteidigt werden muss, sondern die Teile
+   besprochen werden können. */
+function herkunftHtml(vs){
+  if (!vs) return "";
+  const zeile = (was, wert, dazu) =>
+    '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0">'+
+    '<span>'+esc(was)+(dazu?' <span class="hinweis" style="font-size:12.5px;opacity:.75">'+esc(dazu)+'</span>':'')+'</span>'+
+    '<b style="font-variant-numeric:tabular-nums">'+wert+'</b></div>';
+  const proz = q => Math.round(q*100)+" %";
+  let h = '<div style="margin:10px 0;font-size:14px">';
+  h += zeile("Basis", fmtZahl(vs.basis), "wer nicht auffällt");
+  if (vs.muendlich > 0.005) h += zeile("Mündliche Beteiligung", "−"+fmtZahl(vs.muendlich), "in "+proz(vs.quoteM)+" der Stunden");
+  if (vs.schriftlich > 0.005) h += zeile("Schriftliche Mitarbeit", "−"+fmtZahl(vs.schriftlich), "in "+proz(vs.quoteS)+" der Stunden");
+  if (vs.stoerung > 0.005) h += zeile("Störungen und vergessene HA", "+"+fmtZahl(vs.stoerung),
+    vs.stoerAnzahl+"×"+(vs.gedeckelt?", gedeckelt bei 2,0":""));
+  h += '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0 0;margin-top:4px;border-top:1px solid var(--linie)">'+
+    '<span>aus '+vs.stunden+' gehaltenen Stunden</span><b style="font-variant-numeric:tabular-nums">'+fmtZahl(vs.note,1)+'</b></div>';
+  return h + '</div>';
 }
 
 /* ---------- Plandatei-Import (KI-Workflow Stufe 1) ---------- */
@@ -1965,7 +2015,7 @@ function profilPdfErzeugen(schuelerId, kursId){
     (mdlModus(kurs)==="anteil" ? " (fest "+gewMdlAnteil(kurs)+" %)" : " (zählt als eine sonstige Leistung)")+
     " · übrige sonstige: "+(ns.wso==null?"–":fmtZahl(ns.wso))+einheit, 9, false, "#555555");
   y += 14;
-  if (vs) pdfText(p, L, y, "Vorschlag mündliche Note aus Mitarbeit: "+vs.wert+einheit+" (aus "+vs.anzahl+(vs.anzahl===1?" Eintrag":" Einträgen")+", Ø-Stufe "+fmtZahl(vs.avg,1)+")", 9, false, "#777777");
+  if (vs) pdfText(p, L, y, "Vorschlag Mitarbeitsnote: "+vs.wert+einheit+" ("+vorschlagHerkunft(vs)+")", 10, false, "#333333");
   y += 22;
 
   /* Mitarbeit */
@@ -2169,7 +2219,7 @@ function viewProfil(){
     '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
     (vs?'<div class="statwert"><div class="gross">'+vs.wert+'</div><div class="klein2">Vorschlag mdl. (aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+')</div></div>':'')+
     '</div></div>'+
-    (vs?'<p class="hinweis">Aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+' dieses Halbjahres, davon '+vs.frisch+' aus den letzten vier Wochen. Ältere zählen weiter, aber leiser – nach acht Wochen halb. Ø '+fmtZahl(vs.avg,1)+' auf der Skala −2 … +2. Ein Anhaltspunkt; die Note vergeben Sie.</p>':'')+
+    (vs?'<p class="hinweis">'+esc(vorschlagHerkunft(vs))+'</p>':'')+
     '</div>';
 
   html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
@@ -3410,13 +3460,14 @@ viewProfil = function(){
     html += '<div style="display:flex;align-items:baseline;gap:12px;margin:6px 0 4px">'+
       '<div style="font-size:46px;font-weight:900;line-height:1">'+fmtZahl(vs.genau,1)+'</div>'+
       '<div class="hinweis" style="font-size:15px">Vorschlag — du entscheidest</div></div>'+
-      '<p class="hinweis">Aus '+vs.anzahl+(vs.anzahl===1?' Notiz':' Notizen')+' dieses Halbjahres, davon '+vs.frisch+
-      ' aus den letzten vier Wochen. Ältere zählen weiter, aber leiser: nach acht Wochen halb. '+
-      'Eingetragen würde '+(sys.typ==="punkte"? vs.wert+" Punkte" : "eine "+vs.wert)+'.</p>'+
+      herkunftHtml(vs)+
+      '<p class="hinweis">Eingetragen würde '+(sys.typ==="punkte"? vs.wert+" Punkte" : "eine "+vs.wert)+
+      '. Frische Notizen wiegen schwerer: nach acht Wochen zählt eine halb.</p>'+
       '<div class="zeile"><button class="primar" data-a="noteDialog" data-id="'+s.id+'">Als Halbjahresnote übernehmen</button>'+
       '<button data-a="noteDialog" data-id="'+s.id+'">Abweichen und begründen</button></div>';
   } else {
-    html += '<p class="hinweis" style="margin-top:8px">Noch keine Mitarbeitsnotiz in diesem Halbjahr - ohne sie gibt es keinen Vorschlag.</p>';
+    html += '<p class="hinweis" style="margin-top:8px">In diesem Halbjahr hat noch keine Stunde stattgefunden. '+
+      'Der Vorschlag entsteht aus dem Verhältnis von Notizen zu gehaltenen Stunden - ohne Stunden gibt es keins.</p>';
   }
   html += '</div>';
 
@@ -5068,9 +5119,10 @@ function beteiligungVon(k){
   const ab = sj ? MerkrNoten.halbjahrBeginn(sj, todayISO()) : null;
   const stunden = S.stunden.filter(x=>x.kursId===k.id);
   const ereignisse = S.ereignisse.filter(e=>e.kursId===k.id);
-  const liste = MerkrBeteiligung.uebersicht(kursSchueler(k.id), stunden, ereignisse, {ab});
+  const bis = todayISO();
+  const liste = MerkrBeteiligung.uebersicht(kursSchueler(k.id), stunden, ereignisse, {ab, bis});
   const nach = new Map(liste.map(x=>[x.id, x]));
-  return {liste, nach, stunden: stunden.filter(x=>!x.ausfall && (!ab || x.datum >= ab)).length};
+  return {liste, nach, stunden: stunden.filter(x=>!x.ausfall && (!ab || x.datum >= ab) && x.datum <= bis).length};
 }
 
 /* --- 1. Der Sitzplan zeigt es --- */

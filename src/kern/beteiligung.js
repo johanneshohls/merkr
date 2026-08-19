@@ -20,13 +20,17 @@ const MerkrBeteiligung = (function () {
    * @param schueler [{id, vorname, name}]
    * @param stunden  Stunden des Kurses, aufsteigend nach Datum
    * @param ereignisse alle Ereignisse des Kurses
-   * @param opt {ab} - Datum, ab dem gezählt wird (Halbjahresgrenze)
+   * @param opt {ab, bis} - Zeitraum. `ab` ist die Halbjahresgrenze, `bis` das
+   *        letzte zählende Datum, üblicherweise heute. Ohne `bis` zählen die aus
+   *        planr importierten Termine der kommenden Wochen mit, und dann steht
+   *        bei jedem Schüler ein Abstand, der noch gar nicht vergangen ist.
    * @returns je Schüler {id, anzahl, letzte, stundenOhne, mittel}
    */
   function uebersicht(schueler, stunden, ereignisse, opt) {
     const o = opt || {};
     const relevant = (stunden || [])
       .filter((st) => !o.ab || st.datum >= o.ab)
+      .filter((st) => !o.bis || st.datum <= o.bis)
       .filter((st) => !st.ausfall)
       .slice()
       .sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
