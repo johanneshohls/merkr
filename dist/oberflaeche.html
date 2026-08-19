@@ -48,7 +48,9 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
    rücken einfach nach. */
 #seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
-#seitenleiste{padding-top:8px;}
+/* Oben bleibt Platz frei: dort schwebt in Scriptable der eigene
+   Schliessen-Knopf über der Seite, und der erste Eintrag lag genau darunter. */
+#seitenleiste{padding-top:calc(72px + env(safe-area-inset-top));}
 /* Kursleiste: die Auswahl links, die Ansichten daneben. */
 .kurswahl{font-size:16px; font-weight:800; color:var(--akzent); background:var(--karte);
   border:1px solid var(--linie); border-radius:12px; padding:8px 10px; min-height:40px; max-width:190px;}
@@ -80,6 +82,8 @@ body.mitleiste #app{padding-left:108px;}
 @media (max-width:700px){
   #seitenleiste{top:auto; right:0; width:auto; height:auto; flex-direction:row; justify-content:space-around;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid var(--linie);}
+  /* Unten gibt es keinen Schliessen-Knopf, der Freiraum von oben entfaellt. */
+  #seitenleiste{padding-top:6px;}
   #seitenleiste .marke, #seitenleiste .leistetrenner{display:none;}
   #seitenleiste{overflow-x:auto;}
   #seitenleiste button{flex:1; border-radius:12px; padding:8px 2px 6px;}
