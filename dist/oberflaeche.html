@@ -3504,7 +3504,9 @@ function einrichtenSchritte(){
   return [
     { fertig: !!sj, titel: "Schuljahr anlegen",
       offen: "Ohne Schuljahr gibt es keinen Kalender.",
-      steht: sj ? sj.name + (sj.ferien && sj.ferien.length ? " · " + sj.ferien.length + " Ferienzeiträume" : " · noch keine Ferien") : "",
+      steht: sj ? sj.name + (sj.ferien && sj.ferien.length
+        ? " · " + sj.ferien.length + (sj.ferien.length === 1 ? " Ferienzeitraum" : " Ferienzeiträume")
+        : " · noch keine Ferien") : "",
       knopf: null },
     { fertig: kurse.length > 0, titel: "Kurse anlegen",
       offen: "Für jede Lerngruppe einen Kurs.",
@@ -3938,6 +3940,119 @@ viewKurs = function(){
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 };
+
+/* ================= Einrichten, nach dem Entwurf =================
+   Sieben nummerierte Schritte, darunter die Entscheidungen, die merkr getroffen
+   hat. Steht alles, schrumpft der Bereich auf eine Zeile.
+
+   Abweichung vom Entwurf, mit Absicht: dort trägt jede Entscheidung einen
+   Knopf. Hier bekommt nur die einen, die sich wirklich ändern lässt. Ein Knopf,
+   der nichts tut, ist schlimmer als eine Zahl ohne Knopf. */
+
+function einrichtenAufgeklappt(){
+  /* localStorage steht in Scriptable nicht sicher zur Verfügung, deshalb am
+     Zustand: eine Sitzung lang gemerkt reicht für diesen Schalter. */
+  return R.einrichtenOffen !== false;
+}
+
+function einrichtenEntscheidungen(){
+  const sj = aktivesSchuljahr();
+  const kurse = sj ? S.kurse.filter(k=>k.schuljahrId===sj.id) : [];
+  const anteile = [...new Set(kurse.map(k=>100 - gewSonstige(k)))];
+  const anteil = !kurse.length ? "noch kein Kurs"
+    : anteile.length === 1 ? anteile[0]+" %" : "je Kurs verschieden";
+
+  return [
+    { frage: "Wie viel zählen Klassenarbeiten?",
+      hinweis: "Der Rest sind die sonstigen Leistungen, darin die mündliche Note",
+      wert: anteil,
+      knopf: kurse.length ? ["Im Kurs ändern", "kursOeffnen", kurse[0].id] : null },
+    { frage: "Wie lange wiegt eine Mitarbeitsnotiz voll?",
+      hinweis: "Nach "+MerkrNoten.HALBWERTSZEIT_WOCHEN+" Wochen zählt sie halb, sie verschwindet aber nie ganz",
+      wert: MerkrNoten.HALBWERTSZEIT_WOCHEN+" Wochen", knopf: null },
+    { frage: "Notenschlüssel",
+      hinweis: "Vorgabe des Landes, gilt für jede Arbeit: 96 / 80 / 60 / 40 / 20 Prozent",
+      wert: "MV", knopf: null },
+    { frage: "Ab wann erinnert merkr an die Sicherung?",
+      hinweis: "Die laufende Ablage liegt in iCloud, der Export ist die zweite Sicherung",
+      wert: "nach 7 Tagen", knopf: null },
+  ];
+}
+
+function viewEinrichten(){
+  const schritte = einrichtenSchritte();
+  const offen = schritte.filter(s=>!s.fertig);
+  const auf = einrichtenAufgeklappt();
+
+  let html = '<div class="zeile raum" style="margin-bottom:16px">'+
+    '<div><h1 style="font-size:26px;font-weight:900;margin:0">Einrichten</h1>'+
+    '<p class="hinweis" style="margin:4px 0 0">Sieben Schritte, in dieser Reihenfolge. Einmal im Schuljahr.</p></div>'+
+    (offen.length || !auf ? '' : '<button data-a="einrichtenKlappen">Zusammenklappen</button>')+'</div>';
+
+  /* Steht alles und ist zugeklappt: eine Zeile. */
+  if (!offen.length && !auf){
+    const planr = schritte[5].fertig, checkr = schritte[6].fertig;
+    return html + '<div class="karte" style="display:flex;align-items:center;gap:14px">'+
+      '<span style="background:var(--s2);color:#fff;border-radius:12px;padding:7px 11px;font-weight:900;font-size:12px">OK</span>'+
+      '<div style="flex:1"><b>Einrichtung steht · '+schritte.length+' von '+schritte.length+'</b>'+
+      '<div class="hinweis">'+(planr&&checkr ? "planr und checkr verbunden"
+        : planr ? "planr verbunden, checkr offen" : "die Verbindungen stehen noch aus")+'</div></div>'+
+      '<button data-a="einrichtenKlappen">Aufklappen</button></div>';
+  }
+
+  html += '<div class="karte" style="padding:6px 16px">';
+  schritte.forEach((s, i)=>{
+    const letzte = i === schritte.length - 1;
+    html += '<div style="display:flex;align-items:center;gap:14px;padding:13px 0'+
+      (letzte?'':';border-bottom:1px solid var(--linie)')+'">'+
+      '<span style="width:28px;height:28px;border-radius:9px;flex:0 0 28px;display:flex;align-items:center;'+
+      'justify-content:center;font-size:13px;font-weight:900;'+
+      (s.fertig ? 'background:var(--s2);color:#fff' : 'background:var(--akzent-hell);color:var(--akzent)')+'">'+
+      (s.fertig ? "✓" : (i+1))+'</span>'+
+      '<div style="flex:1;min-width:0"><b>'+esc(s.titel)+'</b>'+
+      '<div class="hinweis">'+esc(s.fertig ? s.steht : s.offen)+'</div></div>'+
+      (!s.fertig && s.knopf
+        ? '<button class="klein primar" data-a="'+s.knopf[1]+'"'+(s.knopf[2]?' data-id="'+s.knopf[2]+'"':'')+'>'+s.knopf[0]+'</button>'
+        : '')+
+      '</div>';
+  });
+  html += '</div>';
+
+  /* Die Entscheidungen */
+  html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:24px 0 8px">Entscheidungen</h2>'+
+    '<div class="karte" style="padding:6px 16px">';
+  const ents = einrichtenEntscheidungen();
+  ents.forEach((e, i)=>{
+    const letzte = i === ents.length - 1;
+    html += '<div style="display:flex;align-items:center;gap:14px;padding:13px 0'+
+      (letzte?'':';border-bottom:1px solid var(--linie)')+'">'+
+      '<div style="flex:1;min-width:0"><b>'+esc(e.frage)+'</b>'+
+      '<div class="hinweis">'+esc(e.hinweis)+'</div></div>'+
+      '<span style="background:var(--akzent-hell);color:var(--akzent);border-radius:999px;'+
+      'padding:6px 13px;font-weight:800;font-size:13px;white-space:nowrap">'+esc(e.wert)+'</span>'+
+      (e.knopf ? '<button class="klein" data-a="'+e.knopf[1]+'" data-id="'+e.knopf[2]+'">'+e.knopf[0]+'</button>' : '')+
+      '</div>';
+  });
+  html += '</div><p class="hinweis" style="margin-top:10px">Alles Übrige entscheidet merkr selbst: '+
+    'das Datum ist heute, der Kurs kommt aus dem Stundenplan, gerundet wird nach dem Landesschlüssel.</p>';
+
+  return html;
+}
+
+/* Die Einrichten-Ansicht steht vor den übrigen Einstellungen. */
+const einstellungenOhneEinrichten = einrichtenVorher;
+viewEinstellungen = function(){
+  return viewEinrichten() +
+    '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:26px 0 8px">Weiteres</h2>' +
+    einstellungenOhneEinrichten();
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="einrichtenKlappen"]');
+  if (!el) return;
+  R.einrichtenOffen = !einrichtenAufgeklappt();
+  zeichne();
+});
 
 </script>
 </body>
