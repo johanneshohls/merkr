@@ -24,6 +24,11 @@ node bau.mjs
 node --test test/*.mjs
 ```
 
+**Das Repo liegt seit dem 19.08.2026 privat auf GitHub** (`johanneshohls/merkr`) - vorher gab es
+nur die Platte. Privat bleibt es, solange merkr nicht fertig ist. Datendateien dürfen nie hinein:
+die `.gitignore` sperrt `*.json`, `Kursbuch*` und `merkr-sicherung*`, weil hier als einzigem Modul
+die Zuordnung Kürzel zu Mensch entsteht.
+
 `src/kern/` enthält die Rechenteile ohne DOM - Notenvorschlag, Kürzelvergabe und die Zuordnung der
 planr-Kurse. bau.mjs setzt sie
 an der Stelle `/*__KERN__*/` in die Oberfläche, damit dieselben Zeilen im WebView und unter node

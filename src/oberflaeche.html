@@ -40,6 +40,33 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
 #topbar .titel{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 #topbar .wochenbadge{background:var(--akzent); color:#fff; border-radius:8px; padding:3px 9px; font-size:14px; font-weight:600;}
 #app{padding:16px; max-width:1100px; margin:0 auto;}
+
+/* Seitenleiste nach dem Entwurf: 92 px, Marke oben, sechs Ziele als Kacheln.
+   Sie liegt fest am Rand, statt die Seitenstruktur umzubauen - topbar und app
+   rücken einfach nach. */
+#seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
+  display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
+#seitenleiste .marke{display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 0 12px;}
+#seitenleiste .marke b{font-size:17px; font-weight:900; letter-spacing:-.3px; color:var(--akzent);}
+#seitenleiste .marke span{font-size:10px; font-weight:700; color:#96809a;}
+#seitenleiste button{display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 2px 9px;
+  border-radius:16px; background:transparent; color:var(--akzent); min-height:auto; font-size:11px; font-weight:800; line-height:1;}
+#seitenleiste button.aktiv{background:var(--akzent); color:#fff;}
+#seitenleiste button.aus{opacity:.35;}
+#seitenleiste button svg{display:block;}
+body.mitleiste #topbar{padding-left:108px;}
+body.mitleiste #app{padding-left:108px;}
+
+/* Schmal: die Leiste legt sich unten quer. Auf einem iPhone oder im geteilten
+   Bildschirm bleiben 92 px am Rand sonst der halbe Platz. */
+@media (max-width:700px){
+  #seitenleiste{top:auto; right:0; width:auto; height:auto; flex-direction:row; justify-content:space-around;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid var(--linie);}
+  #seitenleiste .marke{display:none;}
+  #seitenleiste button{flex:1; border-radius:12px; padding:8px 2px 6px;}
+  body.mitleiste #topbar, body.mitleiste #app{padding-left:16px;}
+  body.mitleiste #app{padding-bottom:86px;}
+}
 #testbanner{background:#fff3cd; color:#7a5c00; padding:8px 16px; font-size:14px; text-align:center;}
 
 .karte{background:var(--karte); border-radius:var(--radius); box-shadow:var(--schatten); padding:16px; margin-bottom:14px;}
@@ -3210,7 +3237,7 @@ function viewHome(){
    die Darstellung ist neu - jede Aktion trägt dieselbe data-a wie vorher. */
 
 /* --- Anwesenheit: alle sind da, angetippt wird die Abweichung --- */
-anwesenheitDialogHtml = function(k){
+anwesenheitDialogHtml = function(k, alsTab){
   const st = ensureStunde(k.id, R.datum);
   const schueler = kursSchueler(k.id).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
@@ -3250,7 +3277,8 @@ anwesenheitDialogHtml = function(k){
       html += '<button class="klein" data-a="anwMinuten" data-id="'+s.id+'" data-stunde="'+st.id+'">+5 min</button>';
     html += '</div>';
   }
-  return html + '<div class="abstand"></div><button class="primar" data-a="modalZu">Fertig</button>';
+  /* Als Tab braucht es keinen Schlussknopf - man bleibt einfach. */
+  return html + (alsTab ? '' : '<div class="abstand"></div><button class="primar" data-a="modalZu">Fertig</button>');
 };
 
 /* --- Schülerprofil: die Zahl und woher sie kommt --- */
@@ -3397,6 +3425,98 @@ viewArbeiten = function(k){
     }
     html += '</div>';
   }
+  return html;
+};
+
+/* ================= Seitenleiste =================
+   Nach dem Entwurf von Claude Design: 92 px, Marke oben, sechs Ziele als
+   Kacheln mit Symbol und Wort. Vier davon brauchen einen offenen Kurs - ohne
+   ihn stehen sie blass da und führen zur Kursliste, statt ins Leere zu tippen. */
+
+const LEISTE = [
+  {id:"heute", label:"Heute", view:"home", tab:null, icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"4\"/><path d=\"M8 3v4M16 3v4M3 11h18\"/></svg>"},
+  {id:"sitzplan", label:"Sitzplan", view:"kurs", tab:"sitzplan", icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"2\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"2\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"2\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"2\"/></svg>"},
+  {id:"anwesend", label:"Anwesend", view:"kurs", tab:"anwesenheit", icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 12.5l2.8 2.8L16 9.5\"/></svg>"},
+  {id:"schueler", label:"Sch\u00fcler", view:"kurs", tab:"liste", icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4.5 20c1.4-3.6 4.1-5.2 7.5-5.2s6.1 1.6 7.5 5.2\"/></svg>"},
+  {id:"arbeiten", label:"Arbeiten", view:"kurs", tab:"arbeiten", icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M4 20V11M10 20V5M16 20v-7M22 20H2\"/></svg>"},
+  {id:"einricht", label:"Einrichten", view:"einstellungen", tab:null, icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M4 7h16M4 17h16\"/><circle cx=\"9\" cy=\"7\" r=\"2.5\"/><circle cx=\"15\" cy=\"17\" r=\"2.5\"/></svg>"}
+];
+
+function zeichneSeitenleiste(){
+  let el = document.getElementById("seitenleiste");
+  if (!el){
+    el = document.createElement("nav");
+    el.id = "seitenleiste";
+    document.body.appendChild(el);
+  }
+  document.body.classList.add("mitleiste");
+
+  const sj = aktivesSchuljahr();
+  const k = kursVon(R.kursId);
+  const imZweiten = sj && sj.halbjahrGrenze && todayISO() >= sj.halbjahrGrenze;
+
+  let html = '<div class="marke"><b>merkr</b><span>'+
+    (sj ? "HJ "+(imZweiten?2:1)+" · "+esc(String(sj.name||"").replace("20","").replace("/", "/")) : "kein Schuljahr")+'</span></div>';
+
+  for (const e of LEISTE){
+    const brauchtKurs = e.view==="kurs";
+    const aus = brauchtKurs && !k;
+    const aktiv = (R.view===e.view && (!e.tab || R.tab===e.tab)) ||
+      (e.id==="schueler" && R.view==="profil");
+    html += '<button class="'+(aktiv?"aktiv":"")+(aus?" aus":"")+'" data-a="leiste" data-id="'+e.id+'">'+
+      e.icon + '<span>'+e.label+'</span></button>';
+  }
+  el.innerHTML = html;
+}
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="leiste"]');
+  if (!el) return;
+  const eintrag = LEISTE.find(x=>x.id===el.dataset.id);
+  if (!eintrag) return;
+
+  if (eintrag.view==="kurs" && !kursVon(R.kursId)){
+    /* Ohne offenen Kurs führt der Weg zur Übersicht - dort steht, was es gibt. */
+    R.view = "home"; zeichne(); toast("Zuerst einen Kurs öffnen");
+    return;
+  }
+  if (eintrag.id==="schueler" && R.view==="profil"){ zeichne(); return; }
+  R.view = eintrag.view;
+  if (eintrag.tab) R.tab = eintrag.tab;
+  zeichne();
+});
+
+/* Die Leiste wird bei jedem Zeichnen mitgeführt. */
+const zeichneVorher = zeichne;
+zeichne = function(){
+  zeichneVorher();
+  zeichneSeitenleiste();
+};
+
+/* Anwesenheit gibt es jetzt auch als Tab, weil die Seitenleiste sie als
+   eigenes Ziel führt. Der Dialog über die Kopfzeile bleibt daneben bestehen. */
+/* Der Tab-Streifen zeigt nur, was die Seitenleiste nicht führt. Sitzplan,
+   Anwesend, Schüler und Arbeiten stehen links - zweimal derselbe Weg macht die
+   Oberfläche nicht bedienbarer, sondern unentschlossen. */
+const KURS_TABS_MIT_ANWESENHEIT = [["stunden","Stunden"],["jahr","Jahr"],
+  ["auswertung","Auswertung"],["kurscfg","Kurs"]];
+
+viewKurs = function(){
+  const k = kursVon(R.kursId);
+  if (!k){ R.view="home"; return viewHome(); }
+  let html = '<div class="tabs">';
+  for (const [id, name] of KURS_TABS_MIT_ANWESENHEIT)
+    html += '<button class="'+(R.tab===id?"aktiv":"")+'" data-a="tab" data-id="'+id+'">'+name+'</button>';
+  html += '</div>';
+  if (R.tab==="sitzplan" || R.tab==="liste") html += kursKopfzeile(k);
+  if (R.tab==="sitzplan") html += viewSitzplan(k);
+  else if (R.tab==="anwesenheit") html += anwesenheitDialogHtml(k, true);
+  else if (R.tab==="liste") html += viewListe(k);
+  else if (R.tab==="stunden") html += viewStunden(k);
+  else if (R.tab==="jahr") html += viewJahr(k);
+  else if (R.tab==="arbeiten") html += viewArbeiten(k);
+  else if (R.tab==="auswertung") html += viewAuswertung(k);
+  else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 };
 
