@@ -4855,6 +4855,81 @@ document.addEventListener("click", ev=>{
 
 zeichne();
 
+/* ================= Auch der Sitzplan folgt dem Stundenplan =================
+   Eine Mitarbeitsnotiz gehört an eine Unterrichtsstunde. Über addEreignis lief
+   sie bisher an ensureThe(R.datum) - und das Datumsfeld nahm jeden Tag an, auch
+   einen Sonntag. Jetzt gilt für den Sitzplan dieselbe Regel wie für die
+   Anwesenheit: kein Unterricht, keine Erfassung.
+
+   Das freie Datumsfeld weicht dem Blätterer über die Stunden des Kurses. Für
+   weite Sprünge gibt es den Reiter "Stunden" mit allen Terminen. */
+
+function tagKopf(k){
+  const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
+  const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
+  const wt = wochentagName(new Date(R.datum+"T12:00:00").getDay());
+  return '<div class="zeile">'+
+    (zurueck ? '<button class="klein" data-a="anwTag" data-datum="'+zurueck+'">‹</button>'
+             : '<button class="klein" disabled style="opacity:.35">‹</button>')+
+    '<b>'+wt+', '+esc(fmtDatum(R.datum))+'</b>'+
+    (vor ? '<button class="klein" data-a="anwTag" data-datum="'+vor+'">›</button>'
+         : '<button class="klein" disabled style="opacity:.35">›</button>')+
+    (R.datum !== todayISO() && hatUnterricht(k.id, todayISO())
+      ? '<button class="klein" data-a="anwTag" data-datum="'+todayISO()+'">Heute</button>' : '')+
+    '</div>';
+}
+
+/** Der Hinweis, wenn an diesem Tag kein Unterricht ist - für Sitzplan wie Anwesenheit. */
+function keinUnterrichtHinweis(k, was){
+  const grund = unterrichtsfrei(R.datum);
+  const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
+  const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
+  const wt = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][new Date(R.datum+"T12:00:00").getDay()];
+
+  let html = '<div class="karte" style="text-align:center;padding:30px 18px">'+
+    '<div style="font-size:17px;font-weight:900">'+esc(fmtDatum(R.datum))+' · '+wt+'</div>'+
+    '<p class="hinweis" style="margin:6px 0 14px">'+
+    (grund ? esc(grund)+" - kein Unterricht." : esc(k.name)+" hat an diesem Tag laut Stundenplan keinen Unterricht.")+
+    '<br>'+esc(was)+'</p><div class="zeile" style="justify-content:center">';
+  if (zurueck) html += '<button data-a="anwTag" data-datum="'+zurueck+'">‹ '+fmtDatum(zurueck)+'</button>';
+  if (vor) html += '<button class="primar" data-a="anwTag" data-datum="'+vor+'">'+fmtDatum(vor)+' ›</button>';
+  if (!zurueck && !vor) html += '<span class="hinweis">Für diesen Kurs steht kein Stundenplan.</span>';
+  return html + '</div></div>';
+}
+
+const sitzplanOhnePlan = viewSitzplan;
+viewSitzplan = function(k){
+  if (!hatUnterricht(k.id, R.datum))
+    return keinUnterrichtHinweis(k, "Mitarbeit wird an der Stunde festgehalten, nicht am Kalendertag.");
+  return sitzplanOhnePlan(k);
+};
+
+/* Die Kopfzeile: Blätterer statt Datumsfeld, sonst unverändert. */
+kursKopfzeile = function(k){
+  if (!hatUnterricht(k.id, R.datum)) return "";
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const thema = st && st.thema ? esc(st.thema)
+    : (st && st.geplant ? esc(st.geplant)+' <span class="hinweis">· geplant</span>'
+    : '<span class="hinweis">kein Thema eingetragen</span>');
+  return '<div class="karte"><div class="zeile raum">'+
+    tagKopf(k)+
+    '<div class="zeile">'+
+    '<button class="klein" data-a="stundeDialog">Stunde: '+thema+'</button>'+
+    '<button class="klein" data-a="anwesenheitDialog">Anwesenheit</button>'+
+    '</div></div></div>';
+};
+
+/* Die Anwesenheit nutzt denselben Hinweis und denselben Kopf. */
+anwesenheitDialogHtml = function(k, alsTab){
+  if (!hatUnterricht(k.id, R.datum))
+    return '<h2>Anwesenheit</h2>' +
+      keinUnterrichtHinweis(k, "Anwesenheit wird an der Stunde festgehalten, nicht am Kalendertag.");
+  return '<div class="zeile raum" style="margin-bottom:10px">'+tagKopf(k)+'</div>' +
+    anwesenheitOhnePlan(k, alsTab);
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
