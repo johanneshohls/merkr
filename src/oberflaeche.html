@@ -1,0 +1,2594 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Kursbuch</title>
+<style>
+:root{
+  --akzent:#3d7a4e; --akzent-hell:#e8f2ea; --bg:#f4f5f2; --karte:#ffffff;
+  --text:#22301f; --text2:#6b7a68; --linie:#dde3da; --rot:#c62828;
+  --s2:#1b5e20; --s1:#8bc34a; --s0:#fbc02d; --sm1:#f57c00; --sm2:#d32f2f;
+  --radius:14px; --schatten:0 1px 4px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;height:100%;}
+body{
+  font-family:-apple-system,"Avenir Next","Segoe UI",Roboto,sans-serif;
+  background:var(--bg); color:var(--text); font-size:16px;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+input,textarea,select{ -webkit-user-select:text; user-select:text; font-family:inherit; font-size:16px;
+  border:1px solid var(--linie); border-radius:8px; padding:9px 10px; background:#fff; color:var(--text); max-width:100%;}
+textarea{width:100%; min-height:90px;}
+button{font-family:inherit; font-size:16px; border:none; border-radius:10px; padding:10px 14px;
+  background:var(--akzent-hell); color:var(--akzent); cursor:pointer; min-height:44px;}
+button.primar{background:var(--akzent); color:#fff;}
+button.gefahr{background:#fdecea; color:var(--rot);}
+button.klein{min-height:34px; padding:5px 10px; font-size:14px; border-radius:8px;}
+h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16px;margin:0 0 8px;}
+.hinweis{color:var(--text2); font-size:14px;}
+
+#topbar{position:sticky; top:0; z-index:40; background:var(--bg); display:flex; align-items:center;
+  gap:10px; padding:12px 16px; border-bottom:1px solid var(--linie);}
+#topbar .titel{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#topbar .wochenbadge{background:var(--akzent); color:#fff; border-radius:8px; padding:3px 9px; font-size:14px; font-weight:600;}
+#app{padding:16px; max-width:1100px; margin:0 auto;}
+#testbanner{background:#fff3cd; color:#7a5c00; padding:8px 16px; font-size:14px; text-align:center;}
+
+.karte{background:var(--karte); border-radius:var(--radius); box-shadow:var(--schatten); padding:16px; margin-bottom:14px;}
+.zeile{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.zeile.raum{justify-content:space-between;}
+.feld{display:flex; flex-direction:column; gap:4px; margin-bottom:10px;}
+.feld label{font-size:13px; color:var(--text2);}
+
+.kurskachel{display:flex; align-items:center; gap:12px; padding:14px; border-radius:var(--radius);
+  background:var(--karte); box-shadow:var(--schatten); margin-bottom:10px; cursor:pointer;}
+.kursfarbe{width:16px; height:44px; border-radius:6px; flex-shrink:0;}
+.kurskachel .info{flex:1;} .kurskachel .info .sub{font-size:13px; color:var(--text2);}
+
+.tabs{display:flex; gap:6px; margin:0 0 14px; overflow-x:auto; padding-bottom:2px;}
+.tabs button{white-space:nowrap; background:#fff; color:var(--text2); border:1px solid var(--linie);}
+.tabs button.aktiv{background:var(--akzent); color:#fff; border-color:var(--akzent);}
+
+/* Sitzplan */
+#sitzflaeche{position:relative; background:
+  repeating-linear-gradient(0deg,transparent,transparent 27px,#eef1ec 27px,#eef1ec 28px),
+  repeating-linear-gradient(90deg,transparent,transparent 27px,#eef1ec 27px,#eef1ec 28px),
+  #fbfcfa;
+  border:1px solid var(--linie); border-radius:var(--radius); height:600px; overflow:hidden; touch-action:none;}
+.stile{position:absolute; width:104px; min-height:56px; border-radius:10px; background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.14); border-top:5px solid var(--akzent); padding:6px 8px 5px;
+  cursor:pointer; touch-action:none;}
+.stile .sname{font-size:14px; font-weight:600; line-height:1.15; pointer-events:none;}
+.stile .spunkte{display:flex; gap:3px; margin-top:4px; flex-wrap:wrap; pointer-events:none; min-height:8px;}
+.stile .spunkte i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.stile.fehlt{opacity:.45; border-top-color:var(--rot);}
+.stile.fehlt::after{content:"fehlt"; position:absolute; top:4px; right:6px; font-size:11px; color:var(--rot); font-weight:700;}
+
+/* Schülerliste */
+.slzeile{display:flex; align-items:center; gap:10px; padding:10px 12px; background:#fff;
+  border-radius:10px; margin-bottom:6px; box-shadow:var(--schatten); cursor:pointer;}
+.slzeile .sname{flex:1; font-weight:600;}
+.slzeile .spunkte{display:flex; gap:3px;} .slzeile .spunkte i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.slzeile.fehlt{opacity:.5;} .slzeile.fehlt .sname::after{content:"  – fehlt"; color:var(--rot); font-weight:400; font-size:14px;}
+
+/* Popover / Modal */
+#overlay{position:fixed; inset:0; background:rgba(20,30,18,.35); z-index:60; display:none;}
+#overlay.offen{display:block;}
+#popover{position:fixed; z-index:70; background:#fff; border-radius:16px; box-shadow:0 6px 30px rgba(0,0,0,.25);
+  width:400px; max-width:calc(100vw - 24px); max-height:82vh; overflow-y:auto; padding:16px; display:none;}
+#popover.offen{display:block;}
+.pkopf{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+.pkopf .pname{font-size:18px; font-weight:700;}
+.katzeile{display:flex; align-items:center; gap:8px; margin-bottom:8px; width:100%;}
+.katzeile .katlabel{width:112px; font-size:13px; color:var(--text2); line-height:1.2;}
+.stufen{display:flex; gap:6px; flex:1;}
+.stufe{flex:1; height:44px; border-radius:9px; border:none; color:#fff; font-weight:700; font-size:15px; cursor:pointer; min-height:44px; padding:0;}
+.chipreihe{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.chip{background:var(--akzent-hell); color:var(--akzent); border-radius:20px; padding:9px 14px; font-size:14px; border:none; min-height:40px;}
+.chip.aktivrot{background:#fdecea; color:var(--rot);}
+
+.modalbox{position:fixed; z-index:70; left:50%; top:50%; transform:translate(-50%,-50%);
+  background:#fff; border-radius:16px; box-shadow:0 6px 30px rgba(0,0,0,.25);
+  width:560px; max-width:calc(100vw - 24px); max-height:86vh; overflow-y:auto; padding:20px; display:none;}
+.modalbox.offen{display:block;}
+
+/* Tabellen */
+table.tab{width:100%; border-collapse:collapse; font-size:15px;}
+table.tab th{color:var(--text2); font-size:13px; text-align:left; font-weight:600; padding:6px 8px; border-bottom:1px solid var(--linie);}
+table.tab td{padding:8px; border-bottom:1px solid var(--linie); vertical-align:middle;}
+table.tab tr:last-child td{border-bottom:none;}
+.stufenpunkt{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:middle;}
+
+/* Noteneingabe */
+.wertknoepfe{display:flex; gap:5px; flex-wrap:wrap;}
+.wertknoepfe button{min-width:44px; min-height:40px; padding:4px 6px; background:#fff; border:1px solid var(--linie); color:var(--text); border-radius:8px;}
+.wertknoepfe button.gewaehlt{background:var(--akzent); color:#fff; border-color:var(--akzent);}
+
+/* Statistik */
+.statzeile{display:flex; gap:18px; flex-wrap:wrap; margin:10px 0;}
+.statwert{background:var(--akzent-hell); border-radius:10px; padding:8px 14px;}
+.statwert .gross{font-size:22px; font-weight:700; color:var(--akzent);}
+.statwert .klein2{font-size:12px; color:var(--text2);}
+svg text{font-family:inherit;}
+
+#toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:80;
+  background:#22301f; color:#fff; border-radius:12px; padding:12px 16px; display:none; align-items:center; gap:14px;
+  box-shadow:0 4px 18px rgba(0,0,0,.3); max-width:90vw;}
+#toast.offen{display:flex;}
+#toast button{background:transparent; color:#9fd6ac; font-weight:700; padding:4px 8px; min-height:auto;}
+.leer{color:var(--text2); text-align:center; padding:30px 10px; font-size:15px;}
+.abstand{height:8px;}
+.gewslider{display:flex; align-items:center; gap:10px;}
+.gewslider input[type=range]{flex:1;}
+.fehlstatus button{margin-right:6px;}
+
+/* ==== Design „Tafel" (dunkel) – von Herrn Leußner gewählt ==== */
+:root{ --akzent:#8fbf6f; --akzent-hell:#2e3a30; --bg:#171d19; --karte:#232b25;
+  --text:#e9efe6; --text2:#9fb098; --linie:#39443a; --rot:#ef7b6d; --schatten:0 1px 4px rgba(0,0,0,.5); }
+button{ color:#cfe3c2; }
+button.primar{ background:#8fbf6f; color:#14210f; }
+button.gefahr{ background:#4a2a26; color:#ffb4a8; }
+input,textarea,select{ background:#1b221d; color:#e9efe6; border-color:#39443a; color-scheme:dark; }
+#topbar{ background:#11150f; border-bottom-color:#39443a; }
+#topbar .wochenbadge{ background:#8fbf6f; color:#14210f; }
+.tabs button{ background:#232b25; color:#9fb098; border-color:#39443a; }
+.tabs button.aktiv{ background:#8fbf6f; color:#14210f; border-color:#8fbf6f; }
+#sitzflaeche{ background:
+  repeating-linear-gradient(0deg,transparent,transparent 27px,#222a24 27px,#222a24 28px),
+  repeating-linear-gradient(90deg,transparent,transparent 27px,#222a24 27px,#222a24 28px),
+  #1b221d; border-color:#39443a; }
+.stile{ background:#2b352d; box-shadow:0 1px 5px rgba(0,0,0,.55); }
+.stile .sname{ color:#e9efe6; }
+.slzeile{ background:#232b25; }
+#popover,.modalbox{ background:#232b25; color:#e9efe6; }
+table.tab td{ border-bottom-color:#39443a; }
+table.tab th{ border-bottom-color:#39443a; }
+.chip{ background:#2e3a30; color:#cfe3c2; }
+.chip.aktivrot{ background:#4a2a26; color:#ffb4a8; }
+.wertknoepfe button{ background:#1b221d; border-color:#39443a; color:#e9efe6; }
+.wertknoepfe button.gewaehlt{ background:#8fbf6f; color:#14210f; border-color:#8fbf6f; }
+.statwert{ background:#2e3a30; }
+.statwert .gross{ color:#a9d68b; }
+#testbanner{ background:#3a3423; color:#e8d894; }
+svg text{ fill:#a8b8a0 !important; }
+#toast{ background:#0d110c; }
+</style>
+</head>
+<body style="background:#171d19;color:#e9efe6">
+<script>
+/* Früher Fehlerfänger: zeigt Startfehler sichtbar an, statt weiß zu bleiben */
+window.__KB_startFehlerText = "";
+window.onerror = function(msg, quelle, zeile){
+  try{
+    window.__KB_startFehlerText = msg + " (Zeile " + zeile + ")";
+    var d = document.getElementById("fehleranzeige");
+    if (!d){
+      d = document.createElement("div");
+      d.id = "fehleranzeige";
+      d.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#7a1f1f;color:#fff;padding:12px 16px;font:14px -apple-system,sans-serif;";
+      (document.body || document.documentElement).appendChild(d);
+    }
+    d.textContent = "Kursbuch-Startfehler: " + window.__KB_startFehlerText;
+    var la = document.getElementById("ladeanzeige");
+    if (la) la.innerHTML = "<b>Kursbuch konnte nicht starten.</b><br><br>" +
+      String(window.__KB_startFehlerText).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  }catch(e){}
+};
+window.__KB_startOk = false;
+</script>
+<div id="testbanner" style="display:none">Testmodus ohne Scriptable – Änderungen werden <b>nicht dauerhaft</b> gespeichert.</div>
+<div id="topbar"></div>
+<div id="ladeanzeige" style="padding:24px;font:16px -apple-system,sans-serif;background:#171d19;color:#e9efe6">
+<b>Kursbuch startet …</b><br><br>Bleibt dieser Text stehen, bricht das Skript ab.
+</div>
+<div id="app"></div>
+<div id="overlay"></div>
+<div id="popover"></div>
+<div id="modal" class="modalbox"></div>
+<div id="toast"><span id="toasttext"></span><button data-a="undo">Rückgängig</button></div>
+<script>
+"use strict";
+/* ============ Injektion durch Scriptable ============ */
+const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
+const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
+/* ============ Konstanten ============ */
+const MITARBEIT_KATEGORIEN = [
+  {id:"qual_m",  name:"Qualität mündliche Beteiligung",  kurz:"Qual. mündl."},
+  {id:"quant_m", name:"Quantität mündliche Beteiligung", kurz:"Quant. mündl."},
+  {id:"qual_s",  name:"Qualität schriftl. Ergebnisse (Arbeitsphasen)",  kurz:"Qual. schriftl."},
+  {id:"quant_s", name:"Quantität schriftl. Ergebnisse (Arbeitsphasen)", kurz:"Quant. schriftl."}
+];
+const STUFEN = [
+  {v: 2, label:"++",   farbe:"var(--s2)",  hex:"#1b5e20"},
+  {v: 1, label:"+",    farbe:"var(--s1)",  hex:"#8bc34a"},
+  {v: 0, label:"o",    farbe:"var(--s0)",  hex:"#fbc02d"},
+  {v:-1, label:"−",    farbe:"var(--sm1)", hex:"#f57c00"},
+  {v:-2, label:"−−",   farbe:"var(--sm2)", hex:"#d32f2f"}
+];
+const EINFACH_EREIGNISSE = [
+  {id:"ha_vergessen", name:"Hausaufgaben vergessen", symbol:"HA"},
+  {id:"material",     name:"Material vergessen",     symbol:"M"},
+  {id:"stoerung",     name:"Störung",                symbol:"!"},
+  {id:"positiv",      name:"Positives Sozialverhalten", symbol:"☺"}
+];
+const KURSFARBEN = ["#3d7a4e","#3465a4","#a04578","#b3831a","#7d4fa0","#20807d","#b04a30","#5a6b3b"];
+const ARBEIT_ARTEN = [
+  {name:"Klassenarbeit", bereich:"arbeit"},
+  {name:"Klausur",       bereich:"arbeit"},
+  {name:"LEK",           bereich:"sonstige"},
+  {name:"Test",          bereich:"sonstige"},
+  {name:"Referat",       bereich:"sonstige"},
+  {name:"Protokoll",     bereich:"sonstige"},
+  {name:"Hefter",        bereich:"sonstige"}
+];
+/* Leistungsbewertung nach LBVO/APVO MV: zwei Bereiche –
+   Klassenarbeiten/Klausuren einerseits, sonstige Leistungen andererseits.
+   Zu den sonstigen Leistungen gehoeren die muendliche Note, LEKs, Referate usw. */
+const BEREICHE = {
+  arbeit:    {kurz:"Klassenarb.", lang:"Klassenarbeit / Klausur"},
+  muendlich: {kurz:"mündlich",    lang:"mündliche Note"},
+  sonstige:  {kurz:"sonstige",    lang:"sonstige Leistung"}
+};
+function artBereich(artName){
+  const a = ARBEIT_ARTEN.find(x=>x.name===artName);
+  return a ? a.bereich : "arbeit";
+}
+function bereichNorm(b){
+  if (b==="schriftlich") return "arbeit";           /* Altdaten */
+  return (b==="muendlich" || b==="sonstige" || b==="arbeit") ? b : "arbeit";
+}
+function bereichKurz(b){ return BEREICHE[bereichNorm(b)].kurz; }
+/* Gewicht 0 = Zwischenstand: wird notiert, zaehlt aber nicht in die Note. */
+function gew(x){ return (x==null || x==="") ? 1 : Number(x); }
+function gewText(x){ return gew(x)===0 ? "Zwischenstand" : String(gew(x)); }
+function bereichLang(b){ return BEREICHE[bereichNorm(b)].lang; }
+function gewSonstige(k){ return k.gewichtSonstige==null ? (k.gewichtMuendlich==null?50:k.gewichtMuendlich) : k.gewichtSonstige; }
+function gewMdlAnteil(k){ return k.gewichtMuendlichAnteil==null ? 50 : Math.round(Number(k.gewichtMuendlichAnteil)); }
+/* Zwei Wege, die muendliche Note innerhalb der sonstigen Leistungen zu wichten:
+   "gewicht" – sie zaehlt wie jede andere sonstige Leistung, gesteuert ueber ihr Gewicht
+   "anteil"  – sie bekommt einen festen Prozentsatz der sonstigen Leistungen */
+function mdlModus(k){ return k && k.mdlModus==="anteil" ? "anteil" : "gewicht"; }
+function gewichtungsText(k){
+  const ws = gewSonstige(k);
+  return "Klassenarbeiten "+(100-ws)+" % · sonstige Leistungen "+ws+" % — "+
+    (mdlModus(k)==="anteil"
+      ? "mündliche Note fest "+gewMdlAnteil(k)+" % der sonstigen"
+      : "mündliche Note zählt als eine sonstige Leistung (über ihr Gewicht)");
+}
+
+/* ============ Hilfsfunktionen ============ */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+let uidZaehler = 0;
+function uid(){ uidZaehler++; return Date.now().toString(36)+"-"+uidZaehler+"-"+Math.floor(Math.random()*1e6).toString(36); }
+function todayISO(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fmtDatum(iso){ if(!iso) return "–"; const [j,m,t]=iso.split("-"); return t+"."+m+"."+j; }
+function fmtDatumKurz(iso){ if(!iso) return "–"; const [j,m,t]=iso.split("-"); return t+"."+m+"."; }
+function fmtZahl(x, stellen){ if(x==null||isNaN(x)) return "–"; return x.toFixed(stellen==null?1:stellen).replace(".", ","); }
+function stufeInfo(v){ return STUFEN.find(s=>s.v===v) || STUFEN[2]; }
+function wochentagName(d){ return ["So","Mo","Di","Mi","Do","Fr","Sa"][d]; }
+
+/* ============ Zustand ============ */
+function leererZustand(){
+  return {
+    version: 1,
+    einstellungen: { aktivesSchuljahrId: null, eigeneEreignisse: [], letztesBackup: null },
+    schuljahre: [], kurse: [], schueler: [], stunden: [], ereignisse: [], noten: [], arbeiten: [], anwesenheit: []
+  };
+}
+function migriereBereiche(){
+  for (const k of S.kurse){
+    if (k.gewichtSonstige == null) k.gewichtSonstige = (k.gewichtMuendlich==null?50:k.gewichtMuendlich);
+    if (k.gewichtMuendlichAnteil == null) k.gewichtMuendlichAnteil = 50;
+    if (k.mdlModus !== "anteil" && k.mdlModus !== "gewicht") k.mdlModus = "gewicht";
+  }
+  for (const n of S.noten) n.bereich = bereichNorm(n.bereich);
+  for (const a of S.arbeiten) if (!a.bereich) a.bereich = artBereich(a.art);
+}
+let S = leererZustand();
+if (KB_INJECTED && typeof KB_INJECTED === "object") {
+  S = Object.assign(leererZustand(), KB_INJECTED);
+  S.einstellungen = Object.assign(leererZustand().einstellungen, KB_INJECTED.einstellungen||{});
+}
+/* Altdatenreparatur: fehlende Felder ergaenzen, bevor gezeichnet wird.
+   Jede kuenftige Feldaenderung MUSS hier mit Vorbelegung ergaenzt werden. */
+(function reparieren(){
+  var leer = leererZustand();
+  for (var f in leer) if (Array.isArray(leer[f]) && !Array.isArray(S[f])) S[f] = [];
+  if (!S.einstellungen || typeof S.einstellungen !== "object") S.einstellungen = leer.einstellungen;
+  if (!Array.isArray(S.einstellungen.eigeneEreignisse)) S.einstellungen.eigeneEreignisse = [];
+
+  S.schueler.forEach(function(x){
+    if (!x || typeof x !== "object") return;
+    if (!Array.isArray(x.kursIds)) x.kursIds = x.kursId ? [x.kursId] : [];
+    if (typeof x.name !== "string") x.name = String(x.name == null ? "" : x.name);
+    if (typeof x.vorname !== "string") x.vorname = String(x.vorname == null ? "" : x.vorname);
+    if (!x.sitz || typeof x.sitz !== "object") x.sitz = {};
+  });
+  S.kurse.forEach(function(k){
+    if (!k || typeof k !== "object") return;
+    if (!Array.isArray(k.slots)) k.slots = [];
+    if (typeof k.jahrgang !== "number") k.jahrgang = parseInt(k.jahrgang, 10) || 11;
+  });
+  S.arbeiten.forEach(function(a){
+    if (!a || typeof a !== "object") return;
+    if (!a.ergebnisse || typeof a.ergebnisse !== "object") a.ergebnisse = {};
+  });
+  S.schueler = S.schueler.filter(function(x){ return x && typeof x === "object"; });
+  S.kurse = S.kurse.filter(function(k){ return k && typeof k === "object"; });
+})();
+migriereBereiche();
+
+/* Route */
+let R = { view:"home", kursId:null, tab:"sitzplan", schuelerId:null, datum: todayISO() };
+let letzteAktion = null;   // {text, undo}
+let toastTimer = null;
+
+/* ============ Speicher-Brücke (Scriptable) ============ */
+let bridgeCompletion = null;
+const bridgeWarteschlange = [];
+window.__KB_awaitMessage = function(completion){
+  if (bridgeWarteschlange.length) completion(bridgeWarteschlange.shift());
+  else bridgeCompletion = completion;
+};
+function sendeAnBridge(msg){
+  if (KB_MODE !== "scriptable") return;
+  if (bridgeCompletion){ const c = bridgeCompletion; bridgeCompletion = null; c(JSON.stringify(msg)); }
+  else bridgeWarteschlange.push(JSON.stringify(msg));
+}
+window.__KB_getState = function(){ return JSON.stringify(S); };
+window.__KB_importData = function(jsonText){
+  try{
+    const neu = JSON.parse(jsonText);
+    if(!neu || !Array.isArray(neu.kurse)) throw new Error("Format");
+    S = Object.assign(leererZustand(), neu);
+    S.einstellungen = Object.assign(leererZustand().einstellungen, neu.einstellungen||{});
+    migriereBereiche();
+    speichern(); R = { view:"home", kursId:null, tab:"sitzplan", schuelerId:null, datum: todayISO() };
+    zeichne(); toast("Daten importiert");
+    return "ok";
+  }catch(e){ alertBox("Import fehlgeschlagen: Datei ist keine gültige Kursbuch-Sicherung."); return "fehler"; }
+};
+
+let speicherTimer = null;
+function speichern(){
+  if (KB_MODE !== "scriptable") return;
+  clearTimeout(speicherTimer);
+  speicherTimer = setTimeout(()=>{ sendeAnBridge({typ:"save", daten: JSON.stringify(S)}); }, 700);
+}
+document.addEventListener("visibilitychange", ()=>{
+  if (document.visibilityState === "hidden" && KB_MODE === "scriptable"){
+    clearTimeout(speicherTimer);
+    sendeAnBridge({typ:"save", daten: JSON.stringify(S)});
+  }
+});
+
+/* ============ Domänenlogik ============ */
+function aktivesSchuljahr(){ return S.schuljahre.find(x=>x.id===S.einstellungen.aktivesSchuljahrId) || S.schuljahre[0] || null; }
+function kursVon(id){ return S.kurse.find(k=>k.id===id); }
+function schuelerVon(id){ return S.schueler.find(x=>x.id===id); }
+function kursSchueler(kursId){
+  return S.schueler.filter(x=>x.kursIds.includes(kursId))
+    .sort((a,b)=> (a.name+a.vorname).localeCompare(b.name+b.vorname,"de"));
+}
+function notensystem(kurs){
+  if (kurs.jahrgang >= 11) return {typ:"punkte", werte:Array.from({length:16},(_,i)=>15-i), einheit:"Punkte", best:15, schlechtest:0};
+  return {typ:"noten", werte:[1,2,3,4,5,6], einheit:"Note", best:1, schlechtest:6};
+}
+function mondayOf(iso){
+  const d = new Date(iso+"T12:00:00");
+  const tag = (d.getDay()+6)%7; d.setDate(d.getDate()-tag);
+  return d;
+}
+function wochenBuchstabe(sj, iso){
+  if (!sj || !sj.aWocheAnker) return null;
+  const a = mondayOf(sj.aWocheAnker), b = mondayOf(iso);
+  const diff = Math.round((b-a)/(7*24*3600*1000));
+  return ((diff % 2)+2) % 2 === 0 ? "A" : "B";
+}
+function ensureStunde(kursId, iso){
+  let st = S.stunden.find(x=>x.kursId===kursId && x.datum===iso);
+  if(!st){ st = {id:uid(), kursId, datum:iso, thema:"", hausaufgabe:"", geplant:"", ausfall:false}; S.stunden.push(st); speichern(); }
+  return st;
+}
+function stundeVon(id){ return S.stunden.find(x=>x.id===id); }
+
+function addEreignis(schuelerId, kursId, typ, stufe, text){
+  const st = ensureStunde(kursId, R.datum);
+  const e = {id:uid(), schuelerId, kursId, stundeId:st.id, ts:new Date().toISOString(), typ, stufe:(stufe===undefined?null:stufe), text:text||""};
+  S.ereignisse.push(e); speichern();
+  return e;
+}
+function ereignisName(e){
+  const kat = MITARBEIT_KATEGORIEN.find(k=>k.id===e.typ);
+  if (kat) return kat.kurz;
+  const einf = EINFACH_EREIGNISSE.find(k=>k.id===e.typ);
+  if (einf) return einf.name;
+  const eigen = S.einstellungen.eigeneEreignisse.find(k=>k.id===e.typ);
+  if (eigen) return eigen.name;
+  if (e.typ==="notiz") return "Notiz";
+  return e.typ;
+}
+function anwesenheitVon(schuelerId, stundeId){
+  return S.anwesenheit.find(a=>a.schuelerId===schuelerId && a.stundeId===stundeId);
+}
+function setzeAnwesenheit(schuelerId, stundeId, status, minuten){
+  let a = anwesenheitVon(schuelerId, stundeId);
+  if (status === "anwesend"){
+    if (a) S.anwesenheit = S.anwesenheit.filter(x=>x!==a);
+  } else {
+    if (!a){ a = {id:uid(), schuelerId, stundeId, status, minuten:minuten||0, entschuldigt:null}; S.anwesenheit.push(a); }
+    else { a.status = status; a.minuten = minuten||a.minuten||0; }
+  }
+  speichern();
+}
+
+/* Notenberechnung */
+function schuelerNoten(schuelerId, kursId){
+  const einzel = S.noten.filter(n=>n.schuelerId===schuelerId && n.kursId===kursId);
+  const arbeitsNoten = [];
+  for (const a of S.arbeiten.filter(a=>a.kursId===kursId)){
+    const w = a.ergebnisse[schuelerId];
+    if (w!==undefined && w!==null && w!=="")
+      arbeitsNoten.push({wert:Number(w), bereich:bereichNorm(a.bereich||artBereich(a.art)), label:a.titel, gewicht:gew(a.gewicht), datum:a.datum, ausArbeit:true});
+  }
+  return einzel.map(n=>({wert:Number(n.wert), bereich:bereichNorm(n.bereich), label:n.label||"", gewicht:gew(n.gewicht), datum:n.datum, id:n.id})).concat(arbeitsNoten);
+}
+function gewMittel(liste){
+  let sum=0, g=0;
+  for (const n of liste){ sum += n.wert*gew(n.gewicht); g += gew(n.gewicht); }
+  return g>0 ? sum/g : null;
+}
+function mischen(a, b, gewichtA){
+  if (a!=null && b!=null) return (a*gewichtA + b*(100-gewichtA))/100;
+  return a!=null ? a : (b!=null ? b : null);
+}
+/* Zwei Bereiche: Klassenarbeiten (arb) und sonstige Leistungen (son).
+   Die sonstigen setzen sich aus der muendlichen Note (m) und den
+   weiteren sonstigen Leistungen (wso) zusammen. */
+function notenstandAus(alle, kurs){
+  const arb = gewMittel(alle.filter(n=>bereichNorm(n.bereich)==="arbeit"));
+  const m   = gewMittel(alle.filter(n=>bereichNorm(n.bereich)==="muendlich"));
+  const wso = gewMittel(alle.filter(n=>bereichNorm(n.bereich)==="sonstige"));
+  const son = mdlModus(kurs)==="anteil"
+    ? mischen(m, wso, gewMdlAnteil(kurs))
+    : gewMittel(alle.filter(n=>{ const b = bereichNorm(n.bereich); return b==="muendlich" || b==="sonstige"; }));
+  const gesamt = mischen(son, arb, gewSonstige(kurs));
+  return {arb, m, wso, son, s:arb, gesamt, anzahl: alle.length};
+}
+function notenstand(schuelerId, kursId){
+  return notenstandAus(schuelerNoten(schuelerId, kursId), kursVon(kursId));
+}
+
+/* Statistik einer Arbeit */
+function median(sortiert){
+  const n = sortiert.length; if(!n) return null;
+  return n%2 ? sortiert[(n-1)/2] : (sortiert[n/2-1]+sortiert[n/2])/2;
+}
+function arbeitStatistik(arbeit, kurs){
+  const werte = Object.values(arbeit.ergebnisse).filter(w=>w!==null && w!=="" && w!==undefined).map(Number).sort((a,b)=>a-b);
+  const n = werte.length;
+  if (!n) return {n:0};
+  const mw = werte.reduce((a,b)=>a+b,0)/n;
+  const med = median(werte);
+  const untere = werte.slice(0, Math.floor(n/2));
+  const obere  = werte.slice(Math.ceil(n/2));
+  let q1 = median(untere), q3 = median(obere);
+  if (q1==null) q1 = med;  // bei n=1 fallen Quartile mit dem Median zusammen
+  if (q3==null) q3 = med;
+  const sys = notensystem(kurs);
+  const dist = {};
+  for (const w of sys.werte) dist[w]=0;
+  for (const w of werte) dist[w] = (dist[w]||0)+1;
+  return {n, mittel:mw, median:med, q1, q3, min:werte[0], max:werte[n-1], dist, werte};
+}
+
+/* Mitarbeit zusammenfassen */
+function mitarbeitZusammenfassung(schuelerId, kursId){
+  const erg = {};
+  for (const kat of MITARBEIT_KATEGORIEN){
+    const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId && e.typ===kat.id);
+    const counts = {}; for (const s of STUFEN) counts[s.v]=0;
+    let sum=0;
+    for (const e of evs){ counts[e.stufe]=(counts[e.stufe]||0)+1; sum+=e.stufe; }
+    erg[kat.id] = {anzahl:evs.length, schnitt: evs.length? sum/evs.length : null, counts};
+  }
+  return erg;
+}
+function fehlzeiten(schuelerId, kursId){
+  const liste = S.anwesenheit.filter(a=>a.schuelerId===schuelerId).map(a=>({a, st:stundeVon(a.stundeId)}))
+    .filter(x=>x.st && (!kursId || x.st.kursId===kursId))
+    .sort((x,y)=> (y.st.datum||"").localeCompare(x.st.datum||""));
+  const fehl = liste.filter(x=>x.a.status==="fehlt");
+  return {
+    liste,
+    fehltGesamt: fehl.length,
+    unentschuldigt: fehl.filter(x=>x.a.entschuldigt===false).length,
+    offen: fehl.filter(x=>x.a.entschuldigt===null).length,
+    verspaetungen: liste.filter(x=>x.a.status==="verspaetet").length,
+    minuten: liste.filter(x=>x.a.status==="verspaetet").reduce((s,x)=>s+(x.a.minuten||0),0)
+  };
+}
+function heutigeEreignisse(schuelerId, kursId){
+  const st = S.stunden.find(x=>x.kursId===kursId && x.datum===R.datum);
+  if (!st) return [];
+  return S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.stundeId===st.id);
+}
+/* ============ Rendern: Grundgerüst ============ */
+function zeichne(){
+  zeichneTopbar();
+  const app = document.getElementById("app");
+  if (R.view==="home") app.innerHTML = viewHome();
+  else if (R.view==="kurs") app.innerHTML = viewKurs();
+  else if (R.view==="einstellungen") app.innerHTML = viewEinstellungen();
+  else if (R.view==="profil") app.innerHTML = viewProfil();
+  if (R.view==="kurs" && R.tab==="sitzplan") initSitzplanDrag();
+}
+function zeichneTopbar(){
+  const sj = aktivesSchuljahr();
+  let titel = "Kursbuch", zurueck = "", rechts = "";
+  const wb = sj ? wochenBuchstabe(sj, R.datum) : null;
+  if (R.view==="home"){
+    titel = "Kursbuch" + (sj? " · "+esc(sj.name):"");
+    rechts = '<button class="klein" data-a="go" data-view="einstellungen">Einstellungen</button>';
+  } else if (R.view==="kurs"){
+    const k = kursVon(R.kursId);
+    titel = k? esc(k.name) : "Kurs";
+    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Kurse</button>';
+    rechts = (wb? '<span class="wochenbadge">'+wb+'-Woche</span>' : "");
+  } else if (R.view==="einstellungen"){
+    titel = "Einstellungen";
+    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Kurse</button>';
+  } else if (R.view==="profil"){
+    const s = schuelerVon(R.schuelerId);
+    titel = s? esc(s.vorname+" "+s.name) : "Schülerprofil";
+    zurueck = '<button class="klein" data-a="go" data-view="kurs">‹ Zurück</button>';
+  }
+  document.getElementById("topbar").innerHTML =
+    zurueck + '<h1 class="titel">'+titel+'</h1>' + rechts;
+}
+
+/* ============ Startseite ============ */
+function viewHome(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
+  let html = "";
+  if (!kurse.length) html += '<div class="leer">Noch keine Kurse.<br>Legen Sie unten Ihren ersten Kurs an.</div>';
+  for (const k of kurse){
+    const anz = kursSchueler(k.id).length;
+    const sys = notensystem(k);
+    html += '<div class="kurskachel" data-a="kursOeffnen" data-id="'+k.id+'">'+
+      '<div class="kursfarbe" style="background:'+esc(k.farbe)+'"></div>'+
+      '<div class="info"><div><b>'+esc(k.name)+'</b></div>'+
+      '<div class="sub">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+' Schüler · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div>'+
+      '<div>›</div></div>';
+  }
+  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">+ Kurs anlegen</button>';
+  return html;
+}
+function viewSchuljahrAnlegen(){
+  const j = new Date().getFullYear();
+  return '<div class="karte"><h2>Willkommen im Kursbuch</h2>'+
+  '<p class="hinweis">Legen Sie zuerst das Schuljahr an. Die A/B-Wochen werden über den Montag einer beliebigen A-Woche verankert.</p>'+
+  '<div class="feld"><label>Bezeichnung</label><input id="sjName" value="'+j+'/'+String(j+1).slice(2)+'"></div>'+
+  '<div class="zeile">'+
+  '<div class="feld"><label>Beginn</label><input type="date" id="sjBeginn" value="'+j+'-08-01"></div>'+
+  '<div class="feld"><label>Ende</label><input type="date" id="sjEnde" value="'+(j+1)+'-07-31"></div>'+
+  '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div></div>'+
+  '<button class="primar" data-a="schuljahrAnlegen">Schuljahr anlegen</button></div>';
+}
+function ersterMontagAb(iso){
+  const d = new Date(iso+"T12:00:00");
+  while (d.getDay()!==1) d.setDate(d.getDate()+1);
+  return d.toISOString().slice(0,10);
+}
+
+/* ============ Kursansicht ============ */
+const KURS_TABS = [["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["arbeiten","Arbeiten"],["auswertung","Auswertung"],["kurscfg","Kurs"]];
+function viewKurs(){
+  const k = kursVon(R.kursId);
+  if (!k) { R.view="home"; return viewHome(); }
+  let html = '<div class="tabs">';
+  for (const [id,name] of KURS_TABS)
+    html += '<button class="'+(R.tab===id?"aktiv":"")+'" data-a="tab" data-id="'+id+'">'+name+'</button>';
+  html += '</div>';
+  if (R.tab==="sitzplan" || R.tab==="liste") html += kursKopfzeile(k);
+  if (R.tab==="sitzplan") html += viewSitzplan(k);
+  else if (R.tab==="liste") html += viewListe(k);
+  else if (R.tab==="stunden") html += viewStunden(k);
+  else if (R.tab==="arbeiten") html += viewArbeiten(k);
+  else if (R.tab==="auswertung") html += viewAuswertung(k);
+  else if (R.tab==="kurscfg") html += viewKursCfg(k);
+  return html;
+}
+function kursKopfzeile(k){
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const thema = st && st.thema ? esc(st.thema) : '<span class="hinweis">kein Thema eingetragen</span>';
+  return '<div class="karte"><div class="zeile raum">'+
+    '<div class="zeile"><input type="date" id="kursDatum" value="'+R.datum+'" data-a-change="datumWechsel">'+
+    '<span class="hinweis">'+wochentagName(new Date(R.datum+"T12:00:00").getDay())+'</span></div>'+
+    '<div class="zeile">'+
+    '<button class="klein" data-a="stundeDialog">Stunde: '+thema+'</button>'+
+    '<button class="klein" data-a="anwesenheitDialog">Anwesenheit</button>'+
+    '</div></div></div>';
+}
+
+/* Sitzplan */
+function viewSitzplan(k){
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return '<div class="leer">Dieser Kurs hat noch keine Schüler.<br>Fügen Sie sie im Tab „Kurs" hinzu.</div>';
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  let html = '<div id="sitzflaeche">';
+  let auto = 0;
+  for (const s of schueler){
+    const pos = (s.sitz && s.sitz[k.id]) || {x: 12+(auto%7)*118, y: 12+Math.floor(auto/7)*80};
+    auto++;
+    const anw = st ? anwesenheitVon(s.id, st.id) : null;
+    const fehlt = anw && anw.status==="fehlt";
+    const punkte = heutigeEreignisse(s.id, k.id).slice(-6).map(e=>{
+      const farbe = (e.stufe!=null)? stufeInfo(e.stufe).hex : "#9aa79a";
+      return '<i style="background:'+farbe+'"></i>';
+    }).join("");
+    html += '<div class="stile'+(fehlt?" fehlt":"")+'" data-sid="'+s.id+'" style="left:'+pos.x+'px; top:'+pos.y+'px; border-top-color:'+esc(k.farbe)+'">'+
+      '<div class="sname">'+esc(s.vorname)+'<br>'+esc(s.name)+'</div>'+
+      '<div class="spunkte">'+punkte+'</div></div>';
+  }
+  html += '</div><p class="hinweis">Kacheln frei verschieben (freies Raster). Antippen öffnet die Schnellerfassung.</p>';
+  return html;
+}
+
+/* Liste */
+function viewListe(k){
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return '<div class="leer">Dieser Kurs hat noch keine Schüler.</div>';
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  let html = "";
+  for (const s of schueler){
+    const anw = st ? anwesenheitVon(s.id, st.id) : null;
+    const fehlt = anw && anw.status==="fehlt";
+    const punkte = heutigeEreignisse(s.id, k.id).slice(-8).map(e=>{
+      const farbe = (e.stufe!=null)? stufeInfo(e.stufe).hex : "#9aa79a";
+      return '<i style="background:'+farbe+'"></i>';
+    }).join("");
+    html += '<div class="slzeile'+(fehlt?" fehlt":"")+'" data-a="popupSchueler" data-id="'+s.id+'">'+
+      '<span class="sname">'+esc(s.name)+', '+esc(s.vorname)+'</span>'+
+      '<span class="spunkte">'+punkte+'</span></div>';
+  }
+  return html;
+}
+
+/* ============ Drag & Drop im Sitzplan ============ */
+function initSitzplanDrag(){
+  const flaeche = document.getElementById("sitzflaeche");
+  if (!flaeche) return;
+  let aktiv=null, startX=0, startY=0, ox=0, oy=0, bewegt=false;
+  flaeche.addEventListener("pointerdown", ev=>{
+    const kachel = ev.target.closest(".stile"); if(!kachel) return;
+    aktiv = kachel; bewegt = false;
+    startX = ev.clientX; startY = ev.clientY;
+    ox = kachel.offsetLeft; oy = kachel.offsetTop;
+    try { kachel.setPointerCapture(ev.pointerId); } catch(e) { /* synthetische Ereignisse */ }
+  });
+  flaeche.addEventListener("pointermove", ev=>{
+    if (!aktiv) return;
+    const dx = ev.clientX-startX, dy = ev.clientY-startY;
+    if (!bewegt && Math.hypot(dx,dy) < 8) return;
+    bewegt = true;
+    const RAS = 28;
+    let nx = Math.round((ox+dx)/RAS)*RAS, ny = Math.round((oy+dy)/RAS)*RAS;
+    nx = Math.max(0, Math.min(nx, flaeche.clientWidth - aktiv.offsetWidth));
+    ny = Math.max(0, Math.min(ny, flaeche.clientHeight - aktiv.offsetHeight));
+    aktiv.style.left = nx+"px"; aktiv.style.top = ny+"px";
+  });
+  flaeche.addEventListener("pointerup", ev=>{
+    if (!aktiv) return;
+    const kachel = aktiv; aktiv = null;
+    if (bewegt){
+      const s = schuelerVon(kachel.dataset.sid);
+      if (s){ if(!s.sitz) s.sitz={}; s.sitz[R.kursId] = {x:kachel.offsetLeft, y:kachel.offsetTop}; speichern(); }
+    } else {
+      oeffnePopupSchueler(kachel.dataset.sid, kachel.getBoundingClientRect());
+    }
+  });
+  flaeche.addEventListener("pointercancel", ()=>{ aktiv=null; });
+}
+
+/* ============ Schüler-Popup (Schnellerfassung) ============ */
+function oeffnePopupSchueler(schuelerId, ankerRect){
+  const s = schuelerVon(schuelerId); if (!s) return;
+  const k = kursVon(R.kursId);
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const anw = st ? anwesenheitVon(s.id, st.id) : null;
+  const fehlt = anw && anw.status==="fehlt";
+  let html = '<div class="pkopf"><span class="pname">'+esc(s.vorname)+' '+esc(s.name)+'</span>'+
+    '<button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil ›</button></div>';
+  for (const kat of MITARBEIT_KATEGORIEN){
+    html += '<div class="katzeile"><span class="katlabel">'+esc(kat.kurz)+'</span><span class="stufen">';
+    for (const stu of STUFEN)
+      html += '<button class="stufe" style="background:'+stu.farbe+'" data-a="ereignisStufe" data-id="'+s.id+'" data-kat="'+kat.id+'" data-stufe="'+stu.v+'">'+stu.label+'</button>';
+    html += '</span></div>';
+  }
+  html += '<div class="chipreihe">';
+  for (const e of EINFACH_EREIGNISSE)
+    html += '<button class="chip" data-a="ereignisEinfach" data-id="'+s.id+'" data-typ="'+e.id+'">'+esc(e.name)+'</button>';
+  for (const e of S.einstellungen.eigeneEreignisse){
+    if (e.mitStufen){
+      html += '<div style="width:100%"></div><div class="katzeile"><span class="katlabel">'+esc(e.name)+'</span><span class="stufen">';
+      for (const stu of STUFEN)
+        html += '<button class="stufe" style="background:'+stu.farbe+'" data-a="ereignisStufe" data-id="'+s.id+'" data-kat="'+e.id+'" data-stufe="'+stu.v+'">'+stu.label+'</button>';
+      html += '</span></div>';
+    } else {
+      html += '<button class="chip" data-a="ereignisEinfach" data-id="'+s.id+'" data-typ="'+e.id+'">'+esc(e.name)+'</button>';
+    }
+  }
+  html += '</div><div class="chipreihe">'+
+    '<button class="chip'+(fehlt?' aktivrot':'')+'" data-a="fehltUmschalten" data-id="'+s.id+'">'+(fehlt?"fehlt ✓ (zurücknehmen)":"Fehlt heute")+'</button>'+
+    '<button class="chip" data-a="noteDialog" data-id="'+s.id+'">Note eintragen</button>'+
+    '<button class="chip" data-a="notizDialog" data-id="'+s.id+'">Notiz</button></div>';
+  zeigePopover(html, ankerRect);
+}
+function zeigePopover(html, ankerRect){
+  const pop = document.getElementById("popover");
+  pop.innerHTML = html;
+  document.getElementById("overlay").classList.add("offen");
+  pop.classList.add("offen");
+  let x = 20, y = 80;
+  if (ankerRect){
+    x = Math.min(Math.max(10, ankerRect.left), window.innerWidth - 420);
+    y = ankerRect.bottom + 8;
+    if (y + Math.min(pop.offsetHeight, window.innerHeight*0.82) > window.innerHeight - 10)
+      y = Math.max(10, window.innerHeight - pop.offsetHeight - 16);
+  } else { x = (window.innerWidth - pop.offsetWidth)/2; }
+  pop.style.left = Math.max(10,x)+"px"; pop.style.top = Math.max(10,y)+"px";
+}
+function schliessePopover(){
+  document.getElementById("popover").classList.remove("offen");
+  document.getElementById("modal").classList.remove("offen");
+  document.getElementById("overlay").classList.remove("offen");
+}
+function zeigeModal(html){
+  schliessePopover();
+  const m = document.getElementById("modal");
+  m.innerHTML = html;
+  document.getElementById("overlay").classList.add("offen");
+  m.classList.add("offen");
+}
+function alertBox(text){
+  zeigeModal('<p>'+esc(text)+'</p><button class="primar" data-a="modalZu">OK</button>');
+}
+function toast(text, undoFn){
+  letzteAktion = undoFn ? {undo:undoFn} : null;
+  document.getElementById("toasttext").textContent = text;
+  const t = document.getElementById("toast");
+  t.querySelector("button").style.display = undoFn? "block":"none";
+  t.classList.add("offen");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("offen"), 4500);
+}
+/* ============ Stunden ============ */
+function viewStunden(k){
+  const stunden = S.stunden.filter(x=>x.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
+  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Stundendokumentation</h2>'+
+    '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button></div>';
+  if (!stunden.length) return html + '<div class="leer">Noch keine Stunden dokumentiert.</div>';
+  html += '<div class="karte"><table class="tab"><tr><th>Datum</th><th>Thema</th><th>Hausaufgabe</th><th>Fehlend</th><th></th></tr>';
+  for (const st of stunden){
+    const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
+    html += '<tr><td style="white-space:nowrap">'+fmtDatum(st.datum)+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':'')+'</td>'+
+      '<td>'+esc(st.thema||"–")+'</td><td>'+esc(st.hausaufgabe||"–")+'</td>'+
+      '<td>'+(fehl||"–")+'</td>'+
+      '<td><button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></td></tr>';
+  }
+  return html + '</table></div>';
+}
+function stundeDialogHtml(st){
+  return '<h2>Stunde am '+fmtDatum(st.datum)+'</h2>'+
+    '<div class="feld"><label>Thema / Inhalt der Stunde</label><input id="stThema" value="'+esc(st.thema)+'"></div>'+
+    '<div class="feld"><label>Hausaufgabe</label><input id="stHa" value="'+esc(st.hausaufgabe)+'"></div>'+
+    '<div class="feld"><label><input type="checkbox" id="stAusfall" '+(st.ausfall?"checked":"")+' style="width:auto"> Ausfall / Vertretung</label></div>'+
+    '<div class="zeile"><button class="primar" data-a="stundeSpeichern" data-id="'+st.id+'">Speichern</button>'+
+    '<button data-a="modalZu">Abbrechen</button></div>';
+}
+
+/* ============ Anwesenheit ============ */
+function anwesenheitDialogHtml(k){
+  const st = ensureStunde(k.id, R.datum);
+  const schueler = kursSchueler(k.id);
+  let html = '<h2>Anwesenheit · '+fmtDatum(R.datum)+'</h2><p class="hinweis">Standard: alle anwesend. Nur Abweichungen antippen.</p><table class="tab">';
+  for (const s of schueler){
+    const a = anwesenheitVon(s.id, st.id);
+    const stat = a? a.status : "anwesend";
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td><td class="fehlstatus" style="white-space:nowrap">';
+    for (const [wert, label] of [["fehlt","Fehlt"],["verspaetet","Verspätet"],["beurlaubt","Beurlaubt"]]){
+      const an = stat===wert;
+      html += '<button class="klein" style="'+(an?'background:var(--rot);color:#fff':'')+'" data-a="anwSetzen" data-id="'+s.id+'" data-stunde="'+st.id+'" data-status="'+(an?"anwesend":wert)+'">'+label+
+        (an && wert==="verspaetet" ? " ("+(a.minuten||5)+"′)" : "")+'</button>';
+    }
+    if (a && a.status==="verspaetet")
+      html += '<button class="klein" data-a="anwMinuten" data-id="'+s.id+'" data-stunde="'+st.id+'">+5′</button>';
+    html += '</td></tr>';
+  }
+  return html + '</table><div class="abstand"></div><button class="primar" data-a="modalZu">Fertig</button>';
+}
+
+/* ============ Arbeiten ============ */
+function viewArbeiten(k){
+  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
+  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Arbeiten & Tests</h2>'+
+    '<button class="primar klein" data-a="arbeitNeuDialog">+ Arbeit/Test</button></div>';
+  if (!arbeiten.length) return html + '<div class="leer">Noch keine Arbeiten angelegt.</div>';
+  for (const a of arbeiten){
+    const stat = arbeitStatistik(a, k);
+    const ab = bereichNorm(a.bereich||artBereich(a.art));
+    html += '<div class="karte"><div class="zeile raum"><div><b>'+esc(a.titel)+'</b> <span class="hinweis">'+esc(a.art)+' · '+fmtDatum(a.datum)+' · '+(gew(a.gewicht)===0?'Zwischenstand, zählt nicht':'Gewicht '+gew(a.gewicht))+' · zählt zu <b>'+(ab==="arbeit"?"Klassenarbeiten":"sonstigen Leistungen")+'</b></span></div>'+
+      '<div class="zeile"><button class="klein" data-a="arbeitBereichWechseln" data-id="'+a.id+'">Bereich wechseln</button>'+
+      '<button class="klein" data-a="arbeitEingabe" data-id="'+a.id+'">Ergebnisse eingeben</button>'+
+      '<button class="klein gefahr" data-a="arbeitLoeschen" data-id="'+a.id+'">Löschen</button></div></div>';
+    if (stat.n){
+      const sys = notensystem(k);
+      html += '<div class="statzeile">'+
+        '<div class="statwert"><div class="gross">'+fmtZahl(stat.mittel,2)+'</div><div class="klein2">Mittelwert ('+stat.n+' Werte)</div></div>'+
+        '<div class="statwert"><div class="gross">'+fmtZahl(stat.median,1)+'</div><div class="klein2">Median</div></div>'+
+        '<div class="statwert"><div class="gross">'+fmtZahl(stat.q1,1)+' / '+fmtZahl(stat.q3,1)+'</div><div class="klein2">unteres / oberes Quartil</div></div>'+
+      '</div>'+ svgBoxplot(stat, sys) + svgVerteilung(stat, sys) +
+      '<p class="hinweis">Quartile nach Median-Halbierung (schulübliche Methode); Box = mittlere 50 %, Linie = Median, Antennen = Minimum/Maximum.</p>';
+    } else html += '<p class="hinweis">Noch keine Ergebnisse eingetragen.</p>';
+    html += '</div>';
+  }
+  return html;
+}
+function arbeitEingabeHtml(a, k){
+  const sys = notensystem(k);
+  const schueler = kursSchueler(k.id);
+  let html = '<h2>'+esc(a.titel)+' · Ergebnisse</h2><p class="hinweis">'+(sys.typ==="punkte"?"Punkte 0–15":"Noten 1–6")+' antippen. Leerlassen = nicht mitgeschrieben.</p><table class="tab">';
+  for (const s of schueler){
+    const w = a.ergebnisse[s.id];
+    html += '<tr><td style="min-width:130px"><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td><td><div class="wertknoepfe">';
+    for (const wert of sys.werte)
+      html += '<button class="'+(Number(w)===wert && w!==undefined && w!==null && w!==""?"gewaehlt":"")+'" data-a="arbeitWert" data-id="'+a.id+'" data-sid="'+s.id+'" data-wert="'+wert+'">'+wert+'</button>';
+    html += '<button data-a="arbeitWert" data-id="'+a.id+'" data-sid="'+s.id+'" data-wert="">×</button>';
+    html += '</div></td></tr>';
+  }
+  return html + '</table><div class="abstand"></div><button class="primar" data-a="modalZuArbeiten">Fertig</button>';
+}
+
+/* ============ Diagramme (SVG) ============ */
+function skala(sys){
+  return sys.typ==="punkte" ? {min:0, max:15, ticks:[0,3,6,9,12,15]} : {min:1, max:6, ticks:[1,2,3,4,5,6]};
+}
+function svgBoxplot(stat, sys){
+  const sk = skala(sys), B=640, H=110, L=40, Rr=20;
+  const x = v => L + (v-sk.min)/(sk.max-sk.min)*(B-L-Rr);
+  const yM = 44;
+  let s = '<svg viewBox="0 0 '+B+' '+H+'" style="width:100%;max-width:640px;display:block">';
+  s += '<line x1="'+L+'" y1="86" x2="'+(B-Rr)+'" y2="86" stroke="#c8d0c5"/>';
+  for (const t of sk.ticks)
+    s += '<line x1="'+x(t)+'" y1="82" x2="'+x(t)+'" y2="90" stroke="#c8d0c5"/>'+
+         '<text x="'+x(t)+'" y="104" font-size="12" fill="#6b7a68" text-anchor="middle">'+t+'</text>';
+  s += '<line x1="'+x(stat.min)+'" y1="'+yM+'" x2="'+x(stat.q1)+'" y2="'+yM+'" stroke="#3d7a4e" stroke-width="2"/>';
+  s += '<line x1="'+x(stat.q3)+'" y1="'+yM+'" x2="'+x(stat.max)+'" y2="'+yM+'" stroke="#3d7a4e" stroke-width="2"/>';
+  s += '<line x1="'+x(stat.min)+'" y1="'+(yM-12)+'" x2="'+x(stat.min)+'" y2="'+(yM+12)+'" stroke="#3d7a4e" stroke-width="2"/>';
+  s += '<line x1="'+x(stat.max)+'" y1="'+(yM-12)+'" x2="'+x(stat.max)+'" y2="'+(yM+12)+'" stroke="#3d7a4e" stroke-width="2"/>';
+  const bx = Math.min(x(stat.q1), x(stat.q3)), bw = Math.max(2, Math.abs(x(stat.q3)-x(stat.q1)));
+  s += '<rect x="'+bx+'" y="'+(yM-20)+'" width="'+bw+'" height="40" fill="#e8f2ea" stroke="#3d7a4e" stroke-width="2" rx="4"/>';
+  s += '<line x1="'+x(stat.median)+'" y1="'+(yM-20)+'" x2="'+x(stat.median)+'" y2="'+(yM+20)+'" stroke="#1b5e20" stroke-width="3"/>';
+  s += '<circle cx="'+x(stat.mittel)+'" cy="'+yM+'" r="5" fill="#f57c00"/>'+
+       '<text x="'+x(stat.mittel)+'" y="'+(yM-26)+'" font-size="12" fill="#f57c00" text-anchor="middle">Mittelwert</text>';
+  return s + '</svg>';
+}
+function svgVerteilung(stat, sys){
+  const sk = skala(sys);
+  const werte = sys.werte.slice().sort((a,b)=>a-b);
+  const maxN = Math.max(1, ...Object.values(stat.dist));
+  const B=640, H=150, L=40, unten=124;
+  const bw = (B-L-20)/werte.length;
+  let s = '<svg viewBox="0 0 '+B+' '+H+'" style="width:100%;max-width:640px;display:block;margin-top:6px">';
+  s += '<line x1="'+L+'" y1="'+unten+'" x2="'+(B-14)+'" y2="'+unten+'" stroke="#c8d0c5"/>';
+  werte.forEach((w,i)=>{
+    const n = stat.dist[w]||0;
+    const h = n/maxN*88;
+    const xx = L + i*bw + bw*0.15;
+    if (n) s += '<rect x="'+xx+'" y="'+(unten-h)+'" width="'+(bw*0.7)+'" height="'+h+'" fill="#3d7a4e" rx="3"/>'+
+      '<text x="'+(xx+bw*0.35)+'" y="'+(unten-h-5)+'" font-size="12" fill="#3d7a4e" text-anchor="middle">'+n+'</text>';
+    s += '<text x="'+(xx+bw*0.35)+'" y="'+(unten+16)+'" font-size="12" fill="#6b7a68" text-anchor="middle">'+w+'</text>';
+  });
+  return s + '<text x="'+L+'" y="14" font-size="12" fill="#6b7a68">Verteilung ('+(sys.typ==="punkte"?"Punkte":"Noten")+')</text></svg>';
+}
+
+/* ============ Auswertung (Kurs) ============ */
+function viewAuswertung(k){
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return '<div class="leer">Keine Schüler im Kurs.</div>';
+  const sys = notensystem(k);
+  let html = '<div class="karte"><h2>Notenspiegel & Mitarbeit</h2>'+
+    '<p class="hinweis">Gewichtung: '+gewichtungsText(k)+' – änderbar im Tab „Kurs".</p>'+
+    '<table class="tab"><tr><th>Schüler</th><th>Klassenarb.</th><th>sonstige</th><th>davon mdl.</th><th>Stand</th><th>Mitarbeit</th><th>Fehlz.</th><th></th></tr>';
+  for (const s of schueler){
+    const ns = notenstand(s.id, k.id);
+    const mz = mitarbeitZusammenfassung(s.id, k.id);
+    const fz = fehlzeiten(s.id, k.id);
+    let chips = "";
+    for (const kat of MITARBEIT_KATEGORIEN){
+      const z = mz[kat.id];
+      const farbe = z.schnitt==null ? "#d7ded4" : stufeInfo(Math.round(z.schnitt)).hex;
+      chips += '<span class="stufenpunkt" title="'+esc(kat.kurz)+'" style="background:'+farbe+';margin-right:4px"></span>';
+    }
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+      '<td>'+fmtZahl(ns.arb)+'</td><td>'+fmtZahl(ns.son)+'</td><td>'+fmtZahl(ns.m)+'</td>'+
+      '<td><b>'+fmtZahl(ns.gesamt)+'</b></td>'+
+      '<td>'+chips+'</td>'+
+      '<td>'+fz.fehltGesamt+(fz.offen?' <span style="color:var(--rot)">('+fz.offen+' offen)</span>':'')+'</td>'+
+      '<td><button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil</button></td></tr>';
+  }
+  html += '</table><p class="hinweis">Stand = gewichtetes Mittel'+(sys.typ==="punkte"?" (Punkte 0–15)":" (Noten 1–6)")+'; Mitarbeit-Punkte: Ø je Kategorie (Qual. mündl. · Quant. mündl. · Qual. schriftl. · Quant. schriftl.).</p></div>';
+  return html;
+}
+
+/* ============ Kurs-Einstellungen ============ */
+function viewKursCfg(k){
+  const schueler = kursSchueler(k.id);
+  const ws = gewSonstige(k), wmA = gewMdlAnteil(k);
+  let html = '<div class="karte"><h2>Kursdaten</h2>'+
+    '<div class="zeile">'+
+    '<div class="feld"><label>Name</label><input id="kName" value="'+esc(k.name)+'"></div>'+
+    '<div class="feld"><label>Fach</label><input id="kFach" value="'+esc(k.fach||"")+'"></div>'+
+    '<div class="feld"><label>Jahrgang</label><select id="kJahrgang">'+
+      [5,6,7,8,9,10,11,12].map(j=>'<option value="'+j+'" '+(k.jahrgang===j?"selected":"")+'>'+j+'</option>').join("")+
+    '</select></div>'+
+    '<div class="feld"><label>Farbe</label><select id="kFarbe">'+
+      KURSFARBEN.map(f=>'<option value="'+f+'" '+(k.farbe===f?"selected":"")+' style="background:'+f+'">'+f+'</option>').join("")+
+    '</select></div></div>'+
+    '<div class="feld"><label>Klassenarbeiten : sonstige Leistungen — <b id="gewAnzeige">'+(100-ws)+' % : '+ws+' %</b></label>'+
+    '<div class="gewslider"><span class="hinweis">Klassenarbeiten</span>'+
+    '<input type="range" min="0" max="100" step="5" value="'+(100-ws)+'" id="kGewicht" data-a-input="gewichtVorschau">'+
+    '<span class="hinweis">sonstige</span></div></div>'+
+    '<div class="feld"><label>Rolle der mündlichen Note innerhalb der sonstigen Leistungen</label>'+
+    '<select id="kMdlModus" data-a-change="mdlModusWechsel">'+
+    '<option value="gewicht" '+(mdlModus(k)==="gewicht"?"selected":"")+'>zählt als eine sonstige Leistung (über ihr Gewicht)</option>'+
+    '<option value="anteil" '+(mdlModus(k)==="anteil"?"selected":"")+'>fester Anteil an den sonstigen Leistungen</option>'+
+    '</select></div>'+
+    '<div id="mdlAnteilBlock" style="display:'+(mdlModus(k)==="anteil"?"block":"none")+'">'+
+    '<div class="feld"><label>Fester Anteil — mündliche Note : übrige — <b id="gewAnzeige2">'+wmA+' % : '+(100-wmA)+' %</b></label>'+
+    '<div class="gewslider"><span class="hinweis">mündliche Note</span>'+
+    '<input type="range" min="0" max="100" step="5" value="'+wmA+'" id="kGewicht2" data-a-input="gewichtVorschau2">'+
+    '<span class="hinweis">übrige</span></div></div></div>'+
+    '<p class="hinweis">Sonstige Leistungen sind die mündliche Note sowie LEKs, Tests, Referate und Protokolle. '+
+    'Bei drei sonstigen Leistungen im Halbjahr, von denen die mündliche Note eine ist, bleibt es bei der ersten Einstellung: '+
+    'alle drei mit Gewicht 1, jede zählt ein Drittel. Ist einer der Teile leer, zählt der andere allein. '+
+    'Änderungen wirken sofort auf alle Notenstände dieses Kurses.</p></div>'+
+    '<button class="primar" data-a="kursSpeichern" data-id="'+k.id+'">Kurs speichern</button> '+
+    '<button class="gefahr" data-a="kursLoeschen" data-id="'+k.id+'">Kurs löschen</button></div>';
+
+  html += '<div class="karte"><h2>Schüler ('+schueler.length+')</h2>';
+  if (schueler.length){
+    html += '<table class="tab">';
+    for (const s of schueler)
+      html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+        '<td style="text-align:right"><button class="klein" data-a="schuelerUmbenennen" data-id="'+s.id+'">Umbenennen</button> '+
+        '<button class="klein gefahr" data-a="schuelerEntfernen" data-id="'+s.id+'">Entfernen</button></td></tr>';
+    html += '</table><div class="abstand"></div>';
+  }
+  html += '<div class="feld"><label>Schüler hinzufügen — eine Zeile pro Schüler: <b>Nachname, Vorname</b> (oder „Vorname Nachname")</label>'+
+    '<textarea id="schuelerImport" placeholder="Müller, Anna&#10;Schmidt, Ben&#10;…"></textarea></div>'+
+    '<button class="primar" data-a="schuelerHinzufuegen" data-id="'+k.id+'">Hinzufügen</button></div>';
+  return html;
+}
+
+/* ============ Schülerprofil ============ */
+function viewProfil(){
+  const s = schuelerVon(R.schuelerId); if(!s){ R.view="home"; return viewHome(); }
+  const k = kursVon(R.kursId); if(!k){ R.view="home"; return viewHome(); }
+  const ns = notenstand(s.id, k.id);
+  const noten = schuelerNoten(s.id, k.id).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
+  const mz = mitarbeitZusammenfassung(s.id, k.id);
+  const fz = fehlzeiten(s.id, k.id);
+  const evs = S.ereignisse.filter(e=>e.schuelerId===s.id && e.kursId===k.id)
+    .sort((a,b)=>b.ts.localeCompare(a.ts));
+
+  let html = '<div class="karte"><div class="zeile raum"><h2>'+esc(k.name)+'</h2>'+
+    '<div class="statzeile" style="margin:0">'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.gesamt)+'</div><div class="klein2">Stand gesamt</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.arb)+'</div><div class="klein2">Klassenarbeiten</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.son)+'</div><div class="klein2">sonstige Leistungen</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
+    '</div></div></div>';
+
+  html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
+  for (const kat of MITARBEIT_KATEGORIEN){
+    const z = mz[kat.id];
+    let balken = "";
+    for (const stu of STUFEN){
+      const n = z.counts[stu.v]||0;
+      balken += '<span style="display:inline-flex;align-items:center;margin-right:8px">'+
+        '<span class="stufenpunkt" style="background:'+stu.hex+'"></span>&nbsp;'+n+'</span>';
+    }
+    const dfarbe = z.schnitt==null? "#d7ded4" : stufeInfo(Math.round(z.schnitt)).hex;
+    html += '<tr><td style="min-width:140px">'+esc(kat.kurz)+'</td><td>'+balken+'</td>'+
+      '<td style="text-align:right"><span class="stufenpunkt" style="background:'+dfarbe+'"></span> '+
+      (z.schnitt==null?"–":("Ø "+fmtZahl(z.schnitt,1)))+'</td></tr>';
+  }
+  html += '</table></div>';
+
+  html += '<div class="karte"><h3>Noten & Arbeiten</h3>';
+  if (!noten.length) html += '<p class="hinweis">Noch keine Noten.</p>';
+  else {
+    html += '<table class="tab"><tr><th>Datum</th><th>Art</th><th>Bereich</th><th>Wert</th><th>Gewicht</th><th></th></tr>';
+    for (const n of noten)
+      html += '<tr><td>'+fmtDatum(n.datum)+'</td><td>'+esc(n.label||(n.ausArbeit?"Arbeit":"Note"))+'</td>'+
+        '<td>'+bereichKurz(n.bereich)+'</td><td><b>'+n.wert+'</b></td><td>'+gewText(n.gewicht)+'</td>'+
+        '<td>'+(n.id?'<button class="klein gefahr" data-a="noteLoeschen" data-id="'+n.id+'">×</button>':'<span class="hinweis">aus Arbeit</span>')+'</td></tr>';
+    html += '</table>';
+  }
+  html += '</div>';
+
+  html += '<div class="karte"><h3>Fehlzeiten</h3>'+
+    '<p>'+fz.fehltGesamt+'× gefehlt ('+fz.unentschuldigt+' unentschuldigt, '+fz.offen+' offen) · '+
+    fz.verspaetungen+'× verspätet ('+fz.minuten+' Min.)</p>';
+  if (fz.liste.length){
+    html += '<table class="tab"><tr><th>Datum</th><th>Status</th><th>Entschuldigt?</th></tr>';
+    for (const x of fz.liste.slice(0,25)){
+      html += '<tr><td>'+fmtDatum(x.st.datum)+'</td><td>'+
+        (x.a.status==="fehlt"?"gefehlt":x.a.status==="verspaetet"?("verspätet "+(x.a.minuten||0)+"′"):"beurlaubt")+'</td><td>';
+      if (x.a.status==="fehlt")
+        html += '<button class="klein" style="'+(x.a.entschuldigt===true?'background:var(--akzent);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="true">entsch.</button> '+
+          '<button class="klein" style="'+(x.a.entschuldigt===false?'background:var(--rot);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="false">unentsch.</button>';
+      else html += "–";
+      html += '</td></tr>';
+    }
+    html += '</table>';
+  }
+  html += '</div>';
+
+  html += '<div class="karte"><h3>Ereignisse (mit Datum und Stundenthema)</h3>';
+  if (!evs.length) html += '<p class="hinweis">Noch keine Ereignisse.</p>';
+  else {
+    html += '<table class="tab"><tr><th>Datum</th><th>Thema der Stunde</th><th>Ereignis</th><th>Stufe</th></tr>';
+    for (const e of evs.slice(0,60)){
+      const st = stundeVon(e.stundeId);
+      const stufe = e.stufe==null ? "–" :
+        '<span class="stufenpunkt" style="background:'+stufeInfo(e.stufe).hex+'"></span> '+stufeInfo(e.stufe).label;
+      html += '<tr><td style="white-space:nowrap">'+(st?fmtDatum(st.datum):"–")+'</td>'+
+        '<td>'+esc(st && st.thema ? st.thema : "–")+'</td>'+
+        '<td>'+esc(ereignisName(e))+(e.text?': <i>'+esc(e.text)+'</i>':'')+'</td>'+
+        '<td style="white-space:nowrap">'+stufe+'</td></tr>';
+    }
+    if (evs.length>60) html += '<tr><td colspan="4" class="hinweis">'+(evs.length-60)+' weitere …</td></tr>';
+    html += '</table>';
+  }
+  html += '</div>';
+  if (s.notizen) html += '<div class="karte"><h3>Notizen zum Schüler</h3><p>'+esc(s.notizen)+'</p></div>';
+  return html;
+}
+
+/* ============ Globale Einstellungen ============ */
+function viewEinstellungen(){
+  const sj = aktivesSchuljahr();
+  let html = '<div class="karte"><h2>Schuljahre</h2>';
+  for (const j of S.schuljahre){
+    const aktiv = sj && j.id===sj.id;
+    html += '<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+
+      '<div><b>'+esc(j.name)+'</b> <span class="hinweis">'+fmtDatum(j.beginn)+' – '+fmtDatum(j.ende)+' · A-Woche ab '+fmtDatum(j.aWocheAnker)+'</span></div>'+
+      '<div>'+(aktiv?'<span class="wochenbadge">aktiv</span>':'<button class="klein" data-a="schuljahrAktivieren" data-id="'+j.id+'">aktivieren</button>')+'</div></div>';
+  }
+  html += '<div class="abstand"></div><button data-a="schuljahrNeuDialog">+ Schuljahr</button></div>';
+
+  html += '<div class="karte"><h2>Eigene Ereignisse</h2><p class="hinweis">Erscheinen zusätzlich in der Schnellerfassung.</p>';
+  for (const e of S.einstellungen.eigeneEreignisse)
+    html += '<div class="zeile raum" style="padding:6px 0"><div>'+esc(e.name)+' <span class="hinweis">'+(e.mitStufen?"mit Farbstufen":"Ein-Tipp")+'</span></div>'+
+      '<button class="klein gefahr" data-a="eigenesEreignisLoeschen" data-id="'+e.id+'">Löschen</button></div>';
+  html += '<div class="zeile"><input id="eeName" placeholder="z. B. Experimentierverhalten" style="flex:1">'+
+    '<label class="hinweis"><input type="checkbox" id="eeStufen" style="width:auto"> mit Farbstufen</label>'+
+    '<button data-a="eigenesEreignisNeu">Hinzufügen</button></div></div>';
+
+  html += '<div class="karte"><h2>Datensicherung</h2>'+
+    '<p class="hinweis">'+(KB_MODE==="scriptable" ?
+      "Daten liegen lokal auf dem iPad (Dateien-App → Scriptable → KursbuchDaten). Letzte Sicherung: "+(S.einstellungen.letztesBackup?fmtDatum(S.einstellungen.letztesBackup.slice(0,10)):"noch nie") :
+      "Testmodus: Ohne Scriptable werden Daten nicht dauerhaft gespeichert.")+'</p>'+
+    '<div class="zeile"><button class="primar" data-a="exportieren">Sicherung exportieren</button>'+
+    '<button data-a="importieren">Sicherung importieren</button></div>'+
+    '<input type="file" id="importDatei" accept=".json,application/json" style="display:none"></div>';
+
+  html += '<div class="karte"><h2>Gefahrenzone</h2>'+
+    '<button class="gefahr" data-a="allesLoeschenDialog">Alle Daten löschen</button></div>';
+  return html;
+}
+/* ============ Dialoge ============ */
+function kursNeuDialog(){
+  const sj = aktivesSchuljahr();
+  zeigeModal('<h2>Neuer Kurs</h2>'+
+    '<div class="zeile"><div class="feld"><label>Name</label><input id="nkName" placeholder="z. B. Physik 9b"></div>'+
+    '<div class="feld"><label>Fach</label><input id="nkFach" placeholder="Physik"></div>'+
+    '<div class="feld"><label>Jahrgang</label><select id="nkJahrgang">'+
+    [5,6,7,8,9,10,11,12].map(j=>'<option value="'+j+'" '+(j===9?"selected":"")+'>'+j+'</option>').join("")+'</select></div></div>'+
+    '<p class="hinweis">Jahrgang 5–10: Noten 1–6 (ohne Tendenz) · Jahrgang 11/12: Punkte 0–15.</p>'+
+    '<div class="zeile"><button class="primar" data-a="kursAnlegen" data-sj="'+ (sj?sj.id:"") +'">Anlegen</button><button data-a="modalZu">Abbrechen</button></div>');
+}
+function noteDialog(schuelerId){
+  const k = kursVon(R.kursId); const sys = notensystem(k);
+  const s = schuelerVon(schuelerId);
+  let knoepfe = "";
+  for (const w of sys.werte)
+    knoepfe += '<button data-a="noteWertWahl" data-wert="'+w+'">'+w+'</button>';
+  zeigeModal('<h2>Note · '+esc(s.vorname)+' '+esc(s.name)+'</h2>'+
+    '<div class="feld"><label>'+(sys.typ==="punkte"?"Punkte (0–15)":"Note (1–6)")+'</label><div class="wertknoepfe" id="noteWerte">'+knoepfe+'</div></div>'+
+    '<div class="zeile">'+
+    '<div class="feld"><label>Bereich</label><select id="noteBereich"><option value="muendlich">mündliche Note</option><option value="sonstige">sonstige Leistung</option><option value="arbeit">Klassenarbeit / Klausur</option></select></div>'+
+    '<div class="feld"><label>Bezeichnung</label><input id="noteLabel" placeholder="z. B. mündliche Note, Vortrag"></div>'+
+    '<div class="feld"><label>Gewicht</label><select id="noteGewicht"><option value="0">0 – Zwischenstand (zählt nicht)</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></div>'+
+    '<div class="feld"><label>Datum</label><input type="date" id="noteDatum" value="'+R.datum+'"></div></div>'+
+    '<p class="hinweis">Gewicht 0 notiert die Note als <b>Zwischenstand</b>: Sie erscheint im Profil und im PDF, fließt aber nicht in die Berechnung ein. So lassen sich die Rückmeldungen im Halbjahr festhalten und am Ende eine gültige mündliche Note vergeben.</p>'+
+    '<div class="zeile"><button class="primar" data-a="noteSpeichern" data-id="'+schuelerId+'">Speichern</button><button data-a="modalZu">Abbrechen</button></div>');
+}
+function notizDialog(schuelerId){
+  const s = schuelerVon(schuelerId);
+  zeigeModal('<h2>Notiz · '+esc(s.vorname)+' '+esc(s.name)+'</h2>'+
+    '<div class="feld"><textarea id="notizText" placeholder="Beobachtung, Absprache, …"></textarea></div>'+
+    '<div class="zeile"><button class="primar" data-a="notizSpeichern" data-id="'+schuelerId+'">Speichern</button><button data-a="modalZu">Abbrechen</button></div>');
+}
+function schuljahrNeuDialog(){
+  const j = new Date().getFullYear();
+  zeigeModal('<h2>Neues Schuljahr</h2>'+
+    '<div class="feld"><label>Bezeichnung</label><input id="sjName" value="'+j+'/'+String(j+1).slice(2)+'"></div>'+
+    '<div class="zeile"><div class="feld"><label>Beginn</label><input type="date" id="sjBeginn" value="'+j+'-08-01"></div>'+
+    '<div class="feld"><label>Ende</label><input type="date" id="sjEnde" value="'+(j+1)+'-07-31"></div>'+
+    '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div></div>'+
+    '<div class="zeile"><button class="primar" data-a="schuljahrAnlegen">Anlegen</button><button data-a="modalZu">Abbrechen</button></div>');
+}
+function arbeitNeuDialog(){
+  zeigeModal('<h2>Neue Arbeit / neuer Test</h2>'+
+    '<div class="zeile"><div class="feld"><label>Titel</label><input id="naTitel" placeholder="z. B. LEK Kreisbewegung"></div>'+
+    '<div class="feld"><label>Art</label><select id="naArt" data-a-change="artWechsel">'+ARBEIT_ARTEN.map(a=>'<option value="'+a.name+'">'+a.name+'</option>').join("")+'</select></div>'+
+    '<div class="feld"><label>Zählt zu</label><select id="naBereich">'+
+    '<option value="arbeit">Klassenarbeiten</option><option value="sonstige">sonstige Leistungen</option></select></div>'+
+    '<div class="feld"><label>Datum</label><input type="date" id="naDatum" value="'+R.datum+'"></div>'+
+    '<div class="feld"><label>Gewicht</label><select id="naGewicht"><option value="0">0 – Zwischenstand (zählt nicht)</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></div></div>'+
+    '<p class="hinweis">Klassenarbeiten und Klausuren bilden einen eigenen Bereich; LEKs, Tests, Referate und Protokolle gehören zu den sonstigen Leistungen. Die Vorbelegung folgt der Art und lässt sich hier ändern. Das Gewicht wirkt innerhalb des gewählten Bereichs.</p>'+
+    '<div class="zeile"><button class="primar" data-a="arbeitAnlegen">Anlegen</button><button data-a="modalZu">Abbrechen</button></div>');
+}
+function nameParsen(zeile){
+  zeile = zeile.trim(); if(!zeile) return null;
+  if (zeile.includes(",")){
+    const [n, v] = zeile.split(",").map(x=>x.trim());
+    return {vorname:v||"", name:n||""};
+  }
+  const teile = zeile.split(/\s+/);
+  if (teile.length===1) return {vorname:teile[0], name:""};
+  return {vorname:teile.slice(0,-1).join(" "), name:teile[teile.length-1]};
+}
+
+/* ============ Export / Import ============ */
+function exportieren(){
+  S.einstellungen.letztesBackup = new Date().toISOString();
+  if (KB_MODE==="scriptable"){
+    speichern();
+    sendeAnBridge({typ:"export"});
+    toast("Export wird geöffnet …");
+  } else {
+    const blob = new Blob([JSON.stringify(S,null,1)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "kursbuch-sicherung-"+todayISO()+".json";
+    a.click();
+    toast("Sicherung heruntergeladen");
+  }
+  zeichne();
+}
+function importieren(){
+  if (KB_MODE==="scriptable"){ sendeAnBridge({typ:"import"}); return; }
+  const inp = document.getElementById("importDatei");
+  inp.onchange = ()=>{
+    const f = inp.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=> window.__KB_importData(String(r.result));
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+/* ============ Aktions-Delegation ============ */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) {
+    if (ev.target.id==="overlay") schliessePopover();
+    return;
+  }
+  const a = el.dataset.a, id = el.dataset.id;
+  const k = R.kursId ? kursVon(R.kursId) : null;
+
+  if (a==="go"){ R.view = el.dataset.view; if(R.view==="kurs"&&!R.kursId) R.view="home"; schliessePopover(); zeichne(); }
+  else if (a==="kursOeffnen"){ R.view="kurs"; R.kursId=id; R.tab="sitzplan"; R.datum=todayISO(); zeichne(); }
+  else if (a==="tab"){ R.tab=id; zeichne(); }
+  else if (a==="modalZu"){ schliessePopover(); zeichne(); }
+  else if (a==="modalZuArbeiten"){ schliessePopover(); R.tab="arbeiten"; zeichne(); }
+  else if (a==="undo"){ if(letzteAktion){ letzteAktion.undo(); letzteAktion=null; document.getElementById("toast").classList.remove("offen"); speichern(); zeichne(); } }
+
+  /* Kurse */
+  else if (a==="kursNeuDialog") kursNeuDialog();
+  else if (a==="kursAnlegen"){
+    const name = document.getElementById("nkName").value.trim();
+    if (!name) return alertBox("Bitte einen Kursnamen angeben.");
+    const kurs = {id:uid(), schuljahrId: el.dataset.sj || (aktivesSchuljahr()||{}).id, name,
+      fach: document.getElementById("nkFach").value.trim(),
+      jahrgang: Number(document.getElementById("nkJahrgang").value),
+      farbe: KURSFARBEN[S.kurse.length % KURSFARBEN.length], gewichtSonstige: 50, gewichtMuendlichAnteil: 50, mdlModus: "gewicht"};
+    S.kurse.push(kurs); speichern(); schliessePopover();
+    R.view="kurs"; R.kursId=kurs.id; R.tab="kurscfg"; zeichne();
+    toast("Kurs angelegt – jetzt Schüler hinzufügen");
+  }
+  else if (a==="kursSpeichern"){
+    k.name = document.getElementById("kName").value.trim() || k.name;
+    k.fach = document.getElementById("kFach").value.trim();
+    k.jahrgang = Number(document.getElementById("kJahrgang").value);
+    k.farbe = document.getElementById("kFarbe").value;
+    k.gewichtSonstige = 100 - Number(document.getElementById("kGewicht").value);
+    const mm = document.getElementById("kMdlModus");
+    if (mm) k.mdlModus = mm.value;
+    const g2 = document.getElementById("kGewicht2");
+    if (g2) k.gewichtMuendlichAnteil = Number(g2.value);
+    speichern(); zeichne(); toast("Kurs gespeichert");
+  }
+  else if (a==="kursLoeschen"){
+    zeigeModal('<h2>Kurs löschen?</h2><p>„'+esc(k.name)+'" mit allen Stunden, Ereignissen, Noten und Arbeiten löschen? Schüler bleiben erhalten, wenn sie noch anderen Kursen zugeordnet sind.</p>'+
+      '<div class="zeile"><button class="gefahr" data-a="kursLoeschenJa" data-id="'+k.id+'">Endgültig löschen</button><button class="primar" data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="kursLoeschenJa"){
+    const stundenIds = new Set(S.stunden.filter(x=>x.kursId===id).map(x=>x.id));
+    S.stunden = S.stunden.filter(x=>x.kursId!==id);
+    S.ereignisse = S.ereignisse.filter(x=>x.kursId!==id);
+    S.noten = S.noten.filter(x=>x.kursId!==id);
+    S.arbeiten = S.arbeiten.filter(x=>x.kursId!==id);
+    S.anwesenheit = S.anwesenheit.filter(x=>!stundenIds.has(x.stundeId));
+    for (const s of S.schueler) s.kursIds = s.kursIds.filter(x=>x!==id);
+    S.schueler = S.schueler.filter(s=>s.kursIds.length>0);
+    S.kurse = S.kurse.filter(x=>x.id!==id);
+    speichern(); schliessePopover(); R.view="home"; R.kursId=null; zeichne(); toast("Kurs gelöscht");
+  }
+
+  /* Schüler */
+  else if (a==="schuelerHinzufuegen"){
+    const text = document.getElementById("schuelerImport").value;
+    let anzahl = 0;
+    for (const zeile of text.split("\n")){
+      const p = nameParsen(zeile); if(!p || (!p.vorname && !p.name)) continue;
+      S.schueler.push({id:uid(), vorname:p.vorname, name:p.name, kuerzel:"", notizen:"", kursIds:[id], sitz:{}});
+      anzahl++;
+    }
+    if (anzahl){ speichern(); zeichne(); toast(anzahl+" Schüler hinzugefügt"); }
+  }
+  else if (a==="schuelerEntfernen"){
+    const s = schuelerVon(id);
+    zeigeModal('<h2>Schüler entfernen?</h2><p>'+esc(s.vorname)+' '+esc(s.name)+' aus diesem Kurs entfernen? Ereignisse, Noten und Fehlzeiten dieses Kurses werden mit entfernt.</p>'+
+      '<div class="zeile"><button class="gefahr" data-a="schuelerEntfernenJa" data-id="'+id+'">Entfernen</button><button class="primar" data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="schuelerEntfernenJa"){
+    const s = schuelerVon(id);
+    const stundenIds = new Set(S.stunden.filter(x=>x.kursId===R.kursId).map(x=>x.id));
+    s.kursIds = s.kursIds.filter(x=>x!==R.kursId);
+    S.ereignisse = S.ereignisse.filter(e=>!(e.schuelerId===id && e.kursId===R.kursId));
+    S.noten = S.noten.filter(n=>!(n.schuelerId===id && n.kursId===R.kursId));
+    for (const arb of S.arbeiten.filter(x=>x.kursId===R.kursId)) delete arb.ergebnisse[id];
+    S.anwesenheit = S.anwesenheit.filter(x=>!(x.schuelerId===id && stundenIds.has(x.stundeId)));
+    if (!s.kursIds.length) S.schueler = S.schueler.filter(x=>x.id!==id);
+    speichern(); schliessePopover(); zeichne(); toast("Schüler entfernt");
+  }
+  else if (a==="schuelerUmbenennen"){
+    const s = schuelerVon(id);
+    zeigeModal('<h2>Schüler bearbeiten</h2>'+
+      '<div class="zeile"><div class="feld"><label>Vorname</label><input id="suVor" value="'+esc(s.vorname)+'"></div>'+
+      '<div class="feld"><label>Nachname</label><input id="suNach" value="'+esc(s.name)+'"></div></div>'+
+      '<div class="feld"><label>Notizen (z. B. Nachteilsausgleich)</label><textarea id="suNotiz">'+esc(s.notizen||"")+'</textarea></div>'+
+      '<div class="zeile"><button class="primar" data-a="schuelerUmbenennenJa" data-id="'+id+'">Speichern</button><button data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="schuelerUmbenennenJa"){
+    const s = schuelerVon(id);
+    s.vorname = document.getElementById("suVor").value.trim();
+    s.name = document.getElementById("suNach").value.trim();
+    s.notizen = document.getElementById("suNotiz").value.trim();
+    speichern(); schliessePopover(); zeichne();
+  }
+  else if (a==="popupSchueler"){ oeffnePopupSchueler(id, el.getBoundingClientRect()); }
+  else if (a==="profilOeffnen"){ schliessePopover(); R.view="profil"; R.schuelerId=id; zeichne(); }
+
+  /* Ereignisse */
+  else if (a==="ereignisStufe"){
+    const stufe = Number(el.dataset.stufe);
+    const e = addEreignis(id, R.kursId, el.dataset.kat, stufe);
+    schliessePopover(); zeichne();
+    const s = schuelerVon(id);
+    toast(s.vorname+" · "+ereignisName(e)+" "+stufeInfo(stufe).label, ()=>{ S.ereignisse = S.ereignisse.filter(x=>x.id!==e.id); });
+  }
+  else if (a==="ereignisEinfach"){
+    const e = addEreignis(id, R.kursId, el.dataset.typ);
+    schliessePopover(); zeichne();
+    const s = schuelerVon(id);
+    toast(s.vorname+" · "+ereignisName(e), ()=>{ S.ereignisse = S.ereignisse.filter(x=>x.id!==e.id); });
+  }
+  else if (a==="fehltUmschalten"){
+    const st = ensureStunde(R.kursId, R.datum);
+    const anw = anwesenheitVon(id, st.id);
+    const neu = (anw && anw.status==="fehlt") ? "anwesend" : "fehlt";
+    setzeAnwesenheit(id, st.id, neu);
+    schliessePopover(); zeichne();
+    const s = schuelerVon(id);
+    toast(s.vorname+(neu==="fehlt"?" fehlt heute":" ist wieder anwesend"));
+  }
+  else if (a==="notizDialog") notizDialog(id);
+  else if (a==="notizSpeichern"){
+    const text = document.getElementById("notizText").value.trim();
+    if (text){ addEreignis(id, R.kursId, "notiz", undefined, text); toast("Notiz gespeichert"); }
+    schliessePopover(); zeichne();
+  }
+
+  /* Noten */
+  else if (a==="noteDialog") noteDialog(id);
+  else if (a==="noteWertWahl"){
+    document.querySelectorAll("#noteWerte button").forEach(b=>b.classList.remove("gewaehlt"));
+    el.classList.add("gewaehlt");
+  }
+  else if (a==="noteSpeichern"){
+    const gew = document.querySelector("#noteWerte button.gewaehlt");
+    if (!gew) return alertBox("Bitte zuerst einen Wert antippen.");
+    const n = {id:uid(), schuelerId:id, kursId:R.kursId, datum:document.getElementById("noteDatum").value||R.datum,
+      wert:Number(gew.dataset.wert), bereich:document.getElementById("noteBereich").value,
+      label:document.getElementById("noteLabel").value.trim(), gewicht:Number(document.getElementById("noteGewicht").value)};
+    S.noten.push(n); speichern(); schliessePopover(); zeichne();
+    const s = schuelerVon(id);
+    toast(s.vorname+" · Note "+n.wert+" ("+bereichKurz(n.bereich)+")", ()=>{ S.noten = S.noten.filter(x=>x.id!==n.id); });
+  }
+  else if (a==="noteLoeschen"){
+    const n = S.noten.find(x=>x.id===id);
+    S.noten = S.noten.filter(x=>x.id!==id);
+    speichern(); zeichne(); toast("Note gelöscht", ()=>{ S.noten.push(n); });
+  }
+
+  /* Stunden */
+  else if (a==="stundeDialog"){ zeigeModal(stundeDialogHtml(ensureStunde(R.kursId, R.datum))); }
+  else if (a==="stundeNeuDialog"){
+    zeigeModal('<h2>Stunde anlegen</h2><div class="feld"><label>Datum</label><input type="date" id="stNeuDatum" value="'+R.datum+'"></div>'+
+      '<div class="zeile"><button class="primar" data-a="stundeNeuWeiter">Weiter</button><button data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="stundeNeuWeiter"){
+    const d = document.getElementById("stNeuDatum").value || todayISO();
+    zeigeModal(stundeDialogHtml(ensureStunde(R.kursId, d)));
+  }
+  else if (a==="stundeBearbeiten"){ zeigeModal(stundeDialogHtml(stundeVon(id))); }
+  else if (a==="stundeSpeichern"){
+    const st = stundeVon(id);
+    st.thema = document.getElementById("stThema").value.trim();
+    st.hausaufgabe = document.getElementById("stHa").value.trim();
+    st.ausfall = document.getElementById("stAusfall").checked;
+    speichern(); schliessePopover(); zeichne(); toast("Stunde gespeichert");
+  }
+
+  /* Anwesenheit */
+  else if (a==="anwesenheitDialog"){ zeigeModal(anwesenheitDialogHtml(k)); }
+  else if (a==="anwSetzen"){
+    setzeAnwesenheit(id, el.dataset.stunde, el.dataset.status, el.dataset.status==="verspaetet"?5:0);
+    zeigeModal(anwesenheitDialogHtml(k));
+  }
+  else if (a==="anwMinuten"){
+    const anw = anwesenheitVon(id, el.dataset.stunde);
+    if (anw){ anw.minuten = (anw.minuten||0)+5; speichern(); }
+    zeigeModal(anwesenheitDialogHtml(k));
+  }
+  else if (a==="entschuldigen"){
+    const anw = S.anwesenheit.find(x=>x.id===id);
+    if (anw){ anw.entschuldigt = (el.dataset.wert==="true"); speichern(); zeichne(); }
+  }
+
+  /* Arbeiten */
+  else if (a==="arbeitNeuDialog") arbeitNeuDialog();
+  else if (a==="arbeitAnlegen"){
+    const titel = document.getElementById("naTitel").value.trim();
+    if (!titel) return alertBox("Bitte einen Titel angeben.");
+    const arb = {id:uid(), kursId:R.kursId, titel, art:document.getElementById("naArt").value,
+      bereich:document.getElementById("naBereich").value,
+      datum:document.getElementById("naDatum").value||R.datum, gewicht:Number(document.getElementById("naGewicht").value), ergebnisse:{}};
+    S.arbeiten.push(arb); speichern();
+    zeigeModal(arbeitEingabeHtml(arb, k));
+  }
+  else if (a==="arbeitBereichWechseln"){
+    const arb = S.arbeiten.find(x=>x.id===id);
+    const neu = bereichNorm(arb.bereich||artBereich(arb.art))==="arbeit" ? "sonstige" : "arbeit";
+    arb.bereich = neu; speichern(); zeichne();
+    toast("„"+arb.titel+"“ zählt jetzt zu "+(neu==="arbeit"?"den Klassenarbeiten":"den sonstigen Leistungen"));
+  }
+  else if (a==="arbeitEingabe"){ zeigeModal(arbeitEingabeHtml(S.arbeiten.find(x=>x.id===id), k)); }
+  else if (a==="arbeitWert"){
+    const arb = S.arbeiten.find(x=>x.id===id);
+    const w = el.dataset.wert;
+    if (w==="") delete arb.ergebnisse[el.dataset.sid];
+    else arb.ergebnisse[el.dataset.sid] = Number(w);
+    speichern();
+    zeigeModal(arbeitEingabeHtml(arb, k));
+  }
+  else if (a==="arbeitLoeschen"){
+    const arb = S.arbeiten.find(x=>x.id===id);
+    zeigeModal('<h2>Arbeit löschen?</h2><p>„'+esc(arb.titel)+'" mit allen Ergebnissen löschen?</p>'+
+      '<div class="zeile"><button class="gefahr" data-a="arbeitLoeschenJa" data-id="'+id+'">Löschen</button><button class="primar" data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="arbeitLoeschenJa"){
+    const arb = S.arbeiten.find(x=>x.id===id);
+    S.arbeiten = S.arbeiten.filter(x=>x.id!==id);
+    speichern(); schliessePopover(); zeichne(); toast("Arbeit gelöscht", ()=>{ S.arbeiten.push(arb); });
+  }
+
+  /* Schuljahre & Einstellungen */
+  else if (a==="schuljahrNeuDialog") schuljahrNeuDialog();
+  else if (a==="schuljahrAnlegen"){
+    const sj = {id:uid(), name:document.getElementById("sjName").value.trim()||"Schuljahr",
+      beginn:document.getElementById("sjBeginn").value, ende:document.getElementById("sjEnde").value,
+      aWocheAnker:document.getElementById("sjAnker").value};
+    if (!sj.aWocheAnker) return alertBox("Bitte den Montag einer A-Woche angeben.");
+    S.schuljahre.push(sj); S.einstellungen.aktivesSchuljahrId = sj.id;
+    speichern(); schliessePopover(); R.view="home"; zeichne(); toast("Schuljahr "+sj.name+" angelegt");
+  }
+  else if (a==="schuljahrAktivieren"){ S.einstellungen.aktivesSchuljahrId = id; speichern(); zeichne(); }
+  else if (a==="eigenesEreignisNeu"){
+    const name = document.getElementById("eeName").value.trim();
+    if (!name) return;
+    S.einstellungen.eigeneEreignisse.push({id:"eigen-"+uid(), name, mitStufen:document.getElementById("eeStufen").checked});
+    speichern(); zeichne();
+  }
+  else if (a==="eigenesEreignisLoeschen"){
+    S.einstellungen.eigeneEreignisse = S.einstellungen.eigeneEreignisse.filter(x=>x.id!==id);
+    speichern(); zeichne();
+  }
+  else if (a==="exportieren") exportieren();
+  else if (a==="importieren") importieren();
+  else if (a==="allesLoeschenDialog"){
+    zeigeModal('<h2>Wirklich alle Daten löschen?</h2><p>Alle Schuljahre, Kurse, Schüler, Ereignisse und Noten werden unwiderruflich gelöscht. Exportieren Sie vorher eine Sicherung!</p>'+
+      '<div class="zeile"><button class="gefahr" data-a="allesLoeschenJa">Alles löschen</button><button class="primar" data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="allesLoeschenJa"){
+    S = leererZustand(); speichern(); schliessePopover(); R={view:"home",kursId:null,tab:"sitzplan",schuelerId:null,datum:todayISO()}; zeichne();
+  }
+});
+
+document.addEventListener("change", ev=>{
+  const el = ev.target;
+  if (el.dataset.aChange==="datumWechsel"){ R.datum = el.value || todayISO(); zeichne(); }
+  else if (el.dataset.aChange==="mdlModusWechsel"){
+    const b = document.getElementById("mdlAnteilBlock");
+    if (b) b.style.display = (el.value==="anteil") ? "block" : "none";
+  }
+  else if (el.dataset.aChange==="artWechsel"){
+    const b = document.getElementById("naBereich");
+    if (b) b.value = artBereich(el.value);
+  }
+});
+document.addEventListener("input", ev=>{
+  const el = ev.target;
+  if (el.dataset.aInput==="gewichtVorschau"){
+    const w = Number(el.value);
+    const anz = document.getElementById("gewAnzeige");
+    if (anz) anz.textContent = w+" % : "+(100-w)+" %";
+  }
+  else if (el.dataset.aInput==="gewichtVorschau2"){
+    const w = Number(el.value);
+    const anz = document.getElementById("gewAnzeige2");
+    if (anz) anz.textContent = w+" % : "+(100-w)+" %";
+  }
+});
+
+/* ============ Start ============ */
+if (KB_MODE!=="scriptable") document.getElementById("testbanner").style.display="block";
+zeichne();
+/* ================= PHASE 2 ================= */
+
+/* ---------- SHA-256 (eigenständig, für PIN – unabhängig von WebCrypto) ---------- */
+function sha256Hex(ascii){
+  function rr(v,c){ return (v>>>c)|(v<<(32-c)); }
+  const mathPow=Math.pow, maxWord=mathPow(2,32);
+  let result="", words=[], asciiBitLength=ascii.length*8;
+  let hash=sha256Hex.h=sha256Hex.h||[], k=sha256Hex.k=sha256Hex.k||[];
+  let primeCounter=k.length; const isComposite={};
+  for (let candidate=2; primeCounter<64; candidate++){
+    if (!isComposite[candidate]){
+      for (let i=0;i<313;i+=candidate) isComposite[i]=candidate;
+      hash[primeCounter]=(mathPow(candidate,.5)*maxWord)|0;
+      k[primeCounter++]=(mathPow(candidate,1/3)*maxWord)|0;
+    }
+  }
+  ascii+="\x80";
+  while (ascii.length%64-56) ascii+="\x00";
+  for (let i=0;i<ascii.length;i++){
+    const j=ascii.charCodeAt(i); if (j>>8) return null;
+    words[i>>2]|=j<<((3-i)%4)*8;
+  }
+  words[words.length]=(asciiBitLength/maxWord)|0;
+  words[words.length]=asciiBitLength;
+  for (let j=0;j<words.length;){
+    const w=words.slice(j,j+=16), oldHash=hash.slice(0,8);
+    for (let i=0;i<64;i++){
+      const w15=w[i-15], w2=w[i-2];
+      const a=hash[0], e=hash[4];
+      const temp1=hash[7]
+        +(rr(e,6)^rr(e,11)^rr(e,25))
+        +((e&hash[5])^((~e)&hash[6]))
+        +k[i]
+        +(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+      const temp2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+      hash=[(temp1+temp2)|0].concat(hash);
+      hash[4]=(hash[4]+temp1)|0;
+    }
+    for (let i=0;i<8;i++) hash[i]=(hash[i]+oldHash[i])|0;
+  }
+  for (let i=0;i<8;i++)
+    for (let j=3;j+1;j--){
+      const b=(hash[i]>>(j*8))&255;
+      result+=((b<16)?0:"")+b.toString(16);
+    }
+  return result;
+}
+function pinHash(pin, salt){
+  let h = salt + ":" + pin;
+  for (let i=0;i<5000;i++) h = sha256Hex(h);
+  return h;
+}
+
+/* ---------- Sperre (PIN) ---------- */
+let gesperrt = false, verstecktSeit = null, pinEingabe = "";
+function sperren(){ if (S.einstellungen.pin){ gesperrt = true; pinEingabe=""; zeichne(); } }
+function sperrAnsicht(){
+  let punkte = "";
+  for (let i=0;i<6;i++) punkte += '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;margin:0 5px;'+
+    (i<pinEingabe.length?'background:var(--akzent)':'border:2px solid var(--linie)')+'"></span>';
+  let tasten = "";
+  for (const t of [1,2,3,4,5,6,7,8,9,"C",0,"OK"])
+    tasten += '<button data-a="pinTaste" data-id="'+t+'" style="width:76px;height:64px;font-size:22px;border-radius:14px;'+
+      (t==="OK"?'background:var(--akzent);color:#14210f;':'')+'">'+t+'</button>';
+  return '<div style="max-width:300px;margin:60px auto;text-align:center">'+
+    '<h2>Kursbuch gesperrt</h2><div style="margin:18px 0">'+punkte+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,76px);gap:10px;justify-content:center">'+tasten+'</div>'+
+    '<p class="hinweis" id="pinFehler"></p></div>';
+}
+document.addEventListener("visibilitychange", ()=>{
+  if (document.visibilityState==="hidden") verstecktSeit = Date.now();
+  else if (verstecktSeit && S.einstellungen.pin && Date.now()-verstecktSeit > 5*60*1000) sperren();
+});
+
+/* ---------- Heute-Ansicht & Stundenplan-Slots ---------- */
+function heutigeKurse(){
+  const sj = aktivesSchuljahr(); if(!sj) return [];
+  const heute = todayISO();
+  const wt = new Date(heute+"T12:00:00").getDay(); // 1=Mo..5=Fr
+  const wb = wochenBuchstabe(sj, heute);
+  const liste = [];
+  for (const k of S.kurse.filter(k=>k.schuljahrId===sj.id)){
+    for (const slot of (k.slots||[])){
+      if (slot.tag===wt && (slot.woche==="AB" || slot.woche===wb))
+        liste.push({kurs:k, stunde:slot.stunde});
+    }
+  }
+  return liste.sort((a,b)=>a.stunde-b.stunde);
+}
+function offeneFehlzeiten(){
+  return S.anwesenheit.filter(a=>a.status==="fehlt" && a.entschuldigt===null).length;
+}
+function backupAlterTage(){
+  if (!S.einstellungen.letztesBackup) return null;
+  return Math.floor((Date.now() - new Date(S.einstellungen.letztesBackup).getTime())/(24*3600*1000));
+}
+/* Ersetzt die Phase-1-Fassung */
+function viewHome(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+  const heute = todayISO();
+  const wb = wochenBuchstabe(sj, heute);
+  let html = "";
+
+  /* Heute */
+  const hk = heutigeKurse();
+  html += '<div class="karte"><div class="zeile raum"><h2>Heute · '+wochentagName(new Date(heute+"T12:00:00").getDay())+', '+fmtDatum(heute)+'</h2>'+
+    (wb?'<span class="wochenbadge">'+wb+'-Woche</span>':'')+'</div>';
+  if (!hk.length) html += '<p class="hinweis">Kein Unterricht laut Stundenplan eingetragen (Stundenplan-Slots im Tab „Kurs" jedes Kurses pflegen).</p>';
+  else {
+    for (const e of hk){
+      const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===heute);
+      const geplant = st && st.geplant ? st.geplant : (st && st.thema ? st.thema : "");
+      html += '<div class="kurskachel" style="margin-bottom:8px" data-a="kursOeffnen" data-id="'+e.kurs.id+'">'+
+        '<div class="kursfarbe" style="background:'+esc(e.kurs.farbe)+'"></div>'+
+        '<div class="info"><div><b>'+e.stunde+'. Stunde · '+esc(e.kurs.name)+'</b></div>'+
+        '<div class="sub">'+(geplant?("Geplant: "+esc(geplant)):"kein Thema geplant")+'</div></div><div>›</div></div>';
+    }
+  }
+  /* Offene Punkte */
+  const of = offeneFehlzeiten(), bt = backupAlterTage();
+  const punkte = [];
+  if (of) punkte.push(of+' Fehlzeit'+(of>1?'en':'')+' noch nicht als entschuldigt/unentschuldigt markiert');
+  if (bt===null) punkte.push('Noch keine Datensicherung exportiert');
+  else if (bt>7) punkte.push('Letzte Datensicherung ist '+bt+' Tage alt – bitte exportieren');
+  if (punkte.length) html += '<div style="margin-top:6px">'+punkte.map(p=>'<p class="hinweis">⚠ '+p+'</p>').join("")+'</div>';
+  html += '</div>';
+
+  /* Kursliste */
+  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
+  html += '<h2 style="margin:6px 0 10px">Kurse · '+esc(sj.name)+'</h2>';
+  if (!kurse.length) html += '<div class="leer">Noch keine Kurse.</div>';
+  for (const k of kurse){
+    const anz = kursSchueler(k.id).length, sys = notensystem(k);
+    html += '<div class="kurskachel" data-a="kursOeffnen" data-id="'+k.id+'">'+
+      '<div class="kursfarbe" style="background:'+esc(k.farbe)+'"></div>'+
+      '<div class="info"><div><b>'+esc(k.name)+'</b></div>'+
+      '<div class="sub">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+' Schüler · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div><div>›</div></div>';
+  }
+  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">+ Kurs anlegen</button>';
+  return html;
+}
+
+/* ---------- Notenvorschlag aus Mitarbeit ---------- */
+function notenvorschlag(schuelerId, kursId){
+  const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId &&
+    (MITARBEIT_KATEGORIEN.some(k=>k.id===e.typ) || (S.einstellungen.eigeneEreignisse.some(x=>x.id===e.typ && x.mitStufen))) && e.stufe!=null);
+  if (!evs.length) return null;
+  const avg = evs.reduce((s,e)=>s+e.stufe,0)/evs.length;
+  const kurs = kursVon(kursId), sys = notensystem(kurs);
+  if (sys.typ==="punkte") return {wert: Math.max(0, Math.min(15, Math.round(7.5+3.75*avg))), avg, anzahl:evs.length};
+  return {wert: Math.max(1, Math.min(6, Math.round(3.5-1.25*avg))), avg, anzahl:evs.length};
+}
+
+/* ---------- Plandatei-Import (KI-Workflow Stufe 1) ---------- */
+function planImportieren(text){
+  let plan;
+  try { plan = JSON.parse(text); } catch(e){ return {fehler:"Datei ist kein gültiges JSON."}; }
+  if (!plan || plan.formatVersion!=="kursbuch-plan-1") return {fehler:"Format nicht erkannt – erwartet wird formatVersion \"kursbuch-plan-1\"."};
+  const sj = aktivesSchuljahr(); if (!sj) return {fehler:"Kein aktives Schuljahr."};
+  let ferienNeu=0, themen=0; const unbekannt=[];
+  if (Array.isArray(plan.ferien)){
+    sj.ferien = sj.ferien||[];
+    for (const f of plan.ferien){
+      if (f && f.von && f.bis && !sj.ferien.some(x=>x.von===f.von && x.bis===f.bis)){
+        sj.ferien.push({name:String(f.name||"Ferien"), von:f.von, bis:f.bis}); ferienNeu++;
+      }
+    }
+  }
+  if (Array.isArray(plan.plaene)){
+    for (const p of plan.plaene){
+      const kurs = S.kurse.find(k=>k.schuljahrId===sj.id && k.name.trim().toLowerCase()===String(p.kurs||"").trim().toLowerCase());
+      if (!kurs){ unbekannt.push(String(p.kurs||"?")); continue; }
+      for (const t of (p.themen||[])){
+        if (!t || !t.datum || !/^\d{4}-\d{2}-\d{2}$/.test(t.datum)) continue;
+        const st = ensureStunde(kurs.id, t.datum);
+        st.geplant = String(t.thema||"");
+        themen++;
+      }
+    }
+  }
+  speichern();
+  return {ferienNeu, themen, unbekannt};
+}
+
+/* ---------- Verschlüsseltes Backup (WebCrypto, AES-GCM) ---------- */
+function b64(buf){ let s=""; const b=new Uint8Array(buf); for (let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
+function unb64(s){ const bin=atob(s); const b=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i); return b; }
+function cryptoVerfuegbar(){ return typeof crypto!=="undefined" && crypto.subtle && typeof crypto.subtle.deriveKey==="function"; }
+async function schluesselAbleiten(passwort, salt, iter){
+  const enc = new TextEncoder();
+  const basis = await crypto.subtle.importKey("raw", enc.encode(passwort), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:iter, hash:"SHA-256"}, basis,
+    {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function backupVerschluesseln(passwort){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iter = 150000;
+  const key = await schluesselAbleiten(passwort, salt, iter);
+  const daten = new TextEncoder().encode(JSON.stringify(S));
+  const chiffre = await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, daten);
+  return JSON.stringify({kb:"kursbuch-backup-enc1", iter, salt:b64(salt), iv:b64(iv), daten:b64(chiffre)});
+}
+async function backupEntschluesseln(obj, passwort){
+  const key = await schluesselAbleiten(passwort, unb64(obj.salt), obj.iter||150000);
+  const klar = await crypto.subtle.decrypt({name:"AES-GCM", iv:unb64(obj.iv)}, key, unb64(obj.daten));
+  return new TextDecoder().decode(klar);
+}
+
+/* ---------- Datei-Export (Bridge oder Browser) ---------- */
+function dateiNameSicher(name){
+  return String(name)
+    .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue")
+    .replace(/Ä/g,"Ae").replace(/Ö/g,"Oe").replace(/Ü/g,"Ue").replace(/ß/g,"ss")
+    .replace(/[^\x20-\x7E]/g,"_").replace(/[\\\/:*?"<>|]/g,"_");
+}
+function dateiExportieren(name, inhaltBase64, mime){
+  name = dateiNameSicher(name);
+  if (KB_MODE==="scriptable"){
+    sendeAnBridge({typ:"exportdatei", name, base64: inhaltBase64});
+  } else {
+    const bin = unb64(inhaltBase64);
+    const blob = new Blob([bin], {type: mime||"application/octet-stream"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+}
+function textExportieren(name, text, mime){
+  const b = new TextEncoder().encode(text);
+  let s=""; for (let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]);
+  dateiExportieren(name, btoa(s), mime||"application/json");
+}
+
+/* ---------- Mini-PDF-Generator (A4, Helvetica, Latin-1) ---------- */
+const PDF_B = 595.28, PDF_H = 841.89;
+function pdfNeu(){ return {seiten:[]}; }
+function pdfSeite(doc){ const s={ops:[]}; doc.seiten.push(s); return s; }
+function pdfLatin1(s){
+  let r="";
+  for (const ch of String(s)){
+    const c = ch.codePointAt(0);
+    if (c===8722) r += "-";                    // − Minuszeichen
+    else if (c===8211 || c===8212) r += "-";   // – —
+    else if (c===8222 || c===8220 || c===8221) r += '"';
+    else if (c===8216 || c===8217) r += "'";
+    else if (c===8230) r += "...";
+    else if (c===8594) r += ">";
+    else if (c>255) r += "?";
+    else r += ch;
+  }
+  return r.replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+}
+function pdfFarbe(hex){
+  const n = parseInt(hex.replace("#",""),16);
+  return ((n>>16)&255)/255+" "+((n>>8)&255)/255+" "+(n&255)/255;
+}
+function pdfText(s, x, yTop, txt, groesse, fett, farbeHex){
+  s.ops.push((farbeHex?pdfFarbe(farbeHex):"0 0 0")+" rg BT /"+(fett?"F2":"F1")+" "+(groesse||10)+
+    " Tf 1 0 0 1 "+x.toFixed(1)+" "+(PDF_H-yTop).toFixed(1)+" Tm ("+pdfLatin1(txt)+") Tj ET");
+}
+function pdfTextBreite(txt, groesse){ return String(txt).length * (groesse||10) * 0.5; } // grobe Näherung Helvetica
+function pdfLinie(s, x1, y1, x2, y2, farbeHex, staerke){
+  s.ops.push((farbeHex?pdfFarbe(farbeHex):"0.7 0.7 0.7")+" RG "+(staerke||0.6)+" w "+
+    x1.toFixed(1)+" "+(PDF_H-y1).toFixed(1)+" m "+x2.toFixed(1)+" "+(PDF_H-y2).toFixed(1)+" l S");
+}
+function pdfRechteck(s, x, yTop, b, h, farbeHex){
+  s.ops.push(pdfFarbe(farbeHex||"#eeeeee")+" rg "+x.toFixed(1)+" "+(PDF_H-yTop-h).toFixed(1)+" "+b.toFixed(1)+" "+h.toFixed(1)+" re f");
+}
+function pdfKreis(s, cx, cyTop, r, farbeHex){
+  const cy = PDF_H-cyTop, k = 0.5523*r;
+  s.ops.push(pdfFarbe(farbeHex)+" rg "+
+    (cx-r).toFixed(1)+" "+cy.toFixed(1)+" m "+
+    (cx-r).toFixed(1)+" "+(cy+k).toFixed(1)+" "+(cx-k).toFixed(1)+" "+(cy+r).toFixed(1)+" "+cx.toFixed(1)+" "+(cy+r).toFixed(1)+" c "+
+    (cx+k).toFixed(1)+" "+(cy+r).toFixed(1)+" "+(cx+r).toFixed(1)+" "+(cy+k).toFixed(1)+" "+(cx+r).toFixed(1)+" "+cy.toFixed(1)+" c "+
+    (cx+r).toFixed(1)+" "+(cy-k).toFixed(1)+" "+(cx+k).toFixed(1)+" "+(cy-r).toFixed(1)+" "+cx.toFixed(1)+" "+(cy-r).toFixed(1)+" c "+
+    (cx-k).toFixed(1)+" "+(cy-r).toFixed(1)+" "+(cx-r).toFixed(1)+" "+(cy-k).toFixed(1)+" "+(cx-r).toFixed(1)+" "+cy.toFixed(1)+" c f");
+}
+function pdfFertig(doc){
+  const objekte = [];
+  const nSeiten = doc.seiten.length;
+  // Objekt 1: Catalog, 2: Pages, 3: F1, 4: F2, dann je Seite: Page + Inhalt
+  objekte[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  const kids = [];
+  for (let i=0;i<nSeiten;i++) kids.push((5+i*2)+" 0 R");
+  objekte[2] = "<< /Type /Pages /Kids ["+kids.join(" ")+"] /Count "+nSeiten+" >>";
+  objekte[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  objekte[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+  doc.seiten.forEach((seite,i)=>{
+    const inhalt = seite.ops.join("\n");
+    objekte[5+i*2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+PDF_B+" "+PDF_H+"] "+
+      "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents "+(6+i*2)+" 0 R >>";
+    objekte[6+i*2] = "<< /Length "+inhalt.length+" >>\nstream\n"+inhalt+"\nendstream";
+  });
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let i=1;i<objekte.length;i++){
+    offsets[i] = pdf.length;
+    pdf += i+" 0 obj\n"+objekte[i]+"\nendobj\n";
+  }
+  const xref = pdf.length;
+  pdf += "xref\n0 "+objekte.length+"\n0000000000 65535 f \n";
+  for (let i=1;i<objekte.length;i++) pdf += String(offsets[i]).padStart(10,"0")+" 00000 n \n";
+  pdf += "trailer\n<< /Size "+objekte.length+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF";
+  return btoa(pdf);
+}
+
+/* ---------- Schülerprofil als DIN-A4-PDF (genau eine Seite) ---------- */
+function profilPdfErzeugen(schuelerId, kursId){
+  const s0 = schuelerVon(schuelerId), kurs = kursVon(kursId), sj = aktivesSchuljahr();
+  const sys = notensystem(kurs);
+  const ns = notenstand(schuelerId, kursId);
+  const mz = mitarbeitZusammenfassung(schuelerId, kursId);
+  const fz = fehlzeiten(schuelerId, kursId);
+  const vs = notenvorschlag(schuelerId, kursId);
+  const noten = schuelerNoten(schuelerId, kursId).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
+  const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId).sort((a,b)=>b.ts.localeCompare(a.ts));
+  const doc = pdfNeu(), p = pdfSeite(doc);
+  const L=48, Rr=547;
+  let y = 56;
+
+  pdfText(p, L, y, s0.vorname+" "+s0.name, 20, true, "#14210f");
+  pdfText(p, Rr-pdfTextBreite("Kursbuch · erstellt am "+fmtDatum(todayISO()),9), y, "Kursbuch · erstellt am "+fmtDatum(todayISO()), 9, false, "#777777");
+  y += 18;
+  pdfText(p, L, y, kurs.name+" ("+(kurs.fach||"")+", Jahrgang "+kurs.jahrgang+") · Schuljahr "+(sj?sj.name:"–"), 11);
+  y += 22; pdfLinie(p, L, y, Rr, y, "#3d7a4e", 1.2); y += 24;
+
+  /* Notenstand */
+  pdfText(p, L, y, "Leistungsstand", 13, true, "#3d5a2e");
+  y += 18;
+  const einheit = sys.typ==="punkte" ? " P." : "";
+  pdfText(p, L, y, "Gesamt: "+(ns.gesamt==null?"–":fmtZahl(ns.gesamt))+einheit, 11, true);
+  pdfText(p, L+150, y, "Klassenarbeiten: "+(ns.arb==null?"–":fmtZahl(ns.arb))+einheit+"  ("+(100-gewSonstige(kurs))+" %)", 10);
+  pdfText(p, L+330, y, "sonstige Leistungen: "+(ns.son==null?"–":fmtZahl(ns.son))+einheit+"  ("+gewSonstige(kurs)+" %)", 10);
+  y += 14;
+  pdfText(p, L, y, "davon mündliche Note: "+(ns.m==null?"–":fmtZahl(ns.m))+einheit+
+    (mdlModus(kurs)==="anteil" ? " (fest "+gewMdlAnteil(kurs)+" %)" : " (zählt als eine sonstige Leistung)")+
+    " · übrige sonstige: "+(ns.wso==null?"–":fmtZahl(ns.wso))+einheit, 9, false, "#555555");
+  y += 14;
+  if (vs) pdfText(p, L, y, "Vorschlag mündliche Note aus Mitarbeit: "+vs.wert+einheit+" (aus "+vs.anzahl+(vs.anzahl===1?" Eintrag":" Einträgen")+", Ø-Stufe "+fmtZahl(vs.avg,1)+")", 9, false, "#777777");
+  y += 22;
+
+  /* Mitarbeit */
+  pdfText(p, L, y, "Mitarbeit nach Kategorien", 13, true, "#3d5a2e");
+  y += 18;
+  for (const kat of MITARBEIT_KATEGORIEN){
+    const z = mz[kat.id];
+    pdfText(p, L, y, kat.kurz, 10);
+    let x = L+150;
+    for (const stu of STUFEN){
+      pdfKreis(p, x, y-3, 4.5, stu.hex);
+      pdfText(p, x+8, y, String(z.counts[stu.v]||0), 10);
+      x += 44;
+    }
+    pdfText(p, x+8, y, z.schnitt==null ? "kein Eintrag" : ("Ø "+fmtZahl(z.schnitt,1)+"  ("+z.anzahl+(z.anzahl===1?" Eintrag":" Einträge")+")"), 10, false, "#555555");
+    y += 17;
+  }
+  y += 10;
+
+  /* Noten */
+  pdfText(p, L, y, "Noten und Arbeiten", 13, true, "#3d5a2e"); y += 16;
+  if (!noten.length){ pdfText(p, L, y, "Noch keine Noten.", 10, false, "#777777"); y += 16; }
+  else {
+    pdfText(p, L, y, "Datum", 9, true, "#777777"); pdfText(p, L+80, y, "Art", 9, true, "#777777");
+    pdfText(p, L+300, y, "Bereich", 9, true, "#777777"); pdfText(p, L+380, y, "Wert", 9, true, "#777777");
+    pdfText(p, L+440, y, "Gewicht", 9, true, "#777777");
+    y += 5; pdfLinie(p, L, y, Rr, y); y += 13;
+    const maxNoten = 8;
+    for (const n of noten.slice(0, maxNoten)){
+      pdfText(p, L, y, fmtDatum(n.datum), 10);
+      pdfText(p, L+80, y, (n.label||(n.ausArbeit?"Arbeit":"Note")).slice(0,42), 10);
+      pdfText(p, L+300, y, bereichKurz(n.bereich), 10);
+      pdfText(p, L+380, y, String(n.wert), 10, true);
+      pdfText(p, L+440, y, gewText(n.gewicht), 10);
+      y += 15;
+    }
+    if (noten.length>maxNoten){ pdfText(p, L, y, "… "+(noten.length-maxNoten)+" weitere in der App", 9, false, "#777777"); y += 15; }
+  }
+  y += 8;
+
+  /* Fehlzeiten */
+  pdfText(p, L, y, "Fehlzeiten", 13, true, "#3d5a2e"); y += 16;
+  pdfText(p, L, y, fz.fehltGesamt+"× gefehlt ("+fz.unentschuldigt+" unentschuldigt, "+fz.offen+" offen)  ·  "+
+    fz.verspaetungen+"× verspätet ("+fz.minuten+" Min.)", 10);
+  y += 24;
+
+  /* Ereignisse – füllt den Rest der Seite, bricht nie um */
+  pdfText(p, L, y, "Ereignisse (Datum · Thema der Stunde · Ereignis · Stufe)", 13, true, "#3d5a2e"); y += 16;
+  pdfText(p, L, y, "Datum", 9, true, "#777777"); pdfText(p, L+62, y, "Thema der Stunde", 9, true, "#777777");
+  pdfText(p, L+330, y, "Ereignis", 9, true, "#777777"); pdfText(p, L+480, y, "Stufe", 9, true, "#777777");
+  y += 5; pdfLinie(p, L, y, Rr, y); y += 13;
+  const yMax = 800;
+  let gezeigt = 0;
+  for (const e of evs){
+    if (y > yMax - 15) break;
+    const st = stundeVon(e.stundeId);
+    pdfText(p, L, y, st?fmtDatum(st.datum):"–", 9);
+    pdfText(p, L+62, y, ((st&&st.thema)?st.thema:"–").slice(0,52), 9);
+    pdfText(p, L+330, y, (ereignisName(e)+(e.text?": "+e.text:"")).slice(0,30), 9);
+    if (e.stufe!=null){
+      pdfKreis(p, L+486, y-3, 4, stufeInfo(e.stufe).hex);
+      pdfText(p, L+494, y, stufeInfo(e.stufe).label, 9);
+    } else pdfText(p, L+486, y, "–", 9);
+    y += 14; gezeigt++;
+  }
+  if (evs.length>gezeigt) pdfText(p, L, y, "… "+(evs.length-gezeigt)+" weitere Ereignisse in der App", 9, false, "#777777");
+  pdfLinie(p, L, 812, Rr, 812);
+  pdfText(p, L, 824, "Kursbuch – persönliche Unterrichtsdokumentation. Nur für den dienstlichen Gebrauch.", 8, false, "#999999");
+  return pdfFertig(doc);
+}
+/* ================= PHASE 2: Oberfläche (ersetzt einzelne Phase-1-Ansichten) ================= */
+
+/* Stundendokumentation mit Soll/Ist (ersetzt Phase-1-Fassung) */
+function viewStunden(k){
+  const stunden = S.stunden.filter(x=>x.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
+  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Stundendokumentation & Planung</h2>'+
+    '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button></div>';
+  if (!stunden.length) return html + '<div class="leer">Noch keine Stunden dokumentiert.<br>Geplante Themen erscheinen hier nach dem Plandatei-Import (Einstellungen).</div>';
+  html += '<div class="karte"><table class="tab"><tr><th>Datum</th><th>Geplant (Soll)</th><th>Thema (Ist)</th><th>Hausaufgabe</th><th>Fehlend</th><th></th></tr>';
+  for (const st of stunden){
+    const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
+    html += '<tr><td style="white-space:nowrap">'+fmtDatum(st.datum)+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':'')+'</td>'+
+      '<td class="hinweis">'+esc(st.geplant||"–")+'</td>'+
+      '<td>'+esc(st.thema||"–")+'</td><td>'+esc(st.hausaufgabe||"–")+'</td>'+
+      '<td>'+(fehl||"–")+'</td>'+
+      '<td><button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></td></tr>';
+  }
+  return html + '</table></div>';
+}
+
+/* Stunden-Dialog mit Planungs-Übernahme (ersetzt Phase-1-Fassung) */
+function stundeDialogHtml(st){
+  return '<h2>Stunde am '+fmtDatum(st.datum)+'</h2>'+
+    (st.geplant ? '<p class="hinweis">Geplant: <b>'+esc(st.geplant)+'</b> <button class="klein" data-a="geplantUebernehmen" data-id="'+st.id+'">als Thema übernehmen</button></p>' : "")+
+    '<div class="feld"><label>Thema / Inhalt der Stunde (Ist)</label><input id="stThema" value="'+esc(st.thema)+'"></div>'+
+    '<div class="feld"><label>Hausaufgabe</label><input id="stHa" value="'+esc(st.hausaufgabe)+'"></div>'+
+    '<div class="feld"><label>Geplantes Thema (Soll, aus Langfristplanung)</label><input id="stGeplant" value="'+esc(st.geplant||"")+'"></div>'+
+    '<div class="feld"><label><input type="checkbox" id="stAusfall" '+(st.ausfall?"checked":"")+' style="width:auto"> Ausfall / Vertretung</label></div>'+
+    '<div class="zeile"><button class="primar" data-a="stundeSpeichern" data-id="'+st.id+'">Speichern</button>'+
+    '<button data-a="modalZu">Abbrechen</button></div>';
+}
+
+/* Kurs-Einstellungen inkl. Stundenplan-Slots (ersetzt Phase-1-Fassung) */
+function viewKursCfg(k){
+  const schueler = kursSchueler(k.id);
+  const ws = gewSonstige(k), wmA = gewMdlAnteil(k);
+  let html = '<div class="karte"><h2>Kursdaten</h2>'+
+    '<div class="zeile">'+
+    '<div class="feld"><label>Name</label><input id="kName" value="'+esc(k.name)+'"></div>'+
+    '<div class="feld"><label>Fach</label><input id="kFach" value="'+esc(k.fach||"")+'"></div>'+
+    '<div class="feld"><label>Jahrgang</label><select id="kJahrgang">'+
+      [5,6,7,8,9,10,11,12].map(j=>'<option value="'+j+'" '+(k.jahrgang===j?"selected":"")+'>'+j+'</option>').join("")+
+    '</select></div>'+
+    '<div class="feld"><label>Farbe</label><select id="kFarbe">'+
+      KURSFARBEN.map(f=>'<option value="'+f+'" '+(k.farbe===f?"selected":"")+' style="background:'+f+'">'+f+'</option>').join("")+
+    '</select></div></div>'+
+    '<div class="feld"><label>Klassenarbeiten : sonstige Leistungen — <b id="gewAnzeige">'+(100-ws)+' % : '+ws+' %</b></label>'+
+    '<div class="gewslider"><span class="hinweis">Klassenarbeiten</span>'+
+    '<input type="range" min="0" max="100" step="5" value="'+(100-ws)+'" id="kGewicht" data-a-input="gewichtVorschau">'+
+    '<span class="hinweis">sonstige</span></div></div>'+
+    '<div class="feld"><label>Rolle der mündlichen Note innerhalb der sonstigen Leistungen</label>'+
+    '<select id="kMdlModus" data-a-change="mdlModusWechsel">'+
+    '<option value="gewicht" '+(mdlModus(k)==="gewicht"?"selected":"")+'>zählt als eine sonstige Leistung (über ihr Gewicht)</option>'+
+    '<option value="anteil" '+(mdlModus(k)==="anteil"?"selected":"")+'>fester Anteil an den sonstigen Leistungen</option>'+
+    '</select></div>'+
+    '<div id="mdlAnteilBlock" style="display:'+(mdlModus(k)==="anteil"?"block":"none")+'">'+
+    '<div class="feld"><label>Fester Anteil — mündliche Note : übrige — <b id="gewAnzeige2">'+wmA+' % : '+(100-wmA)+' %</b></label>'+
+    '<div class="gewslider"><span class="hinweis">mündliche Note</span>'+
+    '<input type="range" min="0" max="100" step="5" value="'+wmA+'" id="kGewicht2" data-a-input="gewichtVorschau2">'+
+    '<span class="hinweis">übrige</span></div></div></div>'+
+    '<p class="hinweis">Sonstige Leistungen sind die mündliche Note sowie LEKs, Tests, Referate und Protokolle. '+
+    'Bei drei sonstigen Leistungen im Halbjahr, von denen die mündliche Note eine ist, bleibt es bei der ersten Einstellung: '+
+    'alle drei mit Gewicht 1, jede zählt ein Drittel. Ist einer der Teile leer, zählt der andere allein. '+
+    'Änderungen wirken sofort auf alle Notenstände dieses Kurses.</p></div>'+
+    '<button class="primar" data-a="kursSpeichern" data-id="'+k.id+'">Kurs speichern</button> '+
+    '<button class="gefahr" data-a="kursLoeschen" data-id="'+k.id+'">Kurs löschen</button></div>';
+
+  /* Stundenplan-Slots */
+  html += '<div class="karte"><h2>Stundenplan (für die „Heute"-Ansicht)</h2>';
+  const slots = (k.slots||[]).slice().sort((a,b)=>a.tag-b.tag || a.stunde-b.stunde);
+  if (slots.length){
+    html += '<table class="tab">';
+    for (const [i, sl] of slots.entries()){
+      const idx = (k.slots||[]).indexOf(sl);
+      html += '<tr><td>'+wochentagName(sl.tag)+'</td><td>'+sl.stunde+'. Stunde</td>'+
+        '<td>'+(sl.woche==="AB"?"A- und B-Woche":sl.woche+"-Woche")+'</td>'+
+        '<td style="text-align:right"><button class="klein gefahr" data-a="slotLoeschen" data-id="'+k.id+'" data-idx="'+idx+'">Löschen</button></td></tr>';
+    }
+    html += '</table><div class="abstand"></div>';
+  } else html += '<p class="hinweis">Noch keine Unterrichtsstunden eingetragen.</p>';
+  html += '<div class="zeile">'+
+    '<select id="slotTag">'+[1,2,3,4,5].map(t=>'<option value="'+t+'">'+wochentagName(t)+'</option>').join("")+'</select>'+
+    '<select id="slotStunde">'+[1,2,3,4,5,6,7,8,9,10].map(s=>'<option value="'+s+'">'+s+'. Stunde</option>').join("")+'</select>'+
+    '<select id="slotWoche"><option value="AB">A- und B-Woche</option><option value="A">nur A-Woche</option><option value="B">nur B-Woche</option></select>'+
+    '<button data-a="slotNeu" data-id="'+k.id+'">Hinzufügen</button></div></div>';
+
+  /* Schüler */
+  html += '<div class="karte"><h2>Schüler ('+schueler.length+')</h2>';
+  if (schueler.length){
+    html += '<table class="tab">';
+    for (const s of schueler)
+      html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+        '<td style="text-align:right"><button class="klein" data-a="schuelerUmbenennen" data-id="'+s.id+'">Umbenennen</button> '+
+        '<button class="klein gefahr" data-a="schuelerEntfernen" data-id="'+s.id+'">Entfernen</button></td></tr>';
+    html += '</table><div class="abstand"></div>';
+  }
+  html += '<div class="feld"><label>Schüler hinzufügen — eine Zeile pro Schüler: <b>Nachname, Vorname</b> (oder „Vorname Nachname")</label>'+
+    '<textarea id="schuelerImport" placeholder="Müller, Anna&#10;Schmidt, Ben&#10;…"></textarea></div>'+
+    '<div class="zeile"><button class="primar" data-a="schuelerHinzufuegen" data-id="'+k.id+'">Hinzufügen</button>'+
+    '<button class="klein" data-a="csvWaehlen">CSV-Datei laden</button>'+
+    '<input type="file" id="csvDatei" accept=".csv,.txt,text/csv" style="display:none"></div></div>';
+  return html;
+}
+
+/* Schülerprofil mit Vorschlag und PDF-Export (ersetzt Phase-1-Fassung) */
+function viewProfil(){
+  const s = schuelerVon(R.schuelerId); if(!s){ R.view="home"; return viewHome(); }
+  const k = kursVon(R.kursId); if(!k){ R.view="home"; return viewHome(); }
+  const ns = notenstand(s.id, k.id);
+  const vs = notenvorschlag(s.id, k.id);
+  const noten = schuelerNoten(s.id, k.id).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
+  const mz = mitarbeitZusammenfassung(s.id, k.id);
+  const fz = fehlzeiten(s.id, k.id);
+  const evs = S.ereignisse.filter(e=>e.schuelerId===s.id && e.kursId===k.id).sort((a,b)=>b.ts.localeCompare(a.ts));
+
+  let html = '<div class="karte"><div class="zeile raum"><div><h2>'+esc(k.name)+'</h2>'+
+    '<button class="klein" data-a="profilPdf" data-id="'+s.id+'">Als PDF exportieren (1 Seite A4)</button></div>'+
+    '<div class="statzeile" style="margin:0">'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.gesamt)+'</div><div class="klein2">Stand gesamt</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.arb)+'</div><div class="klein2">Klassenarbeiten</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.son)+'</div><div class="klein2">sonstige Leistungen</div></div>'+
+    '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
+    (vs?'<div class="statwert"><div class="gross">'+vs.wert+'</div><div class="klein2">Vorschlag mdl. (aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+')</div></div>':'')+
+    '</div></div>'+
+    (vs?'<p class="hinweis">Der Vorschlag wird aus den Mitarbeits-Stufen berechnet (Ø '+fmtZahl(vs.avg,1)+' auf der Skala −2 … +2) und ist nur ein Anhaltspunkt – die Note vergeben Sie.</p>':'')+
+    '</div>';
+
+  html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
+  for (const kat of MITARBEIT_KATEGORIEN){
+    const z = mz[kat.id];
+    let balken = "";
+    for (const stu of STUFEN){
+      const n = z.counts[stu.v]||0;
+      balken += '<span style="display:inline-flex;align-items:center;margin-right:8px">'+
+        '<span class="stufenpunkt" style="background:'+stu.hex+'"></span>&nbsp;'+n+'</span>';
+    }
+    const dfarbe = z.schnitt==null? "#555" : stufeInfo(Math.round(z.schnitt)).hex;
+    html += '<tr><td style="min-width:140px">'+esc(kat.kurz)+'</td><td>'+balken+'</td>'+
+      '<td style="text-align:right"><span class="stufenpunkt" style="background:'+dfarbe+'"></span> '+
+      (z.schnitt==null?"–":("Ø "+fmtZahl(z.schnitt,1)))+'</td></tr>';
+  }
+  html += '</table></div>';
+
+  html += '<div class="karte"><h3>Noten & Arbeiten</h3>';
+  if (!noten.length) html += '<p class="hinweis">Noch keine Noten.</p>';
+  else {
+    html += '<table class="tab"><tr><th>Datum</th><th>Art</th><th>Bereich</th><th>Wert</th><th>Gewicht</th><th></th></tr>';
+    for (const n of noten)
+      html += '<tr'+(gew(n.gewicht)===0?' style="opacity:.65"':'')+'><td>'+fmtDatum(n.datum)+'</td><td>'+esc(n.label||(n.ausArbeit?"Arbeit":"Note"))+'</td>'+
+        '<td>'+bereichKurz(n.bereich)+'</td><td><b>'+n.wert+'</b></td><td>'+gewText(n.gewicht)+'</td>'+
+        '<td>'+(n.id?'<button class="klein gefahr" data-a="noteLoeschen" data-id="'+n.id+'">×</button>':'<span class="hinweis">aus Arbeit</span>')+'</td></tr>';
+    html += '</table>';
+    const zws = noten.filter(n=>gew(n.gewicht)===0 && bereichNorm(n.bereich)==="muendlich")
+      .sort((a,b)=>(a.datum||"").localeCompare(b.datum||""));
+    if (zws.length)
+      html += '<p class="hinweis">Mündliche Zwischenstände: '+
+        zws.map(n=>fmtDatumKurz(n.datum)+" → <b>"+n.wert+"</b>").join(" · ")+
+        ' (Ø '+fmtZahl(zws.reduce((x,n)=>x+n.wert,0)/zws.length,1)+', zählt nicht)</p>';
+  }
+  html += '</div>';
+  html += profilZusatzKarten(s, k, ns);
+
+  html += '<div class="karte"><h3>Fehlzeiten</h3>'+
+    '<p>'+fz.fehltGesamt+'× gefehlt ('+fz.unentschuldigt+' unentschuldigt, '+fz.offen+' offen) · '+
+    fz.verspaetungen+'× verspätet ('+fz.minuten+' Min.)</p>';
+  if (fz.liste.length){
+    html += '<table class="tab"><tr><th>Datum</th><th>Status</th><th>Entschuldigt?</th></tr>';
+    for (const x of fz.liste.slice(0,25)){
+      html += '<tr><td>'+fmtDatum(x.st.datum)+'</td><td>'+
+        (x.a.status==="fehlt"?"gefehlt":x.a.status==="verspaetet"?("verspätet "+(x.a.minuten||0)+"′"):"beurlaubt")+'</td><td>';
+      if (x.a.status==="fehlt")
+        html += '<button class="klein" style="'+(x.a.entschuldigt===true?'background:var(--akzent);color:#14210f':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="true">entsch.</button> '+
+          '<button class="klein" style="'+(x.a.entschuldigt===false?'background:var(--rot);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="false">unentsch.</button>';
+      else html += "–";
+      html += '</td></tr>';
+    }
+    html += '</table>';
+  }
+  html += '</div>';
+
+  html += '<div class="karte"><h3>Ereignisse (mit Datum und Stundenthema)</h3>';
+  if (!evs.length) html += '<p class="hinweis">Noch keine Ereignisse.</p>';
+  else {
+    html += '<table class="tab"><tr><th>Datum</th><th>Thema der Stunde</th><th>Ereignis</th><th>Stufe</th></tr>';
+    for (const e of evs.slice(0,60)){
+      const st = stundeVon(e.stundeId);
+      const stufe = e.stufe==null ? "–" :
+        '<span class="stufenpunkt" style="background:'+stufeInfo(e.stufe).hex+'"></span> '+stufeInfo(e.stufe).label;
+      html += '<tr><td style="white-space:nowrap">'+(st?fmtDatum(st.datum):"–")+'</td>'+
+        '<td>'+esc(st && st.thema ? st.thema : "–")+'</td>'+
+        '<td>'+esc(ereignisName(e))+(e.text?': <i>'+esc(e.text)+'</i>':'')+'</td>'+
+        '<td style="white-space:nowrap">'+stufe+'</td></tr>';
+    }
+    if (evs.length>60) html += '<tr><td colspan="4" class="hinweis">'+(evs.length-60)+' weitere …</td></tr>';
+    html += '</table>';
+  }
+  html += '</div>';
+  if (s.notizen) html += '<div class="karte"><h3>Notizen zum Schüler</h3><p>'+esc(s.notizen)+'</p></div>';
+  return html;
+}
+/* Erweiterungspunkt für Phase 3 (Was-wäre-wenn) */
+function profilZusatzKarten(){ return ""; }
+
+/* Globale Einstellungen (ersetzt Phase-1-Fassung) */
+function viewEinstellungen(){
+  const sj = aktivesSchuljahr();
+  let html = '<div class="karte"><h2>Schuljahre</h2>';
+  for (const j of S.schuljahre){
+    const aktiv = sj && j.id===sj.id;
+    const ferien = (j.ferien||[]).length;
+    html += '<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+
+      '<div><b>'+esc(j.name)+'</b> <span class="hinweis">'+fmtDatum(j.beginn)+' – '+fmtDatum(j.ende)+' · A-Woche ab '+fmtDatum(j.aWocheAnker)+
+      (ferien?' · '+ferien+' Ferienzeiträume':'')+'</span></div>'+
+      '<div>'+(aktiv?'<span class="wochenbadge">aktiv</span>':'<button class="klein" data-a="schuljahrAktivieren" data-id="'+j.id+'">aktivieren</button>')+'</div></div>';
+  }
+  html += '<div class="abstand"></div><button data-a="schuljahrNeuDialog">+ Schuljahr</button></div>';
+
+  html += '<div class="karte"><h2>Eigene Ereignisse</h2><p class="hinweis">Erscheinen zusätzlich in der Schnellerfassung.</p>';
+  for (const e of S.einstellungen.eigeneEreignisse)
+    html += '<div class="zeile raum" style="padding:6px 0"><div>'+esc(e.name)+' <span class="hinweis">'+(e.mitStufen?"mit Farbstufen":"Ein-Tipp")+'</span></div>'+
+      '<button class="klein gefahr" data-a="eigenesEreignisLoeschen" data-id="'+e.id+'">Löschen</button></div>';
+  html += '<div class="zeile"><input id="eeName" placeholder="z. B. Experimentierverhalten" style="flex:1">'+
+    '<label class="hinweis"><input type="checkbox" id="eeStufen" style="width:auto"> mit Farbstufen</label>'+
+    '<button data-a="eigenesEreignisNeu">Hinzufügen</button></div></div>';
+
+  /* Langfristplanung */
+  html += '<div class="karte"><h2>Langfristplanung (KI-Plandatei)</h2>'+
+    '<p class="hinweis">Erzeugen Sie mit Claude aus Ferienkalender und Fachcurriculum eine Plandatei (Format „kursbuch-plan-1", Beschreibung liegt der App bei) und importieren Sie sie hier. Geplante Themen erscheinen dann in der Stundendokumentation und der Heute-Ansicht.</p>'+
+    '<div class="zeile"><button class="primar" data-a="planImportWaehlen">Plandatei importieren</button></div>'+
+    '<input type="file" id="planDatei" accept=".json,application/json" style="display:none"></div>';
+
+  /* Sicherung */
+  const bt = backupAlterTage();
+  html += '<div class="karte"><h2>Datensicherung</h2>'+
+    '<p class="hinweis">'+(KB_MODE==="scriptable" ?
+      "Daten liegen lokal auf dem iPad (Dateien-App → Scriptable → KursbuchDaten). " :
+      "Testmodus: Ohne Scriptable werden Daten nicht dauerhaft gespeichert. ")+
+      "Letzte Sicherung: "+(bt===null?"noch nie":(bt===0?"heute":"vor "+bt+" Tagen"))+
+      (cryptoVerfuegbar()?"":" · Hinweis: Verschlüsselung ist in dieser Umgebung nicht verfügbar, Export erfolgt unverschlüsselt.")+'</p>'+
+    '<div class="zeile"><button class="primar" data-a="backupDialog">Sicherung exportieren</button>'+
+    '<button data-a="importieren">Sicherung importieren</button></div>'+
+    '<input type="file" id="importDatei" accept=".json,application/json" style="display:none"></div>';
+
+  /* Sperre */
+  html += '<div class="karte"><h2>App-Sperre</h2>'+
+    (S.einstellungen.pin ?
+      '<p class="hinweis">PIN ist aktiv. Die App sperrt sich beim Start und nach 5 Minuten im Hintergrund.</p>'+
+      '<button class="gefahr" data-a="pinEntfernen">PIN entfernen</button>' :
+      '<p class="hinweis">Zusätzlich zur Gerätesperre: 4- bis 6-stellige PIN beim Öffnen von Kursbuch.</p>'+
+      '<div class="zeile"><input id="pinNeu" inputmode="numeric" maxlength="6" placeholder="PIN (4–6 Ziffern)" style="width:180px">'+
+      '<button class="primar" data-a="pinSetzen">PIN aktivieren</button></div>')+
+    '</div>';
+
+  html += einstellungenZusatz();
+
+  html += '<div class="karte"><h2>Gefahrenzone</h2>'+
+    '<button class="gefahr" data-a="allesLoeschenDialog">Alle Daten löschen</button></div>';
+  return html;
+}
+/* Erweiterungspunkt für Phase 3 (Claude-API) */
+function einstellungenZusatz(){ return ""; }
+
+/* ---------- Phase-2-Aktionen ---------- */
+document.addEventListener("click", async ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a, id = el.dataset.id;
+  const k = R.kursId ? kursVon(R.kursId) : null;
+
+  /* PIN-Sperre */
+  if (a==="pinTaste"){
+    if (id==="C") pinEingabe = "";
+    else if (id==="OK"){
+      const p = S.einstellungen.pin;
+      if (p && pinHash(pinEingabe, p.salt)===p.hash){ gesperrt=false; pinEingabe=""; zeichne(); return; }
+      pinEingabe = "";
+      const f = document.getElementById("pinFehler"); if (f) f.textContent = "Falsche PIN.";
+      zeichne(); const f2 = document.getElementById("pinFehler"); if (f2) f2.textContent = "Falsche PIN.";
+      return;
+    }
+    else if (pinEingabe.length<6) pinEingabe += id;
+    zeichne();
+  }
+  else if (a==="pinSetzen"){
+    const p = (document.getElementById("pinNeu").value||"").trim();
+    if (!/^\d{4,6}$/.test(p)) return alertBox("Bitte 4 bis 6 Ziffern eingeben.");
+    const salt = Math.random().toString(36).slice(2,12);
+    S.einstellungen.pin = {salt, hash: pinHash(p, salt)};
+    speichern(); zeichne(); toast("PIN aktiviert");
+  }
+  else if (a==="pinEntfernen"){
+    S.einstellungen.pin = null; speichern(); zeichne(); toast("PIN entfernt");
+  }
+
+  /* Stundenplan-Slots */
+  else if (a==="slotNeu"){
+    const kurs = kursVon(id);
+    kurs.slots = kurs.slots||[];
+    kurs.slots.push({tag:Number(document.getElementById("slotTag").value),
+      stunde:Number(document.getElementById("slotStunde").value),
+      woche:document.getElementById("slotWoche").value});
+    speichern(); zeichne();
+  }
+  else if (a==="slotLoeschen"){
+    const kurs = kursVon(id);
+    kurs.slots.splice(Number(el.dataset.idx),1);
+    speichern(); zeichne();
+  }
+
+  /* Planung */
+  else if (a==="geplantUebernehmen"){
+    const st = stundeVon(id);
+    const inp = document.getElementById("stThema");
+    if (inp && st) inp.value = st.geplant;
+  }
+  else if (a==="planImportWaehlen"){
+    if (KB_MODE==="scriptable"){ sendeAnBridge({typ:"planimport"}); return; }
+    const inp = document.getElementById("planDatei");
+    inp.onchange = ()=>{
+      const f = inp.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ()=> window.__KB_planImport(String(r.result));
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+
+  /* Backup */
+  else if (a==="backupDialog"){
+    if (!cryptoVerfuegbar()){
+      S.einstellungen.letztesBackup = new Date().toISOString();
+      textExportieren("kursbuch-sicherung-"+todayISO()+".json", JSON.stringify(S,null,1));
+      speichern(); zeichne(); toast("Unverschlüsselte Sicherung exportiert"); return;
+    }
+    zeigeModal('<h2>Sicherung exportieren</h2>'+
+      '<p class="hinweis">Mit Passwort wird die Datei verschlüsselt (AES-256). Ohne Passwort wird unverschlüsselt exportiert – dann bitte sicher aufbewahren.</p>'+
+      '<div class="feld"><label>Passwort (empfohlen)</label><input type="password" id="bkPw1" autocomplete="new-password"></div>'+
+      '<div class="feld"><label>Passwort wiederholen</label><input type="password" id="bkPw2" autocomplete="new-password"></div>'+
+      '<div class="zeile"><button class="primar" data-a="backupExport">Exportieren</button><button data-a="modalZu">Abbrechen</button></div>');
+  }
+  else if (a==="backupExport"){
+    const p1 = document.getElementById("bkPw1").value, p2 = document.getElementById("bkPw2").value;
+    if (p1 !== p2) return alertBox("Die Passwörter stimmen nicht überein.");
+    S.einstellungen.letztesBackup = new Date().toISOString();
+    try{
+      if (p1){
+        const chiffre = await backupVerschluesseln(p1);
+        textExportieren("kursbuch-sicherung-"+todayISO()+".kbx.json", chiffre);
+        toast("Verschlüsselte Sicherung exportiert");
+      } else {
+        textExportieren("kursbuch-sicherung-"+todayISO()+".json", JSON.stringify(S,null,1));
+        toast("Unverschlüsselte Sicherung exportiert");
+      }
+      speichern(); schliessePopover(); zeichne();
+    }catch(e){ alertBox("Export fehlgeschlagen: "+e.message); }
+  }
+  else if (a==="backupEntsperren"){
+    const pw = document.getElementById("bkPwImport").value;
+    try{
+      const klar = await backupEntschluesseln(window.__KB_pendingImport, pw);
+      window.__KB_pendingImport = null;
+      schliessePopover();
+      window.__KB_importData(klar);
+    }catch(e){ alertBox("Entschlüsselung fehlgeschlagen – falsches Passwort?"); }
+  }
+
+  /* Profil-PDF */
+  else if (a==="profilPdf"){
+    try{
+      const s = schuelerVon(id);
+      const pdfB64 = profilPdfErzeugen(id, R.kursId);
+      dateiExportieren("Schuelerprofil-"+(s.name||"")+"-"+(s.vorname||"")+"-"+todayISO()+".pdf", pdfB64, "application/pdf");
+      toast("PDF wird exportiert …");
+    }catch(e){ alertBox("PDF-Erstellung fehlgeschlagen: "+e.message); }
+  }
+});
+
+/* Import-Umleitung: verschlüsselte Sicherungen erkennen */
+const __importAlt = window.__KB_importData;
+window.__KB_importData = function(jsonText){
+  try{
+    const obj = JSON.parse(jsonText);
+    if (obj && obj.kb==="kursbuch-backup-enc1"){
+      if (!cryptoVerfuegbar()) { alertBox("Diese Sicherung ist verschlüsselt, aber Entschlüsselung ist in dieser Umgebung nicht verfügbar."); return "fehler"; }
+      window.__KB_pendingImport = obj;
+      zeigeModal('<h2>Verschlüsselte Sicherung</h2><div class="feld"><label>Passwort</label>'+
+        '<input type="password" id="bkPwImport"></div>'+
+        '<div class="zeile"><button class="primar" data-a="backupEntsperren">Entschlüsseln & importieren</button><button data-a="modalZu">Abbrechen</button></div>');
+      return "passwort";
+    }
+  }catch(e){ /* kein JSON – normale Fehlermeldung unten */ }
+  return __importAlt(jsonText);
+};
+window.__KB_planImport = function(text){
+  const erg = planImportieren(text);
+  if (erg.fehler){ alertBox(erg.fehler); return "fehler"; }
+  let meldung = erg.themen+" geplante Themen übernommen";
+  if (erg.ferienNeu) meldung += ", "+erg.ferienNeu+" Ferienzeiträume ergänzt";
+  if (erg.unbekannt.length) meldung += ". Nicht gefunden: "+erg.unbekannt.join(", ");
+  zeichne(); toast(meldung);
+  return "ok";
+};
+
+/* Sperre beim Start aktivieren */
+/* zeichne() um Sperrbildschirm erweitern */
+const __zeichneAlt = zeichne;
+zeichne = function(){
+  if (gesperrt){
+    document.getElementById("topbar").innerHTML = '<h1 class="titel">Kursbuch</h1>';
+    document.getElementById("app").innerHTML = sperrAnsicht();
+    return;
+  }
+  __zeichneAlt();
+};
+if (S.einstellungen.pin){ gesperrt = true; zeichne(); } else zeichne();
+/* ================= PHASE 3 ================= */
+
+/* ---------- Mehrseitige PDF-Tabellen (Notenliste, Stundenliste) ---------- */
+function pdfTabellenDokument(titel, untertitel, spalten, zeilen, fussnote){
+  const doc = pdfNeu();
+  const L=48, Rr=547, yStart=110, yMax=790;
+  let p = null, y = 0;
+  const kopf = ()=>{
+    p = pdfSeite(doc);
+    pdfText(p, L, 56, titel, 16, true, "#14210f");
+    pdfText(p, Rr-pdfTextBreite("Kursbuch · "+fmtDatum(todayISO()),9), 56, "Kursbuch · "+fmtDatum(todayISO()), 9, false, "#777777");
+    pdfText(p, L, 74, untertitel, 10, false, "#555555");
+    pdfLinie(p, L, 84, Rr, 84, "#3d7a4e", 1.2);
+    let x=L;
+    for (const sp of spalten){ pdfText(p, x, 100, sp.titel, 9, true, "#777777"); x += sp.breite; }
+    pdfLinie(p, L, 105, Rr, 105);
+    y = yStart + 8;
+  };
+  kopf();
+  for (const zeile of zeilen){
+    if (y > yMax){ kopf(); }
+    let x=L;
+    zeile.forEach((zelle,i)=>{
+      const sp = spalten[i];
+      const txt = String(zelle==null?"–":zelle).slice(0, sp.maxZeichen||40);
+      pdfText(p, x, y, txt, 9.5, !!sp.fett);
+      x += sp.breite;
+    });
+    y += 15;
+  }
+  if (fussnote){
+    if (y > yMax) kopf();
+    pdfText(p, L, y+8, fussnote, 8, false, "#999999");
+  }
+  return pdfFertig(doc);
+}
+function notenlistePdf(kursId){
+  const kurs = kursVon(kursId), sys = notensystem(kurs);
+  const zeilen = kursSchueler(kursId).map(s=>{
+    const ns = notenstand(s.id, kursId), fz = fehlzeiten(s.id, kursId), vs = notenvorschlag(s.id, kursId);
+    return [s.name+", "+s.vorname, fmtZahl(ns.arb), fmtZahl(ns.son), fmtZahl(ns.m), fmtZahl(ns.gesamt), vs?String(vs.wert):"–",
+      fz.fehltGesamt+" ("+fz.unentschuldigt+" u.)"];
+  });
+  return pdfTabellenDokument(
+    "Notenliste "+kurs.name,
+    (kurs.fach||"")+" · Jahrgang "+kurs.jahrgang+" · "+(sys.typ==="punkte"?"Punkte 0–15":"Noten 1–6")+
+      " · "+gewichtungsText(kurs),
+    [{titel:"Schüler", breite:138, fett:true, maxZeichen:28},{titel:"Klassenarb.", breite:66},{titel:"sonstige", breite:60},
+     {titel:"davon mdl.", breite:62},{titel:"Gesamt", breite:58, fett:true},{titel:"Vorschl. mdl.", breite:62},{titel:"Fehlz.", breite:52}],
+    zeilen,
+    "Gewichtete Mittel; Vorschlag aus Mitarbeits-Stufen. Nur für den dienstlichen Gebrauch.");
+}
+function stundenlistePdf(kursId){
+  const kurs = kursVon(kursId);
+  const stunden = S.stunden.filter(x=>x.kursId===kursId).sort((a,b)=>a.datum.localeCompare(b.datum));
+  const zeilen = stunden.map(st=>{
+    const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
+    return [fmtDatum(st.datum)+(st.ausfall?" (Ausfall)":""), st.geplant||"–", st.thema||"–", st.hausaufgabe||"–", fehl||"–"];
+  });
+  return pdfTabellenDokument(
+    "Stundendokumentation "+kurs.name,
+    (kurs.fach||"")+" · "+stunden.length+" Stunden",
+    [{titel:"Datum", breite:80},{titel:"Geplant (Soll)", breite:130, maxZeichen:26},{titel:"Thema (Ist)", breite:150, maxZeichen:30},
+     {titel:"Hausaufgabe", breite:90, maxZeichen:18},{titel:"Fehlend", breite:50}],
+    zeilen,
+    "Nachweis der Unterrichtsinhalte. Nur für den dienstlichen Gebrauch.");
+}
+
+/* ---------- Was-wäre-wenn (Schülerprofil) ---------- */
+function wasWaereWenn(schuelerId, kursId, wert, bereich, gewicht){
+  const alle = schuelerNoten(schuelerId, kursId).concat([{wert, bereich, gewicht}]);
+  return notenstandAus(alle, kursVon(kursId)).gesamt;
+}
+/* Ersetzt den Phase-2-Platzhalter */
+profilZusatzKarten = function(s, k, ns){
+  const sys = notensystem(k);
+  let knoepfe = "";
+  for (const w of sys.werte)
+    knoepfe += '<button data-a="wwRechnen" data-id="'+s.id+'" data-wert="'+w+'">'+w+'</button>';
+  return '<div class="karte"><h3>Was-wäre-wenn</h3>'+
+    '<p class="hinweis">Wie ändert sich der Gesamtstand (aktuell '+fmtZahl(ns.gesamt)+'), wenn die nächste Leistung so ausfällt?</p>'+
+    '<div class="zeile">'+
+    '<select id="wwBereich"><option value="arbeit">Klassenarbeit / Klausur</option><option value="muendlich">mündliche Note</option><option value="sonstige">sonstige Leistung</option></select>'+
+    '<select id="wwGewicht"><option value="1">Gewicht 1</option><option value="2" selected>Gewicht 2</option><option value="3">Gewicht 3</option></select>'+
+    '</div><div class="abstand"></div>'+
+    '<div class="wertknoepfe">'+knoepfe+'</div>'+
+    '<p id="wwErgebnis" class="hinweis" style="font-size:16px"></p></div>';
+};
+
+/* ---------- Arbeiten-Verlauf & erweiterte Auswertung (ersetzt Phase-1-Fassung) ---------- */
+function viewAuswertung(k){
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return '<div class="leer">Keine Schüler im Kurs.</div>';
+  const sys = notensystem(k);
+  let html = '<div class="karte"><div class="zeile raum"><h2>Notenspiegel & Mitarbeit</h2>'+
+    '<div class="zeile"><button class="klein" data-a="notenlistePdf">Notenliste als PDF</button>'+
+    '<button class="klein" data-a="stundenlistePdf">Stundendoku als PDF</button></div></div>'+
+    '<p class="hinweis">Gewichtung: '+gewichtungsText(k)+' – änderbar im Tab „Kurs".</p>'+
+    '<table class="tab"><tr><th>Schüler</th><th>Klassenarb.</th><th>sonstige</th><th>davon mdl.</th><th>Stand</th><th>Vorschlag mdl.</th><th>Mitarbeit</th><th>Fehlz.</th><th></th></tr>';
+  for (const s of schueler){
+    const ns = notenstand(s.id, k.id);
+    const vs = notenvorschlag(s.id, k.id);
+    const mz = mitarbeitZusammenfassung(s.id, k.id);
+    const fz = fehlzeiten(s.id, k.id);
+    let chips = "";
+    for (const kat of MITARBEIT_KATEGORIEN){
+      const z = mz[kat.id];
+      const farbe = z.schnitt==null ? "#555" : stufeInfo(Math.round(z.schnitt)).hex;
+      chips += '<span class="stufenpunkt" title="'+esc(kat.kurz)+'" style="background:'+farbe+';margin-right:4px"></span>';
+    }
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+      '<td>'+fmtZahl(ns.arb)+'</td><td>'+fmtZahl(ns.son)+'</td><td>'+fmtZahl(ns.m)+'</td>'+
+      '<td><b>'+fmtZahl(ns.gesamt)+'</b></td>'+
+      '<td>'+(vs?vs.wert:"–")+'</td>'+
+      '<td>'+chips+'</td>'+
+      '<td>'+fz.fehltGesamt+(fz.offen?' <span style="color:var(--rot)">('+fz.offen+' offen)</span>':'')+'</td>'+
+      '<td><button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil</button></td></tr>';
+  }
+  html += '</table><p class="hinweis">Stand = gewichtetes Mittel'+(sys.typ==="punkte"?" (Punkte 0–15)":" (Noten 1–6)")+'; Vorschlag aus Mitarbeits-Stufen (nur Anhaltspunkt).</p></div>';
+
+  /* Verlauf der Arbeiten */
+  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id)
+    .map(a=>({a, stat: arbeitStatistik(a, k)}))
+    .filter(x=>x.stat.n>0)
+    .sort((x,y)=>x.a.datum.localeCompare(y.a.datum));
+  if (arbeiten.length>=2){
+    html += '<div class="karte"><h3>Arbeiten im Verlauf (Mittelwerte)</h3>'+verlaufSvg(arbeiten, sys)+'</div>';
+  }
+  return html;
+}
+function verlaufSvg(arbeiten, sys){
+  const sk = skala(sys), B=640, H=190, L=40, unten=150;
+  const n = arbeiten.length;
+  const x = i => L + (n===1 ? 0 : i*(B-L-30)/(n-1));
+  const yv = v => 20 + (sys.typ==="punkte" ? (sk.max-v)/(sk.max-sk.min) : (v-sk.min)/(sk.max-sk.min))*(unten-30);
+  let s = '<svg viewBox="0 0 '+B+' '+H+'" style="width:100%;max-width:640px;display:block">';
+  for (const t of sk.ticks){
+    s += '<line x1="'+L+'" y1="'+yv(t)+'" x2="'+(B-24)+'" y2="'+yv(t)+'" stroke="#39443a" stroke-width="0.5"/>'+
+         '<text x="'+(L-8)+'" y="'+(yv(t)+4)+'" font-size="11" text-anchor="end">'+t+'</text>';
+  }
+  let pfad = "";
+  arbeiten.forEach((e,i)=>{ pfad += (i?"L":"M")+x(i).toFixed(1)+" "+yv(e.stat.mittel).toFixed(1)+" "; });
+  s += '<path d="'+pfad+'" fill="none" stroke="#8fbf6f" stroke-width="2.5"/>';
+  arbeiten.forEach((e,i)=>{
+    s += '<circle cx="'+x(i)+'" cy="'+yv(e.stat.mittel)+'" r="5" fill="#8fbf6f"/>'+
+      '<text x="'+x(i)+'" y="'+(yv(e.stat.mittel)-10)+'" font-size="11" text-anchor="middle">'+fmtZahl(e.stat.mittel,1)+'</text>'+
+      '<text x="'+x(i)+'" y="'+(unten+18)+'" font-size="10" text-anchor="middle">'+esc(e.a.titel.slice(0,14))+'</text>'+
+      '<text x="'+x(i)+'" y="'+(unten+31)+'" font-size="9" text-anchor="middle">'+fmtDatumKurz(e.a.datum)+'</text>';
+  });
+  return s+'</svg><p class="hinweis">Höher im Diagramm = besser ('+(sys.typ==="punkte"?"oben 15 Punkte":"oben Note 1")+').</p>';
+}
+
+/* ---------- Claude-API-Anbindung (KI Stufe 2, ersetzt Phase-2-Platzhalter) ---------- */
+einstellungenZusatz = function(){
+  const sj = aktivesSchuljahr();
+  const kurse = sj ? S.kurse.filter(k=>k.schuljahrId===sj.id) : [];
+  return '<div class="karte"><h2>KI-Planung direkt erzeugen (Claude-API)</h2>'+
+    '<p class="hinweis">Alternative zum Plandatei-Import: Kursbuch schickt Ferienkalender, Curriculum und Ihren Stundenplan an die Claude-API und übernimmt die erzeugte Planung direkt. Übertragen werden ausschließlich diese Angaben – nie Schülerdaten. Der API-Schlüssel (console.anthropic.com) wird lokal in Ihren Kursbuch-Daten gespeichert; die Nutzung ist kostenpflichtig (wenige Cent pro Planung).</p>'+
+    '<div class="feld"><label>API-Schlüssel</label><input type="password" id="kiKey" value="'+esc(S.einstellungen.apiKey||"")+'" placeholder="sk-ant-…"></div>'+
+    '<div class="feld"><label>Kurs</label><select id="kiKurs">'+kurse.map(k=>'<option value="'+k.id+'">'+esc(k.name)+'</option>').join("")+'</select></div>'+
+    '<div class="feld"><label>Ferien & Feiertage (Freitext, z. B. aus dem Ferienkalender MV kopiert)</label><textarea id="kiFerien" placeholder="Herbstferien: 05.10.–17.10.2026&#10;Weihnachtsferien: …"></textarea></div>'+
+    '<div class="feld"><label>Curriculum / Stoffverteilung (Themen in gewünschter Reihenfolge, Freitext)</label><textarea id="kiCurriculum" placeholder="1. Kreisbewegung (ca. 6 Stunden)&#10;2. Gravitation (ca. 8 Stunden)&#10;…"></textarea></div>'+
+    '<div class="zeile"><button class="primar" data-a="kiPlanung">Planung erzeugen</button><span id="kiStatus" class="hinweis"></span></div></div>';
+};
+function kiPromptBauen(kurs, ferienText, curriculumText){
+  const sj = aktivesSchuljahr();
+  const slots = (kurs.slots||[]).map(s=>wochentagName(s.tag)+" "+s.stunde+". Stunde ("+(s.woche==="AB"?"jede Woche":"nur "+s.woche+"-Woche")+")").join("; ") || "unbekannt";
+  return "Du bist Planungsassistent für eine Lehrkraft. Erzeuge eine Stoffverteilung als JSON.\n\n"+
+    "Schuljahr: "+sj.name+" von "+sj.beginn+" bis "+sj.ende+". Der Montag "+sj.aWocheAnker+" beginnt eine A-Woche; A- und B-Wochen wechseln sich wöchentlich ab (auch über Ferien hinweg).\n"+
+    "Kurs: "+kurs.name+", Stundenplan: "+slots+".\n\n"+
+    "Ferien und Feiertage (an diesen Tagen ist KEIN Unterricht):\n"+ferienText+"\n\n"+
+    "Curriculum in dieser Reihenfolge:\n"+curriculumText+"\n\n"+
+    "Aufgabe: Bestimme alle realen Unterrichtstermine des Kurses (richtige Wochentage, A/B-Wochen beachten, Ferien/Feiertage auslassen) und verteile die Curriculumsthemen der Reihe nach sinnvoll auf diese Termine (Stundenumfänge beachten, pro Termin ein Thema).\n"+
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt in exakt diesem Format, ohne Erklärtext und ohne Markdown:\n"+
+    '{"formatVersion":"kursbuch-plan-1","ferien":[{"name":"…","von":"JJJJ-MM-TT","bis":"JJJJ-MM-TT"}],"plaene":[{"kurs":"'+kurs.name+'","themen":[{"datum":"JJJJ-MM-TT","thema":"…"}]}]}';
+}
+window.__KB_kiAntwort = function(jsonText){
+  const status = document.getElementById("kiStatus");
+  try{
+    const antwort = JSON.parse(jsonText);
+    if (antwort.fehler) throw new Error(antwort.fehler);
+    if (antwort.error) throw new Error(antwort.error.message||"API-Fehler");
+    const text = (antwort.content && antwort.content[0] && antwort.content[0].text) || "";
+    const start = text.indexOf("{"), ende = text.lastIndexOf("}");
+    if (start<0 || ende<0) throw new Error("Keine JSON-Antwort erhalten.");
+    const erg = window.__KB_planImport(text.slice(start, ende+1));
+    if (status) status.textContent = (erg==="ok") ? "Planung übernommen." : "Antwort konnte nicht übernommen werden.";
+    return erg;
+  }catch(e){
+    if (status) status.textContent = "Fehler: "+e.message;
+    else alertBox("KI-Planung fehlgeschlagen: "+e.message);
+    return "fehler";
+  }
+};
+async function kiPlanungStarten(){
+  const key = document.getElementById("kiKey").value.trim();
+  const kurs = kursVon(document.getElementById("kiKurs").value);
+  const ferienText = document.getElementById("kiFerien").value.trim();
+  const curriculumText = document.getElementById("kiCurriculum").value.trim();
+  const status = document.getElementById("kiStatus");
+  if (!key) return alertBox("Bitte zuerst den API-Schlüssel eintragen.");
+  if (!kurs) return alertBox("Bitte einen Kurs wählen.");
+  if (!(kurs.slots||[]).length) return alertBox("Bitte zuerst den Stundenplan des Kurses pflegen (Tab Kurs) – sonst kennt die KI die Unterrichtstage nicht.");
+  if (!ferienText || !curriculumText) return alertBox("Bitte Ferien und Curriculum eintragen.");
+  S.einstellungen.apiKey = key; speichern();
+  const body = {
+    model: "claude-sonnet-4-5",
+    max_tokens: 8000,
+    messages: [{role:"user", content: kiPromptBauen(kurs, ferienText, curriculumText)}]
+  };
+  if (status) status.textContent = "Planung wird erzeugt …";
+  if (KB_MODE==="scriptable"){
+    sendeAnBridge({typ:"anthropic", key, body});
+  } else {
+    try{
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"content-type":"application/json","x-api-key":key,
+          "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body: JSON.stringify(body)
+      });
+      window.__KB_kiAntwort(JSON.stringify(await r.json()));
+    }catch(e){ window.__KB_kiAntwort(JSON.stringify({fehler:String(e)})); }
+  }
+}
+
+/* ---------- Phase-3-Aktionen ---------- */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a, id = el.dataset.id;
+
+  if (a==="wwRechnen"){
+    document.querySelectorAll('[data-a="wwRechnen"]').forEach(b=>b.classList.remove("gewaehlt"));
+    el.classList.add("gewaehlt");
+    const wert = Number(el.dataset.wert);
+    const bereich = document.getElementById("wwBereich").value;
+    const gewicht = Number(document.getElementById("wwGewicht").value);
+    const neu = wasWaereWenn(id, R.kursId, wert, bereich, gewicht);
+    const alt = notenstand(id, R.kursId).gesamt;
+    const erg = document.getElementById("wwErgebnis");
+    erg.innerHTML = 'Eine <b>'+wert+'</b> ('+bereichLang(bereich)+', Gewicht '+gewicht+') ergäbe: '+
+      '<b>'+fmtZahl(neu)+'</b> statt '+fmtZahl(alt)+
+      ' <span class="hinweis">('+(neu<alt?"−":"+")+fmtZahl(Math.abs(neu-alt),2)+')</span>';
+  }
+  else if (a==="notenlistePdf"){
+    try{
+      const kurs = kursVon(R.kursId);
+      dateiExportieren("Notenliste-"+kurs.name.replace(/\s+/g,"-")+"-"+todayISO()+".pdf", notenlistePdf(R.kursId), "application/pdf");
+      toast("Notenliste wird exportiert …");
+    }catch(e){ alertBox("PDF fehlgeschlagen: "+e.message); }
+  }
+  else if (a==="stundenlistePdf"){
+    try{
+      const kurs = kursVon(R.kursId);
+      dateiExportieren("Stundendoku-"+kurs.name.replace(/\s+/g,"-")+"-"+todayISO()+".pdf", stundenlistePdf(R.kursId), "application/pdf");
+      toast("Stundendokumentation wird exportiert …");
+    }catch(e){ alertBox("PDF fehlgeschlagen: "+e.message); }
+  }
+  else if (a==="csvWaehlen"){
+    const inp = document.getElementById("csvDatei");
+    inp.onchange = ()=>{
+      const f = inp.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ()=>{
+        const text = String(r.result).replace(/\r/g,"");
+        const zeilen = text.split("\n").map(z=>{
+          const teile = z.split(/[;\t]/).map(t=>t.trim().replace(/^"|"$/g,""));
+          return teile.length>=2 ? teile[0]+", "+teile[1] : z.trim();
+        }).filter(Boolean);
+        document.getElementById("schuelerImport").value = zeilen.join("\n");
+        toast(zeilen.length+" Zeilen aus CSV übernommen – bitte prüfen, dann Hinzufügen antippen");
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+  else if (a==="kiPlanung"){ kiPlanungStarten(); }
+});
+
+/* ---------- Startmarke: erst hier ist die Oberflaeche vollstaendig ---------- */
+window.__KB_startOk = true;
+(function(){ var la = document.getElementById("ladeanzeige"); if (la) la.parentNode.removeChild(la); })();
+const JAHR_PALETTE=[{bg:"#2c3a2c",tx:"#bcdcab"},{bg:"#23323e",tx:"#a2c8ea"},{bg:"#332b40",tx:"#c6b3e8"},{bg:"#3d2b26",tx:"#eaa88f"},{bg:"#1f3a38",tx:"#8fd6cd"},{bg:"#3b3524",tx:"#e2cb7e"},{bg:"#3b2733",tx:"#e8a6c4"},{bg:"#2b3138",tx:"#b6c4d0"},{bg:"#343a24",tx:"#cad88c"},{bg:"#3d3129",tx:"#dfb08a"}];const JAHR_NEUTRAL={bg:"#232b25",tx:"#9fb098"};const JAHR_FERIEN_BG="repeating-linear-gradient(45deg,#1c221d 0 7px,#232b25 7px 14px)";(function jahrStilEinfuegen(){if(document.getElementById("jahrStil"))return;const s=document.createElement("style");s.id="jahrStil";s.textContent=".jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:5px;}"+".jkachel{border-radius:7px;padding:4px 5px;min-height:44px;overflow:hidden;}"+".jkachel.klick{cursor:pointer;}"+".jdat{font-size:11px;font-weight:600;line-height:1.2;}"+".jreihe{font-size:9px;line-height:1.15;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}"+".jpunkte{margin-top:2px;font-size:10px;letter-spacing:1.5px;line-height:1.1;}"+".jlegende{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;padding-top:6px;"+"border-top:1px solid var(--linie);font-size:10px;color:var(--text2);}"+".jlegende i{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:4px;font-style:normal;}";document.head.appendChild(s)})();function jahrTagPlus(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrMontag(iso){const d=mondayOf(iso);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrReiheVon(st){if(!st)return"";const r=String(st.reihe||"").trim();if(r)return r;return String(st.geplant||st.thema||"").trim()}function jahrFarbe(kurs,reihe){if(!reihe)return JAHR_NEUTRAL;if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};if(kurs.reihenFarben[reihe]==null){const belegt=Object.keys(kurs.reihenFarben).map(x=>kurs.reihenFarben[x]);let idx=0;while(idx<JAHR_PALETTE.length&&belegt.indexOf(idx)>=0)idx++;if(idx>=JAHR_PALETTE.length)idx=belegt.length%JAHR_PALETTE.length;kurs.reihenFarben[reihe]=idx;speichern()}return JAHR_PALETTE[kurs.reihenFarben[reihe]%JAHR_PALETTE.length]}function jahrFerienName(sj,montag){const f=sj.ferien||[];let treffer=0,name="";for(let i=0;i<5;i++){const tag=jahrTagPlus(montag,i);const g=f.find(x=>x&&x.von&&x.bis&&tag>=x.von&&tag<=x.bis);if(g){treffer++;if(!name)name=g.name||"Ferien"}}return treffer>=3?name:""}function viewJahr(k){const sj=aktivesSchuljahr();if(!sj||!sj.beginn||!sj.ende)return'<div class="leer">Für die Jahresübersicht braucht das Schuljahr Beginn und Ende.<br>Einstellungen → Schuljahre.</div>';const arbeitTage={};for(const a of S.arbeiten)if(a.kursId===k.id&&a.datum)arbeitTage[a.datum]=true;const proWoche={};for(const st of S.stunden){if(st.kursId!==k.id)continue;if(st.datum<sj.beginn||st.datum>sj.ende)continue;const m=jahrMontag(st.datum);(proWoche[m]=proWoche[m]||[]).push(st)}for(const m in proWoche)proWoche[m].sort((a,b)=>a.datum.localeCompare(b.datum));const wochen=[];let m=jahrMontag(sj.beginn),schutz=0;while(m<=sj.ende&&schutz++<70){wochen.push(m);m=jahrTagPlus(m,7)}const benutzteReihen=[];let wochenMitUnterricht=0,stundenDoku=0,stundenGeplant=0;let html='<div class="zeile raum" style="margin-bottom:8px">'+'<h2 style="font-size:16px;margin:0">Jahresübersicht</h2>'+'<span class="hinweis" style="font-size:11px">'+esc(sj.name||"")+'</span></div><div class="jgrid">';let letzteReihe="";for(let i=0;i<wochen.length;i++){const mo=wochen[i];const stunden=proWoche[mo]||[];const ferien=stunden.length?"":jahrFerienName(sj,mo);if(ferien){let spanne=1;while(i+spanne<wochen.length&&!(proWoche[wochen[i+spanne]]||[]).length&&jahrFerienName(sj,wochen[i+spanne])===ferien)spanne++;const bis=wochen[i+spanne-1];html+='<div class="jkachel" style="background:'+JAHR_FERIEN_BG+";color:var(--text2);grid-column:span "+Math.min(spanne,2)+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+'<div class="jreihe">'+esc(ferien)+"</div></div>";i+=spanne-1;letzteReihe="";continue}if(!stunden.length){html+='<div class="jkachel" style="background:#1e241f;color:var(--text2)">'+'<div class="jdat" style="opacity:.55">'+fmtDatumKurz(mo)+"</div></div>";letzteReihe="";continue}wochenMitUnterricht++;const reihen=[];for(const st of stunden){const r=jahrReiheVon(st);if(r&&reihen.indexOf(r)<0)reihen.push(r);if(r&&benutzteReihen.indexOf(r)<0)benutzteReihen.push(r)}const f1=jahrFarbe(k,reihen[0]||"");const f2=reihen.length>1?jahrFarbe(k,reihen[1]):null;const hg=f2?"linear-gradient(160deg,"+f1.bg+" 0 52%,"+f2.bg+" 52% 100%)":f1.bg;const textFarbe=f2?f2.tx:f1.tx;const beschriftung=f2?"→ "+reihen[1]:reihen[0]||"ohne Thema";let punkte="";for(const st of stunden){if(st.ausfall)punkte+="✕";else if(String(st.thema||"").trim()){punkte+="●";stundenDoku++}else if(String(st.geplant||"").trim()){punkte+="○";stundenGeplant++}else punkte+="·";if(arbeitTage[st.datum])punkte+="◆"}const zeigeReihe=(reihen[0]||"")!==letzteReihe||f2;letzteReihe=reihen[reihen.length-1]||"";html+='<div class="jkachel klick" data-a="jahrWoche" data-id="'+mo+'" title="KW '+jahrKW(mo)+" · "+esc(beschriftung)+'" style="background:'+hg+";color:"+textFarbe+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+(zeigeReihe?'<div class="jreihe">'+esc(beschriftung)+"</div>":"")+'<div class="jpunkte">'+punkte+"</div></div>"}html+="</div>";html+='<div class="jlegende">';for(const r of benutzteReihen){const f=jahrFarbe(k,r);html+='<span><i style="background:'+f.bg+'"></i>'+esc(r)+"</span>"}html+="<span>● dokumentiert</span><span>○ nur geplant</span><span>✕ Ausfall</span><span>◆ Arbeit</span></div>";html+='<p class="hinweis" style="margin-top:6px;font-size:10px">'+wochenMitUnterricht+" Unterrichtswochen · "+stundenDoku+" dokumentiert · "+stundenGeplant+" offen</p>";return html}function jahrKW(iso){const d=new Date(iso+"T12:00:00");const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const tag=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-tag+3);const ersterDo=new Date(Date.UTC(t.getUTCFullYear(),0,4));const tag2=(ersterDo.getUTCDay()+6)%7;ersterDo.setUTCDate(ersterDo.getUTCDate()-tag2+3);return 1+Math.round((t-ersterDo)/(7*24*3600*1e3))}function jahrWocheDialog(montag){const k=kursVon(R.kursId);if(!k)return;const liste=S.stunden.filter(x=>x.kursId===k.id&&jahrMontag(x.datum)===montag).sort((a,b)=>a.datum.localeCompare(b.datum));let h="<h2>Woche ab "+fmtDatum(montag)+"</h2>";if(!liste.length)h+='<p class="hinweis">In dieser Woche ist keine Stunde angelegt.</p>';for(const st of liste){const wt=wochentagName(new Date(st.datum+"T12:00:00").getDay());h+='<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+"<div><b>"+wt+", "+fmtDatum(st.datum)+"</b>"+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':"")+'<div class="hinweis">'+(st.reihe?esc(st.reihe)+" · ":"")+esc(st.thema||st.geplant||"–")+"</div></div>"+'<button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></div>'}h+='<div class="zeile" style="margin-top:12px"><button data-a="modalZu">Schließen</button></div>';zeigeModal(h)}const KURS_TABS_MIT_JAHR=[["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["jahr","Jahr"],["arbeiten","Arbeiten"],["auswertung","Auswertung"],["kurscfg","Kurs"]];function viewKurs(){const k=kursVon(R.kursId);if(!k){R.view="home";return viewHome()}let html='<div class="tabs">';for(const[id,name]of KURS_TABS_MIT_JAHR)html+='<button class="'+(R.tab===id?"aktiv":"")+'" data-a="tab" data-id="'+id+'">'+name+"</button>";html+="</div>";if(R.tab==="sitzplan"||R.tab==="liste")html+=kursKopfzeile(k);if(R.tab==="sitzplan")html+=viewSitzplan(k);else if(R.tab==="liste")html+=viewListe(k);else if(R.tab==="stunden")html+=viewStunden(k);else if(R.tab==="jahr")html+=viewJahr(k);else if(R.tab==="arbeiten")html+=viewArbeiten(k);else if(R.tab==="auswertung")html+=viewAuswertung(k);else if(R.tab==="kurscfg")html+=viewKursCfg(k);return html}function planImportieren(text){let plan;try{plan=JSON.parse(text)}catch(e){return{fehler:"Datei ist kein gültiges JSON."}}const fv=plan&&plan.formatVersion;if(fv!=="kursbuch-plan-1"&&fv!=="kursbuch-plan-2")return{fehler:'Format nicht erkannt – erwartet wird formatVersion "kursbuch-plan-1" oder "kursbuch-plan-2".'};const sj=aktivesSchuljahr();if(!sj)return{fehler:"Kein aktives Schuljahr."};let ferienNeu=0,themen=0,mitReihe=0;const unbekannt=[];if(Array.isArray(plan.ferien)){sj.ferien=sj.ferien||[];for(const f of plan.ferien){if(f&&f.von&&f.bis&&!sj.ferien.some(x=>x.von===f.von&&x.bis===f.bis)){sj.ferien.push({name:String(f.name||"Ferien"),von:f.von,bis:f.bis});ferienNeu++}}}if(Array.isArray(plan.plaene)){for(const p of plan.plaene){const kurs=S.kurse.find(k=>k.schuljahrId===sj.id&&k.name.trim().toLowerCase()===String(p.kurs||"").trim().toLowerCase());if(!kurs){unbekannt.push(String(p.kurs||"?"));continue}if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};for(const t of p.themen||[]){if(!t||!t.datum||!/^\d{4}-\d{2}-\d{2}$/.test(t.datum))continue;const st=ensureStunde(kurs.id,t.datum);st.geplant=String(t.thema||"");if(t.reihe!=null&&String(t.reihe).trim()){st.reihe=String(t.reihe).trim();jahrFarbe(kurs,st.reihe);mitReihe++}else if(st.reihe==null)st.reihe="";themen++}}}speichern();return{ferienNeu:ferienNeu,themen:themen,unbekannt:unbekannt,mitReihe:mitReihe}}document.addEventListener("click",ev=>{const el=ev.target.closest("[data-a]");if(!el)return;if(el.dataset.a==="jahrWoche")jahrWocheDialog(el.dataset.id)});
+
+</script>
+</body>
+</html>
