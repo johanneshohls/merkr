@@ -49,8 +49,10 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
 #seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
 /* Oben bleibt Platz frei: dort schwebt in Scriptable der eigene
-   Schliessen-Knopf über der Seite. 72 px reichen, am Gerät nachgemessen. */
-#seitenleiste{padding-top:72px; padding-top:calc(72px + env(safe-area-inset-top));}
+   Schliessen-Knopf über der Seite. 72 px, am Gerät nachgemessen - ohne die
+   sichere Fläche obendrauf: die Statusleiste liegt über der Seite, und der
+   Knopf liegt darunter. Wer beides addiert, schiebt die Leiste zu tief. */
+#seitenleiste{padding-top:72px;}
 /* Kursleiste: die Auswahl links, die Ansichten daneben. */
 .kurswahl{font-size:16px; font-weight:800; color:var(--akzent); background:var(--karte);
   border:1px solid var(--linie); border-radius:12px; padding:8px 10px; min-height:40px; max-width:190px;}
