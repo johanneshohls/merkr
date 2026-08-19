@@ -17,7 +17,25 @@ const hier = path.dirname(fileURLToPath(import.meta.url));
 const PLATZHALTER = '"__OBERFLAECHE__"';
 
 const rahmen = fs.readFileSync(path.join(hier, "src/rahmen.js"), "utf8");
-const html = fs.readFileSync(path.join(hier, "src/oberflaeche.html"), "utf8");
+let html = fs.readFileSync(path.join(hier, "src/oberflaeche.html"), "utf8");
+
+// Der Kern (src/kern/*.js) wird in die Oberfläche gesetzt, statt dort zu leben:
+// so laufen dieselben Zeilen im WebView und in `node --test`. Sortiert, damit
+// dist/ bei gleichem Stand gleich bleibt.
+const KERN_PLATZHALTER = "/*__KERN__*/";
+const kernOrdner = path.join(hier, "src/kern");
+if (fs.existsSync(kernOrdner)) {
+  const teile = fs.readdirSync(kernOrdner).filter((n) => n.endsWith(".js")).sort();
+  const kern = teile
+    .map((n) => "/* --- kern/" + n + " --- */\n" + fs.readFileSync(path.join(kernOrdner, n), "utf8"))
+    .join("\n");
+  if (!html.includes(KERN_PLATZHALTER)) {
+    console.error("Platzhalter " + KERN_PLATZHALTER + " fehlt in src/oberflaeche.html.");
+    process.exit(1);
+  }
+  html = html.replace(KERN_PLATZHALTER, () => kern);
+  console.log("Kern eingesetzt: " + teile.join(", "));
+}
 
 if (!rahmen.includes(PLATZHALTER)) {
   console.error("Platzhalter " + PLATZHALTER + " fehlt in src/rahmen.js.");

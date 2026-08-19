@@ -192,6 +192,7 @@ window.__KB_startOk = false;
 <script>
 "use strict";
 /* ============ Injektion durch Scriptable ============ */
+/*__KERN__*/
 const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
 const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
 /* ============ Konstanten ============ */
@@ -577,7 +578,7 @@ function viewSchuljahrAnlegen(){
   '<div class="zeile">'+
   '<div class="feld"><label>Beginn</label><input type="date" id="sjBeginn" value="'+j+'-08-01"></div>'+
   '<div class="feld"><label>Ende</label><input type="date" id="sjEnde" value="'+(j+1)+'-07-31"></div>'+
-  '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div></div>'+
+  '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div>'+'<div class="feld"><label>Beginn 2. Halbjahr</label><input type="date" id="sjGrenze" value="'+(j+1)+'-02-01"></div></div>'+
   '<button class="primar" data-a="schuljahrAnlegen">Schuljahr anlegen</button></div>';
 }
 function ersterMontagAb(iso){
@@ -1070,7 +1071,7 @@ function viewEinstellungen(){
   for (const j of S.schuljahre){
     const aktiv = sj && j.id===sj.id;
     html += '<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+
-      '<div><b>'+esc(j.name)+'</b> <span class="hinweis">'+fmtDatum(j.beginn)+' – '+fmtDatum(j.ende)+' · A-Woche ab '+fmtDatum(j.aWocheAnker)+'</span></div>'+
+      '<div><b>'+esc(j.name)+'</b> <span class="hinweis">'+fmtDatum(j.beginn)+' – '+fmtDatum(j.ende)+' · A-Woche ab '+fmtDatum(j.aWocheAnker)+(j.halbjahrGrenze?' · 2. Halbjahr ab '+fmtDatum(j.halbjahrGrenze):'')+'</span></div>'+
       '<div>'+(aktiv?'<span class="wochenbadge">aktiv</span>':'<button class="klein" data-a="schuljahrAktivieren" data-id="'+j.id+'">aktivieren</button>')+'</div></div>';
   }
   html += '<div class="abstand"></div><button data-a="schuljahrNeuDialog">+ Schuljahr</button></div>';
@@ -1134,7 +1135,7 @@ function schuljahrNeuDialog(){
     '<div class="feld"><label>Bezeichnung</label><input id="sjName" value="'+j+'/'+String(j+1).slice(2)+'"></div>'+
     '<div class="zeile"><div class="feld"><label>Beginn</label><input type="date" id="sjBeginn" value="'+j+'-08-01"></div>'+
     '<div class="feld"><label>Ende</label><input type="date" id="sjEnde" value="'+(j+1)+'-07-31"></div>'+
-    '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div></div>'+
+    '<div class="feld"><label>Montag einer A-Woche</label><input type="date" id="sjAnker" value="'+ersterMontagAb(j+"-08-01")+'"></div>'+'<div class="feld"><label>Beginn 2. Halbjahr</label><input type="date" id="sjGrenze" value="'+(j+1)+'-02-01"></div></div>'+
     '<div class="zeile"><button class="primar" data-a="schuljahrAnlegen">Anlegen</button><button data-a="modalZu">Abbrechen</button></div>');
 }
 function arbeitNeuDialog(){
@@ -1421,7 +1422,10 @@ document.addEventListener("click", ev=>{
   else if (a==="schuljahrAnlegen"){
     const sj = {id:uid(), name:document.getElementById("sjName").value.trim()||"Schuljahr",
       beginn:document.getElementById("sjBeginn").value, ende:document.getElementById("sjEnde").value,
-      aWocheAnker:document.getElementById("sjAnker").value};
+      aWocheAnker:document.getElementById("sjAnker").value,
+      /* Ab hier zählt das zweite Halbjahr. Die Grenze ist hart: in eine
+         Halbjahresnote gehört nur, was im Halbjahr passiert ist. */
+      halbjahrGrenze:(document.getElementById("sjGrenze")||{}).value||""};
     if (!sj.aWocheAnker) return alertBox("Bitte den Montag einer A-Woche angeben.");
     S.schuljahre.push(sj); S.einstellungen.aktivesSchuljahrId = sj.id;
     speichern(); schliessePopover(); R.view="home"; zeichne(); toast("Schuljahr "+sj.name+" angelegt");
@@ -1621,14 +1625,24 @@ function viewHome(){
 }
 
 /* ---------- Notenvorschlag aus Mitarbeit ---------- */
+/* Vorschlag für die mündliche Note. Rechnet in MerkrNoten (src/kern/noten.js),
+   damit die Kurve und die Zeitgewichtung ohne Gerät prüfbar bleiben.
+
+   Zwei Regeln stecken darin: die Halbjahresgrenze ist hart, und innerhalb des
+   Halbjahres wiegen frische Notizen schwerer. Vorher war es das arithmetische
+   Mittel über das ganze Jahr - wer im September stumm war und seit Februar
+   trägt, schleppte den September voll mit. */
 function notenvorschlag(schuelerId, kursId){
   const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId &&
     (MITARBEIT_KATEGORIEN.some(k=>k.id===e.typ) || (S.einstellungen.eigeneEreignisse.some(x=>x.id===e.typ && x.mitStufen))) && e.stufe!=null);
   if (!evs.length) return null;
-  const avg = evs.reduce((s,e)=>s+e.stufe,0)/evs.length;
   const kurs = kursVon(kursId), sys = notensystem(kurs);
-  if (sys.typ==="punkte") return {wert: Math.max(0, Math.min(15, Math.round(7.5+3.75*avg))), avg, anzahl:evs.length};
-  return {wert: Math.max(1, Math.min(6, Math.round(3.5-1.25*avg))), avg, anzahl:evs.length};
+  const erg = MerkrNoten.vorschlag(evs, {
+    typ: sys.typ,
+    ab: MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), todayISO())
+  });
+  if (!erg) return null;
+  return {wert: erg.wert, avg: erg.mittel, anzahl: erg.anzahl, frisch: erg.anzahlFrisch};
 }
 
 /* ---------- Plandatei-Import (KI-Workflow Stufe 1) ---------- */
@@ -2013,7 +2027,7 @@ function viewProfil(){
     '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
     (vs?'<div class="statwert"><div class="gross">'+vs.wert+'</div><div class="klein2">Vorschlag mdl. (aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+')</div></div>':'')+
     '</div></div>'+
-    (vs?'<p class="hinweis">Der Vorschlag wird aus den Mitarbeits-Stufen berechnet (Ø '+fmtZahl(vs.avg,1)+' auf der Skala −2 … +2) und ist nur ein Anhaltspunkt – die Note vergeben Sie.</p>':'')+
+    (vs?'<p class="hinweis">Aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+' dieses Halbjahres, davon '+vs.frisch+' aus den letzten vier Wochen. Ältere zählen weiter, aber leiser – nach acht Wochen halb. Ø '+fmtZahl(vs.avg,1)+' auf der Skala −2 … +2. Ein Anhaltspunkt; die Note vergeben Sie.</p>':'')+
     '</div>';
 
   html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
