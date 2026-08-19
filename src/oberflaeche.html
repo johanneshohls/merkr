@@ -3838,19 +3838,28 @@ zeichne();
    Raster und ausdrücklich zu prüfen - eine falsche Uhrzeit zeigt die falsche
    Klasse. Zu ändern in den Einstellungen. */
 
-const STUNDENZEITEN_VORGABE = [
-  {stunde:1, von:"07:45", bis:"08:30"}, {stunde:2, von:"08:30", bis:"09:15"},
-  {stunde:3, von:"09:35", bis:"10:20"}, {stunde:4, von:"10:20", bis:"11:05"},
-  {stunde:5, von:"11:25", bis:"12:10"}, {stunde:6, von:"12:10", bis:"12:55"},
-  {stunde:7, von:"13:25", bis:"14:10"}, {stunde:8, von:"14:10", bis:"14:55"},
-  {stunde:9, von:"15:00", bis:"15:45"}, {stunde:10, von:"15:45", bis:"16:30"},
+/* Das EBG unterrichtet in Doppelstunden: vier Blöcke zu je 90 Minuten, Beginn
+   7:40, 9:40, 11:40 und 13:40. Deshalb steht hier der Block und nicht die
+   Einzelstunde - sonst gälte eine Stunde als "läuft" und die zweite Hälfte
+   desselben Blocks als Pause. */
+const BLOCKZEITEN_VORGABE = [
+  {block:1, stunden:[1,2], von:"07:40", bis:"09:10"},
+  {block:2, stunden:[3,4], von:"09:40", bis:"11:10"},
+  {block:3, stunden:[5,6], von:"11:40", bis:"13:10"},
+  {block:4, stunden:[7,8], von:"13:40", bis:"15:10"},
 ];
 
 function stundenzeiten(){
-  const eigene = S.einstellungen.stundenzeiten;
-  return Array.isArray(eigene) && eigene.length ? eigene : STUNDENZEITEN_VORGABE;
+  const eigene = S.einstellungen.blockzeiten;
+  return Array.isArray(eigene) && eigene.length ? eigene : BLOCKZEITEN_VORGABE;
 }
-function zeitVon(nr){ return stundenzeiten().find(z=>z.stunde===nr) || null; }
+/** Der Block, in dem diese Stundennummer liegt. */
+function zeitVon(nr){ return stundenzeiten().find(z=>(z.stunden||[]).includes(Number(nr))) || null; }
+/** Wie der Block heißt: "1./2." statt "1." */
+function blockLabel(nr){
+  const z = zeitVon(nr);
+  return z ? z.stunden.join("./")+"." : nr+".";
+}
 function jetztHHMM(){
   const d = new Date();
   return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
@@ -3893,7 +3902,7 @@ function schnellzugriff(){
   return '<div class="karte" style="display:flex;align-items:center;gap:16px;padding:16px 18px;margin-bottom:20px;'+
     'border:1px solid var(--akzent)">'+
     '<div style="background:var(--akzent);color:#fff;border-radius:14px;padding:10px 14px;text-align:center;min-width:74px">'+
-    '<div style="font-size:19px;font-weight:900;line-height:1">'+a.e.stunde+'.</div>'+
+    '<div style="font-size:19px;font-weight:900;line-height:1">'+esc(blockLabel(a.e.stunde))+'</div>'+
     '<div style="font-size:11px;font-weight:700;opacity:.85">'+esc(a.z.von)+'</div></div>'+
     '<div style="flex:1;min-width:0">'+
     '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:800">'+kopf+'</div>'+
@@ -3921,7 +3930,14 @@ function viewWochenraster(){
   /* Lücken dazwischen bleiben stehen, sonst rutscht die 7. neben die 3. und der
      Plan sieht dichter aus, als der Tag ist. */
   const zeilen = [];
-  for (let n = benutzte[0]; n <= benutzte[benutzte.length-1]; n++) zeilen.push(n);
+  const gesehen = new Set();
+  for (let n = benutzte[0]; n <= benutzte[benutzte.length-1]; n++){
+    const z = zeitVon(n);
+    const schluessel = z ? "b"+z.block : "s"+n;
+    if (gesehen.has(schluessel)) continue;
+    gesehen.add(schluessel);
+    zeilen.push(n);
+  }
 
   /* Feste Spaltenbreiten: sonst bekommt der Tag mit dem längsten Thema die
      halbe Woche und der Plan sieht schief aus. */
@@ -3941,11 +3957,12 @@ function viewWochenraster(){
   for (const nr of zeilen){
     const z = zeitVon(nr);
     html += '<tr><td style="text-align:right;vertical-align:middle">'+
-      '<div style="font-weight:800;font-size:13px">'+nr+'.</div>'+
+      '<div style="font-weight:800;font-size:13px">'+esc(blockLabel(nr))+'</div>'+
       (z?'<div class="hinweis" style="font-size:10px">'+esc(z.von)+'</div>':'')+'</td>';
 
     for (const t of belegung){
-      const treffer = t.liste.filter(e=>e.stunde===nr);
+      const z2 = zeitVon(nr);
+      const treffer = t.liste.filter(e=>z2 ? (z2.stunden||[]).includes(Number(e.stunde)) : e.stunde===nr);
       const istHeute = t.iso === heute;
       if (!treffer.length){
         html += '<td><div style="min-height:52px;border-radius:12px;background:'+
@@ -4124,16 +4141,16 @@ zeichne();
 const einstellungenOhneZeiten = viewEinstellungen;
 viewEinstellungen = function(){
   const zeiten = stundenzeiten();
-  const eigene = Array.isArray(S.einstellungen.stundenzeiten) && S.einstellungen.stundenzeiten.length;
+  const eigene = Array.isArray(S.einstellungen.blockzeiten) && S.einstellungen.blockzeiten.length;
 
-  let karte = '<div class="karte"><h2>Stundenzeiten</h2>'+
-    '<p class="hinweis">Nach ihnen zeigt die Startseite, welche Stunde gerade läuft. '+
-    (eigene ? 'Von Ihnen gesetzt.' : '<b>Noch die Vorgabe - bitte gegen den Plan Ihrer Schule prüfen.</b>')+'</p>'+
-    '<table class="tab"><tr><th>Stunde</th><th>von</th><th>bis</th></tr>';
+  let karte = '<div class="karte"><h2>Blockzeiten</h2>'+
+    '<p class="hinweis">Vier Doppelstunden zu je 90 Minuten. Nach ihnen zeigt die Startseite, welcher Block gerade läuft. '+
+    (eigene ? 'Von Ihnen gesetzt.' : 'Beginn 7:40, 9:40, 11:40 und 13:40.')+'</p>'+
+    '<table class="tab"><tr><th>Block</th><th>von</th><th>bis</th></tr>';
   for (const z of zeiten)
-    karte += '<tr><td><b>'+z.stunde+'.</b></td>'+
-      '<td><input type="time" id="zeitVon'+z.stunde+'" value="'+esc(z.von)+'"></td>'+
-      '<td><input type="time" id="zeitBis'+z.stunde+'" value="'+esc(z.bis)+'"></td></tr>';
+    karte += '<tr><td><b>'+z.stunden.join("./")+'.</b></td>'+
+      '<td><input type="time" id="zeitVon'+z.block+'" value="'+esc(z.von)+'"></td>'+
+      '<td><input type="time" id="zeitBis'+z.block+'" value="'+esc(z.bis)+'"></td></tr>';
   karte += '</table><div class="abstand"></div>'+
     '<div class="zeile"><button class="primar" data-a="zeitenSpeichern">Zeiten speichern</button>'+
     (eigene ? '<button data-a="zeitenZuruecksetzen">Auf Vorgabe zurücksetzen</button>' : '')+'</div></div>';
@@ -4147,18 +4164,18 @@ document.addEventListener("click", ev=>{
   if (el.dataset.a === "zeitenSpeichern"){
     const neu = [];
     for (const z of stundenzeiten()){
-      const von = document.getElementById("zeitVon"+z.stunde);
-      const bis = document.getElementById("zeitBis"+z.stunde);
+      const von = document.getElementById("zeitVon"+z.block);
+      const bis = document.getElementById("zeitBis"+z.block);
       if (!von || !bis || !von.value || !bis.value) continue;
-      if (bis.value <= von.value) return alertBox("Die "+z.stunde+". Stunde endet vor ihrem Beginn.");
-      neu.push({stunde:z.stunde, von:von.value, bis:bis.value});
+      if (bis.value <= von.value) return alertBox("Der "+z.stunden.join("./")+". Block endet vor seinem Beginn.");
+      neu.push({block:z.block, stunden:z.stunden, von:von.value, bis:bis.value});
     }
     if (!neu.length) return alertBox("Keine Zeiten eingetragen.");
-    S.einstellungen.stundenzeiten = neu;
+    S.einstellungen.blockzeiten = neu;
     speichern(); zeichne(); toast("Stundenzeiten gespeichert");
   }
   else if (el.dataset.a === "zeitenZuruecksetzen"){
-    delete S.einstellungen.stundenzeiten;
+    delete S.einstellungen.blockzeiten;
     speichern(); zeichne(); toast("Vorgabe wiederhergestellt");
   }
 });
