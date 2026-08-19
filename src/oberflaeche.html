@@ -5,16 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>merkr</title>
 <style>
+/*__SCHRIFT__*/
 :root{
-  --akzent:#3d7a4e; --akzent-hell:#e8f2ea; --bg:#f4f5f2; --karte:#ffffff;
-  --text:#22301f; --text2:#6b7a68; --linie:#dde3da; --rot:#c62828;
-  --s2:#1b5e20; --s1:#8bc34a; --s0:#fbc02d; --sm1:#f57c00; --sm2:#d32f2f;
-  --radius:14px; --schatten:0 1px 4px rgba(0,0,0,.08);
+  /* Pflaume auf Papier. Eigene Marke im lehrr-Verbund: selbr hat Smaragd,
+     planr Indigo, drillr Blau, prüfr Amber, checkr Rot. */
+  --akzent:#6b3f6e; --akzent-hell:#f4ecf5; --bg:#efe6f0; --karte:#ffffff;
+  --text:#3b1f3e; --text2:#6f5872; --linie:#e4d7e5; --rot:#c02f2f;
+  /* Die fünf Stufen sind die einzige Stelle, an der Farbe etwas bedeutet.
+     Deshalb hält sich der Rest der Oberfläche zurück. */
+  --s2:#12715a; --s1:#64a35e; --s0:#d8a417; --sm1:#cf7a2e; --sm2:#8e3b3b;
+  --radius:16px; --schatten:0 1px 3px rgba(59,31,62,.07);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;height:100%;}
 body{
-  font-family:-apple-system,"Avenir Next","Segoe UI",Roboto,sans-serif;
+  font-family:'Nunito',-apple-system,"Avenir Next","Segoe UI",Roboto,sans-serif;
   background:var(--bg); color:var(--text); font-size:16px;
   -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -58,12 +63,21 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
   repeating-linear-gradient(90deg,transparent,transparent 27px,#eef1ec 27px,#eef1ec 28px),
   #fbfcfa;
   border:1px solid var(--linie); border-radius:var(--radius); height:600px; overflow:hidden; touch-action:none;}
-.stile{position:absolute; width:104px; min-height:56px; border-radius:10px; background:#fff;
-  box-shadow:0 1px 4px rgba(0,0,0,.14); border-top:5px solid var(--akzent); padding:6px 8px 5px;
+.stile{position:absolute; width:112px; min-height:72px; border-radius:14px; background:var(--karte);
+  box-shadow:0 1px 3px rgba(59,31,62,.09); border:1px solid var(--linie); padding:9px 10px 8px;
   cursor:pointer; touch-action:none;}
-.stile .sname{font-size:14px; font-weight:600; line-height:1.15; pointer-events:none;}
-.stile .spunkte{display:flex; gap:3px; margin-top:4px; flex-wrap:wrap; pointer-events:none; min-height:8px;}
-.stile .spunkte i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.stile .sname{font-size:14px; font-weight:800; line-height:1.15; pointer-events:none; color:var(--text);}
+.stile .sname span{display:block; font-weight:600; color:var(--text2);}
+/* Vier Felder, eine je Kategorie: Qualität und Menge, mündlich und schriftlich.
+   Ein leeres Feld heißt "heute noch nichts" - man sieht auf einen Blick, wo
+   eine Notiz fehlt, und nicht nur, was zuletzt passiert ist. */
+.stile .spunkte{display:flex; gap:4px; margin-top:7px; pointer-events:none;}
+.stile .spunkte i{width:22px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:900;font-style:normal;color:#fff;background:var(--akzent-hell);}
+.stile .spunkte i.ohne{color:var(--linie);}
+.stufenlegende{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:12px;font-size:12px;color:var(--text2);}
+.stufenlegende b{display:inline-flex;width:22px;height:20px;border-radius:6px;align-items:center;justify-content:center;
+  font-size:10px;color:#fff;margin-right:5px;vertical-align:-5px;}
 .stile.fehlt{opacity:.45; border-top-color:var(--rot);}
 .stile.fehlt::after{content:"fehlt"; position:absolute; top:4px; right:6px; font-size:11px; color:var(--rot); font-weight:700;}
 
@@ -126,38 +140,12 @@ svg text{font-family:inherit;}
 .fehlstatus button{margin-right:6px;}
 
 /* ==== Design „Tafel" (dunkel) – von Herrn Leußner gewählt ==== */
-:root{ --akzent:#8fbf6f; --akzent-hell:#2e3a30; --bg:#171d19; --karte:#232b25;
-  --text:#e9efe6; --text2:#9fb098; --linie:#39443a; --rot:#ef7b6d; --schatten:0 1px 4px rgba(0,0,0,.5); }
-button{ color:#cfe3c2; }
-button.primar{ background:#8fbf6f; color:#14210f; }
-button.gefahr{ background:#4a2a26; color:#ffb4a8; }
-input,textarea,select{ background:#1b221d; color:#e9efe6; border-color:#39443a; color-scheme:dark; }
-#topbar{ background:#11150f; border-bottom-color:#39443a; }
-#topbar .wochenbadge{ background:#8fbf6f; color:#14210f; }
-.tabs button{ background:#232b25; color:#9fb098; border-color:#39443a; }
-.tabs button.aktiv{ background:#8fbf6f; color:#14210f; border-color:#8fbf6f; }
-#sitzflaeche{ background:
-  repeating-linear-gradient(0deg,transparent,transparent 27px,#222a24 27px,#222a24 28px),
-  repeating-linear-gradient(90deg,transparent,transparent 27px,#222a24 27px,#222a24 28px),
-  #1b221d; border-color:#39443a; }
-.stile{ background:#2b352d; box-shadow:0 1px 5px rgba(0,0,0,.55); }
-.stile .sname{ color:#e9efe6; }
-.slzeile{ background:#232b25; }
-#popover,.modalbox{ background:#232b25; color:#e9efe6; }
-table.tab td{ border-bottom-color:#39443a; }
-table.tab th{ border-bottom-color:#39443a; }
-.chip{ background:#2e3a30; color:#cfe3c2; }
-.chip.aktivrot{ background:#4a2a26; color:#ffb4a8; }
-.wertknoepfe button{ background:#1b221d; border-color:#39443a; color:#e9efe6; }
-.wertknoepfe button.gewaehlt{ background:#8fbf6f; color:#14210f; border-color:#8fbf6f; }
-.statwert{ background:#2e3a30; }
-.statwert .gross{ color:#a9d68b; }
-#testbanner{ background:#3a3423; color:#e8d894; }
-svg text{ fill:#a8b8a0 !important; }
-#toast{ background:#0d110c; }
+/* Das dunkle Thema ist am 19.08.2026 entfallen. merkr wird im hellen
+   Klassenzimmer benutzt, oft mit Sonne auf dem Bildschirm - dort gewinnt
+   dunkle Schrift auf hellem Grund. Die Palette oben ist die einzige. */
 </style>
 </head>
-<body style="background:#171d19;color:#e9efe6">
+<body style="background:#efe6f0;color:#3b1f3e">
 <script>
 /* Früher Fehlerfänger: zeigt Startfehler sichtbar an, statt weiß zu bleiben */
 window.__KB_startFehlerText = "";
@@ -181,7 +169,7 @@ window.__KB_startOk = false;
 </script>
 <div id="testbanner" style="display:none">Testmodus ohne Scriptable – Änderungen werden <b>nicht dauerhaft</b> gespeichert.</div>
 <div id="topbar"></div>
-<div id="ladeanzeige" style="padding:24px;font:16px -apple-system,sans-serif;background:#171d19;color:#e9efe6">
+<div id="ladeanzeige" style="padding:24px;font:16px 'Nunito',-apple-system,sans-serif;background:#efe6f0;color:#3b1f3e">
 <b>merkr startet …</b><br><br>Bleibt dieser Text stehen, bricht das Skript ab.
 </div>
 <div id="app"></div>
@@ -211,12 +199,15 @@ const MITARBEIT_KATEGORIEN = [
   {id:"qual_s",  name:"Qualität schriftl. Ergebnisse (Arbeitsphasen)",  kurz:"Qual. schriftl."},
   {id:"quant_s", name:"Quantität schriftl. Ergebnisse (Arbeitsphasen)", kurz:"Quant. schriftl."}
 ];
+/* Die fünf Stufen. Ihre Farben sind die einzigen, die in merkr etwas bedeuten -
+   deshalb stehen sie hier und im CSS unter denselben Werten. Das kräftige Rot
+   bleibt für "Lücke" reserviert, "sehr schwach" trägt ein gedecktes Dunkelrot. */
 const STUFEN = [
-  {v: 2, label:"++",   farbe:"var(--s2)",  hex:"#1b5e20"},
-  {v: 1, label:"+",    farbe:"var(--s1)",  hex:"#8bc34a"},
-  {v: 0, label:"o",    farbe:"var(--s0)",  hex:"#fbc02d"},
-  {v:-1, label:"−",    farbe:"var(--sm1)", hex:"#f57c00"},
-  {v:-2, label:"−−",   farbe:"var(--sm2)", hex:"#d32f2f"}
+  {v: 2, label:"++",   farbe:"var(--s2)",  hex:"#12715a"},
+  {v: 1, label:"+",    farbe:"var(--s1)",  hex:"#64a35e"},
+  {v: 0, label:"o",    farbe:"var(--s0)",  hex:"#d8a417"},
+  {v:-1, label:"−",    farbe:"var(--sm1)", hex:"#cf7a2e"},
+  {v:-2, label:"−−",   farbe:"var(--sm2)", hex:"#8e3b3b"}
 ];
 const EINFACH_EREIGNISSE = [
   {id:"ha_vergessen", name:"Hausaufgaben vergessen", symbol:"HA"},
@@ -637,7 +628,12 @@ function viewKurs(){
 }
 function kursKopfzeile(k){
   const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
-  const thema = st && st.thema ? esc(st.thema) : '<span class="hinweis">kein Thema eingetragen</span>';
+  /* Was heute dran ist: das gehaltene Thema, sonst das geplante aus planr,
+     sonst der Hinweis. Vorher stand hier "kein Thema eingetragen", auch wenn
+     die Stoffverteilung längst da war. */
+  const thema = st && st.thema ? esc(st.thema)
+    : (st && st.geplant ? esc(st.geplant)+' <span class="hinweis">· geplant</span>'
+    : '<span class="hinweis">kein Thema eingetragen</span>');
   return '<div class="karte"><div class="zeile raum">'+
     '<div class="zeile"><input type="date" id="kursDatum" value="'+R.datum+'" data-a-change="datumWechsel">'+
     '<span class="hinweis">'+wochentagName(new Date(R.datum+"T12:00:00").getDay())+'</span></div>'+
@@ -655,19 +651,35 @@ function viewSitzplan(k){
   let html = '<div id="sitzflaeche">';
   let auto = 0;
   for (const s of schueler){
-    const pos = (s.sitz && s.sitz[k.id]) || {x: 12+(auto%7)*118, y: 12+Math.floor(auto/7)*80};
+    const pos = (s.sitz && s.sitz[k.id]) || {x: 12+(auto%7)*124, y: 12+Math.floor(auto/7)*92};
     auto++;
     const anw = st ? anwesenheitVon(s.id, st.id) : null;
     const fehlt = anw && anw.status==="fehlt";
-    const punkte = heutigeEreignisse(s.id, k.id).slice(-6).map(e=>{
-      const farbe = (e.stufe!=null)? stufeInfo(e.stufe).hex : "#9aa79a";
-      return '<i style="background:'+farbe+'"></i>';
+
+    /* Je Kategorie das Letzte von heute. Vorher standen hier die letzten sechs
+       Ereignisse in beliebiger Mischung - daraus ließ sich nicht ablesen, ob
+       eine Kategorie heute schon dran war. */
+    const heute = heutigeEreignisse(s.id, k.id);
+    const felder = MITARBEIT_KATEGORIEN.map(kat=>{
+      const letzte = heute.filter(e=>e.typ===kat.id && e.stufe!=null).slice(-1)[0];
+      if (!letzte) return '<i class="ohne" title="'+esc(kat.name)+': heute noch nichts">·</i>';
+      const si = stufeInfo(letzte.stufe);
+      return '<i style="background:'+si.hex+'" title="'+esc(kat.name)+': '+si.label+'">'+si.label+'</i>';
     }).join("");
-    html += '<div class="stile'+(fehlt?" fehlt":"")+'" data-sid="'+s.id+'" style="left:'+pos.x+'px; top:'+pos.y+'px; border-top-color:'+esc(k.farbe)+'">'+
-      '<div class="sname">'+esc(s.vorname)+'<br>'+esc(s.name)+'</div>'+
-      '<div class="spunkte">'+punkte+'</div></div>';
+
+    html += '<div class="stile'+(fehlt?" fehlt":"")+'" data-sid="'+s.id+'" style="left:'+pos.x+'px; top:'+pos.y+'px">'+
+      '<div class="sname">'+esc(s.vorname)+'<span>'+esc(s.name)+'</span></div>'+
+      '<div class="spunkte">'+felder+'</div></div>';
   }
-  html += '</div><p class="hinweis">Kacheln frei verschieben (freies Raster). Antippen öffnet die Schnellerfassung.</p>';
+  html += '</div>';
+
+  html += '<div class="stufenlegende"><span>Stufen</span>';
+  for (const stufe of STUFEN)
+    html += '<span><b style="background:'+stufe.hex+'">'+stufe.label+'</b>'+
+      ({2:"sehr gut",1:"gut",0:"mittel","-1":"schwach","-2":"sehr schwach"}[stufe.v])+'</span>';
+  html += '<span><b style="background:var(--akzent-hell);color:var(--linie)">·</b>heute noch nichts</span></div>'+
+    '<p class="hinweis">Vier Felder je Kachel: Qualität und Menge, mündlich und schriftlich. '+
+    'Antippen öffnet die Erfassung, Ziehen verschiebt den Platz.</p>';
   return html;
 }
 
@@ -3095,6 +3107,103 @@ function einrichtenKarte(){
 
 const einrichtenVorher = viewEinstellungen;
 viewEinstellungen = function(){ return einrichtenKarte() + einrichtenVorher(); };
+
+/* ================= Heute, im neuen Design =================
+   Nach dem Entwurf von Claude Design: das Datum groß, darunter die Einordnung,
+   dann der Stundenplan des Tages mit einer Marke je Stunde, die sagt, ob dort
+   schon etwas notiert ist. Zuletzt die offenen Punkte - aber nur echte. */
+
+function heuteMarke(text, art){
+  const farben = {
+    gut:   ["#eaf3ee", "var(--s2)"],
+    offen: ["var(--akzent-hell)", "var(--text2)"],
+    fehlt: ["#fdf3e6", "#a3611a"],
+  };
+  const f = farben[art] || farben.offen;
+  return '<span style="background:'+f[0]+';color:'+f[1]+';border-radius:999px;padding:5px 11px;'+
+    'font-size:12px;font-weight:800;white-space:nowrap">'+esc(text)+'</span>';
+}
+
+function viewHome(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+
+  const heute = todayISO();
+  const wb = wochenBuchstabe(sj, heute);
+  const wt = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][new Date(heute+"T12:00:00").getDay()];
+  const monat = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(heute.slice(5,7))-1];
+  const imHalbjahr = sj.halbjahrGrenze && heute >= sj.halbjahrGrenze ? 2 : 1;
+
+  let html = '<h1 style="font-size:30px;font-weight:900;letter-spacing:-.5px;margin:2px 0 2px">'+
+    wt+', '+Number(heute.slice(8,10))+'. '+monat+'</h1>'+
+    '<p class="hinweis" style="margin:0 0 18px">'+
+    (wb ? "Woche "+wb+" · " : "")+"Halbjahr "+imHalbjahr+" · Notenschlüssel MV</p>";
+
+  /* Der Stundenplan des Tages */
+  const hk = heutigeKurse();
+  html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Heute im Stundenplan</h2>';
+
+  if (!hk.length){
+    html += leer("Für heute steht kein Kurs im Stundenplan.", "Stundenplan eintragen", "kursNeuDialog");
+  } else {
+    for (const e of hk){
+      const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===heute);
+      const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
+      const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
+      const marke = notizen ? heuteMarke(notizen+(notizen===1?" Notiz":" Notizen"), "gut")
+        : (thema ? heuteMarke("noch nichts notiert", "offen") : heuteMarke("Thema fehlt", "fehlt"));
+
+      html += '<div class="karte" style="display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:10px">'+
+        '<div style="background:var(--akzent-hell);border-radius:12px;padding:8px 12px;text-align:center;min-width:62px">'+
+        '<div style="font-weight:900;font-size:15px">'+e.stunde+'.</div></div>'+
+        '<div style="flex:1;min-width:0">'+
+        '<div><b style="font-size:17px">'+esc(e.kurs.name)+'</b> <span class="hinweis">'+esc(e.kurs.fach||"")+'</span></div>'+
+        '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+        (thema ? esc(thema) : "Kein Thema geplant")+'</div></div>'+
+        marke+
+        '<button class="primar" data-a="kursOeffnen" data-id="'+e.kurs.id+'">Sitzplan</button></div>';
+    }
+  }
+
+  /* Offene Punkte - nur, wenn es welche gibt */
+  const of = offeneFehlzeiten(), bt = backupAlterTage();
+  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
+  const punkte = [];
+  if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
+    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
+  if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
+    "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
+  else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",
+    "letzte Sicherung vor "+bt+" Tagen", "Jetzt sichern", "backupDialog", null]);
+
+  if (punkte.length){
+    html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">Offene Punkte</h2>';
+    for (const [art, titel, unter, knopf, aktion, id] of punkte){
+      html += '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px">'+
+        '<span style="width:9px;height:9px;border-radius:50%;background:'+(art==="rot"?"var(--rot)":"var(--s0)")+'"></span>'+
+        '<div style="flex:1"><b>'+esc(titel)+'</b><div class="hinweis">'+esc(unter)+'</div></div>'+
+        '<button data-a="'+aktion+'"'+(id?' data-id="'+id+'"':'')+'>'+knopf+'</button></div>';
+    }
+  }
+
+  /* Die Kurse */
+  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
+  html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">'+
+    'Kurse · '+esc(sj.name)+'</h2>';
+  if (!kurse.length) html += leer("Noch kein Kurs angelegt.", "Kurs anlegen", "kursNeuDialog");
+  for (const k of kurse){
+    const anz = kursSchueler(k.id).length, sys = notensystem(k);
+    html += '<div class="karte" style="display:flex;align-items:center;gap:14px;padding:13px 16px;margin-bottom:8px;cursor:pointer" '+
+      'data-a="kursOeffnen" data-id="'+k.id+'">'+
+      '<div style="width:8px;height:34px;border-radius:99px;background:'+esc(k.farbe||"var(--akzent)")+'"></div>'+
+      '<div style="flex:1"><b style="font-size:16px">'+esc(k.name)+'</b>'+
+      '<div class="hinweis">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+
+      (anz===1?" Schüler":" Schüler")+' · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div>'+
+      '<div style="color:var(--text2);font-size:20px">›</div></div>';
+  }
+  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">Kurs anlegen</button>';
+  return html;
+}
 
 </script>
 </body>
