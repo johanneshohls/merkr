@@ -206,7 +206,7 @@ function baueHtml(datenText) {
 // Die Fassung stempelt bau.mjs beim Bauen ein. Ohne sie sieht man auf dem
 // Startbildschirm nicht, ob gerade der neue oder der alte Stand läuft - und
 // genau das war am 19.08. die Frage.
-const VERSION = "2026-08-20 00:19";
+const VERSION = "2026-08-20 00:39";
 const ABLAGE_TEXT = ablage.icloud
   ? "Daten in iCloud Drive → Scriptable → " + ORDNER_NAME
   : "<b style='color:#e8b25a'>Achtung: iCloud nicht erreichbar, Daten liegen nur auf diesem Gerät.</b>"
