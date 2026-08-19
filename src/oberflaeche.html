@@ -46,7 +46,11 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
    rücken einfach nach. */
 #seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
-#seitenleiste .marke{display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 0 12px;}
+#seitenleiste{padding-top:8px;}
+#seitenleiste .leistetrenner{margin:10px 2px 4px; padding-top:9px; border-top:1px solid var(--linie);
+  text-align:center; font-size:10px; font-weight:800; color:var(--text2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+#seitenleiste .marke{display:none;}
 #seitenleiste .marke b{font-size:17px; font-weight:900; letter-spacing:-.3px; color:var(--akzent);}
 #seitenleiste .marke span{font-size:10px; font-weight:700; color:#96809a;}
 #seitenleiste button{display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 2px 9px;
@@ -62,7 +66,8 @@ body.mitleiste #app{padding-left:108px;}
 @media (max-width:700px){
   #seitenleiste{top:auto; right:0; width:auto; height:auto; flex-direction:row; justify-content:space-around;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid var(--linie);}
-  #seitenleiste .marke{display:none;}
+  #seitenleiste .marke, #seitenleiste .leistetrenner{display:none;}
+  #seitenleiste{overflow-x:auto;}
   #seitenleiste button{flex:1; border-radius:12px; padding:8px 2px 6px;}
   body.mitleiste #topbar, body.mitleiste #app{padding-left:16px;}
   body.mitleiste #app{padding-bottom:86px;}
@@ -3825,6 +3830,339 @@ document.addEventListener("click", ev=>{
 
 /* Erst hier ist alles definiert. Der Startlauf weiter oben zeichnete noch ohne
    Seitenleiste - deshalb stand die Startseite bisher ohne sie da. */
+zeichne();
+
+/* ================= Stundenzeiten =================
+   merkr braucht sie für den Schnellzugriff: welche Stunde läuft gerade. planr
+   führt nur Blocknummern, also stehen sie hier. Die Vorgabe ist ein übliches
+   Raster und ausdrücklich zu prüfen - eine falsche Uhrzeit zeigt die falsche
+   Klasse. Zu ändern in den Einstellungen. */
+
+const STUNDENZEITEN_VORGABE = [
+  {stunde:1, von:"07:45", bis:"08:30"}, {stunde:2, von:"08:30", bis:"09:15"},
+  {stunde:3, von:"09:35", bis:"10:20"}, {stunde:4, von:"10:20", bis:"11:05"},
+  {stunde:5, von:"11:25", bis:"12:10"}, {stunde:6, von:"12:10", bis:"12:55"},
+  {stunde:7, von:"13:25", bis:"14:10"}, {stunde:8, von:"14:10", bis:"14:55"},
+  {stunde:9, von:"15:00", bis:"15:45"}, {stunde:10, von:"15:45", bis:"16:30"},
+];
+
+function stundenzeiten(){
+  const eigene = S.einstellungen.stundenzeiten;
+  return Array.isArray(eigene) && eigene.length ? eigene : STUNDENZEITEN_VORGABE;
+}
+function zeitVon(nr){ return stundenzeiten().find(z=>z.stunde===nr) || null; }
+function jetztHHMM(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+
+/**
+ * Was läuft gerade, und was kommt als Nächstes?
+ *
+ * "läuft" gilt zwischen Beginn und Ende der Stunde, "gleich" bis 20 Minuten
+ * davor - in der Pause will man schon sehen, wohin man gleich geht.
+ */
+function aktuelleStunde(){
+  const heute = todayISO();
+  const jetzt = jetztHHMM();
+  const liste = kurseAmTag(heute);
+  let laeuft = null, naechste = null;
+  for (const e of liste){
+    const z = zeitVon(e.stunde);
+    if (!z) continue;
+    if (jetzt >= z.von && jetzt < z.bis){ if (!laeuft) laeuft = {e, z}; }
+    else if (jetzt < z.von && !naechste) naechste = {e, z};
+  }
+  if (laeuft) return {art:"laeuft", ...laeuft};
+  if (naechste){
+    const minuten = (Number(naechste.z.von.slice(0,2))*60 + Number(naechste.z.von.slice(3,5)))
+      - (Number(jetzt.slice(0,2))*60 + Number(jetzt.slice(3,5)));
+    return {art: minuten <= 20 ? "gleich" : "spaeter", minuten, ...naechste};
+  }
+  return null;
+}
+
+function schnellzugriff(){
+  const a = aktuelleStunde();
+  if (!a) return "";
+  const st = S.stunden.find(x=>x.kursId===a.e.kurs.id && x.datum===todayISO());
+  const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
+  const kopf = a.art==="laeuft" ? "Läuft gerade"
+    : a.art==="gleich" ? "Gleich, in "+a.minuten+" Minuten" : "Als Nächstes heute";
+
+  return '<div class="karte" style="display:flex;align-items:center;gap:16px;padding:16px 18px;margin-bottom:20px;'+
+    'border:1px solid var(--akzent)">'+
+    '<div style="background:var(--akzent);color:#fff;border-radius:14px;padding:10px 14px;text-align:center;min-width:74px">'+
+    '<div style="font-size:19px;font-weight:900;line-height:1">'+a.e.stunde+'.</div>'+
+    '<div style="font-size:11px;font-weight:700;opacity:.85">'+esc(a.z.von)+'</div></div>'+
+    '<div style="flex:1;min-width:0">'+
+    '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:800">'+kopf+'</div>'+
+    '<div><b style="font-size:19px">'+esc(a.e.kurs.name)+'</b></div>'+
+    '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+    (thema ? esc(thema) : "kein Thema")+'</div></div>'+
+    '<button class="primar" data-a="stundeOeffnen" data-id="'+a.e.kurs.id+'" data-datum="'+todayISO()+'">Sitzplan</button></div>';
+}
+
+/* ================= Wochenplan als Raster =================
+   Wochentage in den Spalten, Stunden in den Zeilen - so hängt jeder
+   Stundenplan an jeder Schule. */
+
+function viewWochenraster(){
+  const sj = aktivesSchuljahr();
+  const heute = todayISO();
+  const anker = R.wochenAnker || heute;
+  const tage = wochenTage(anker);
+  const belegung = tage.map(iso=>({iso, liste: kurseAmTag(iso)}));
+
+  const benutzte = [...new Set(belegung.flatMap(t=>t.liste.map(e=>e.stunde)))].sort((a,b)=>a-b);
+  if (!benutzte.length)
+    return leer("In dieser Woche steht kein Unterricht im Stundenplan.", "Kurse ansehen", "go", "kurse");
+
+  /* Lücken dazwischen bleiben stehen, sonst rutscht die 7. neben die 3. und der
+     Plan sieht dichter aus, als der Tag ist. */
+  const zeilen = [];
+  for (let n = benutzte[0]; n <= benutzte[benutzte.length-1]; n++) zeilen.push(n);
+
+  /* Feste Spaltenbreiten: sonst bekommt der Tag mit dem längsten Thema die
+     halbe Woche und der Plan sieht schief aus. */
+  let html = '<div style="overflow-x:auto"><table style="width:100%;table-layout:fixed;border-collapse:separate;'+
+    'border-spacing:6px;min-width:640px"><colgroup><col style="width:54px">'+
+    '<col style="width:19.2%"><col style="width:19.2%"><col style="width:19.2%"><col style="width:19.2%"><col style="width:19.2%">'+
+    '</colgroup><tr><td></td>';
+  for (const t of belegung){
+    const istHeute = t.iso === heute;
+    const wt = ["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(t.iso+"T12:00:00").getDay()];
+    html += '<td style="text-align:center;padding-bottom:2px">'+
+      '<div style="font-weight:800;font-size:13px;'+(istHeute?'color:var(--akzent)':'color:var(--text2)')+'">'+wt+'</div>'+
+      '<div class="hinweis" style="font-size:11px">'+Number(t.iso.slice(8,10))+'.'+Number(t.iso.slice(5,7))+'.</div></td>';
+  }
+  html += '</tr>';
+
+  for (const nr of zeilen){
+    const z = zeitVon(nr);
+    html += '<tr><td style="text-align:right;vertical-align:middle">'+
+      '<div style="font-weight:800;font-size:13px">'+nr+'.</div>'+
+      (z?'<div class="hinweis" style="font-size:10px">'+esc(z.von)+'</div>':'')+'</td>';
+
+    for (const t of belegung){
+      const treffer = t.liste.filter(e=>e.stunde===nr);
+      const istHeute = t.iso === heute;
+      if (!treffer.length){
+        html += '<td><div style="min-height:52px;border-radius:12px;background:'+
+          (istHeute?'var(--akzent-hell)':'transparent')+'"></div></td>';
+        continue;
+      }
+      html += '<td>';
+      for (const e of treffer){
+        const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===t.iso);
+        const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
+        const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
+        const gehalten = st && st.thema;
+        html += '<div data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+t.iso+'" '+
+          'style="cursor:pointer;min-height:52px;border-radius:12px;padding:7px 9px;background:var(--karte);'+
+          'border-left:5px solid '+esc(e.kurs.farbe||"var(--akzent)")+';'+
+          (istHeute?'box-shadow:0 0 0 1px var(--akzent)':'box-shadow:var(--schatten)')+'">'+
+          '<div class="zeile raum" style="gap:6px;align-items:flex-start">'+
+          '<b style="font-size:13px;line-height:1.2">'+esc(e.kurs.name)+'</b>'+
+          '<span style="width:8px;height:8px;border-radius:50%;flex:0 0 8px;margin-top:3px;background:'+
+          (notizen ? "var(--s2)" : gehalten ? "var(--s0)" : "var(--linie)")+'"></span></div>'+
+          (thema ? '<div class="hinweis" style="font-size:11px;line-height:1.25;overflow:hidden;'+
+            'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(thema)+'</div>' : '')+
+          '</div>';
+      }
+      html += '</td>';
+    }
+    html += '</tr>';
+  }
+  return html + '</table></div>';
+}
+
+/* Die Startseite: Schnellzugriff, dann das Raster, dann die offenen Punkte. */
+const homeVorRaster = viewHome;
+viewHome = function(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+
+  const heute = todayISO();
+  const anker = R.wochenAnker || heute;
+  const tage = wochenTage(anker);
+  const wb = wochenBuchstabe(sj, tage[0]);
+  const imZweiten = sj.halbjahrGrenze && heute >= sj.halbjahrGrenze;
+  const dieseWoche = wochenTage(heute)[0] === tage[0];
+  const monat = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(tage[0].slice(5,7))-1];
+
+  let html = dieseWoche ? schnellzugriff() : "";
+
+  html += '<div class="zeile raum" style="align-items:flex-end;margin-bottom:14px">'+
+    '<div><h1 style="font-size:26px;font-weight:900;letter-spacing:-.4px;margin:0">'+
+    (dieseWoche ? "Diese Woche" : "Woche ab "+Number(tage[0].slice(8,10))+". "+monat)+'</h1>'+
+    '<p class="hinweis" style="margin:4px 0 0">'+
+    (wb ? "Woche "+wb+" · " : "")+"Halbjahr "+(imZweiten?2:1)+" · Notenschlüssel MV"+'</p></div>'+
+    '<div class="zeile"><button data-a="wocheZurueck">‹</button>'+
+    (dieseWoche ? '' : '<button data-a="wocheHeute">Diese Woche</button>')+
+    '<button data-a="wocheVor">›</button></div></div>';
+
+  html += viewWochenraster();
+
+  /* Offene Punkte wie gehabt */
+  const of = offeneFehlzeiten(), bt = backupAlterTage();
+  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
+  const punkte = [];
+  if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
+    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
+  if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
+    "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
+  else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",
+    "letzte Sicherung vor "+bt+" Tagen", "Jetzt sichern", "backupDialog", null]);
+
+  if (punkte.length){
+    html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:24px 0 8px">Offene Punkte</h2>';
+    for (const [art, titel, unter, knopf, aktion, id] of punkte)
+      html += '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px">'+
+        '<span style="width:9px;height:9px;border-radius:50%;background:'+(art==="rot"?"var(--rot)":"var(--s0)")+'"></span>'+
+        '<div style="flex:1"><b>'+esc(titel)+'</b><div class="hinweis">'+esc(unter)+'</div></div>'+
+        '<button data-a="'+aktion+'"'+(id?' data-id="'+id+'"':'')+'>'+knopf+'</button></div>';
+  }
+  return html;
+};
+
+/* ================= Seitenleiste, zweistufig =================
+   Vorher standen Sitzplan, Anwesend, Schüler und Noten immer da, obwohl sie
+   nur innerhalb eines Kurses etwas bedeuten - ohne offenen Kurs führten sie
+   ins Nichts und waren blass geschaltet. Das war eine Krücke.
+
+   Jetzt zwei Ebenen: oben, was immer gilt (Home, Kurse, Einrichten), darunter
+   der offene Kurs mit seinen Ansichten. Ist keiner offen, ist der untere Block
+   einfach nicht da. Der Tab-Streifen entfällt damit ganz.
+
+   Die Marke oben ist weg: dort sitzt in Scriptable der eigene Schließen-Knopf,
+   und zwei Kopfzeilen übereinander sind eine zu viel. */
+
+const LEISTE_GLOBAL = [
+  {id:"home",     label:"Home",       view:"home",          icon:LEISTE[0].icon},
+  {id:"kurse",    label:"Kurse",      view:"kurse",         icon:LEISTE[1].icon},
+  {id:"einricht", label:"Einrichten", view:"einstellungen", icon:LEISTE[6].icon},
+];
+
+const LEISTE_KURS = [
+  {id:"sitzplan",  label:"Sitzplan",   tab:"sitzplan",    icon:LEISTE[2].icon},
+  {id:"anwesend",  label:"Anwesend",   tab:"anwesenheit", icon:LEISTE[3].icon},
+  {id:"schueler",  label:"Schüler",    tab:"liste",       icon:LEISTE[4].icon},
+  {id:"noten",     label:"Noten",      tab:"arbeiten",    icon:LEISTE[5].icon},
+  {id:"stunden",   label:"Stunden",    tab:"stunden",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>'},
+  {id:"jahr",      label:"Jahr",       tab:"jahr",        icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>'},
+  {id:"auswertung",label:"Auswertung", tab:"auswertung",  icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M6 15l4-5 3 3 5-7"/></svg>'},
+  {id:"kurscfg",   label:"Kurs",       tab:"kurscfg",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>'},
+];
+
+zeichneSeitenleiste = function(){
+  let el = document.getElementById("seitenleiste");
+  if (!el){
+    el = document.createElement("nav");
+    el.id = "seitenleiste";
+    document.body.appendChild(el);
+  }
+  document.body.classList.add("mitleiste");
+
+  const k = kursVon(R.kursId);
+  let html = "";
+
+  for (const e of LEISTE_GLOBAL){
+    const aktiv = R.view === e.view;
+    html += '<button class="'+(aktiv?"aktiv":"")+'" data-a="leisteGlobal" data-id="'+e.id+'">'+
+      e.icon+'<span>'+e.label+'</span></button>';
+  }
+
+  if (k){
+    html += '<div class="leistetrenner"><span>'+esc(k.name)+'</span></div>';
+    for (const e of LEISTE_KURS){
+      const aktiv = (R.view==="kurs" && R.tab===e.tab) || (e.id==="schueler" && R.view==="profil");
+      html += '<button class="'+(aktiv?"aktiv":"")+'" data-a="leisteKurs" data-id="'+e.id+'">'+
+        e.icon+'<span>'+e.label+'</span></button>';
+    }
+  }
+  el.innerHTML = html;
+};
+
+document.addEventListener("click", ev=>{
+  const g = ev.target.closest('[data-a="leisteGlobal"]');
+  if (g){
+    const e = LEISTE_GLOBAL.find(x=>x.id===g.dataset.id);
+    if (e){ R.view = e.view; zeichne(); }
+    return;
+  }
+  const kk = ev.target.closest('[data-a="leisteKurs"]');
+  if (kk){
+    const e = LEISTE_KURS.find(x=>x.id===kk.dataset.id);
+    if (e && kursVon(R.kursId)){ R.view = "kurs"; R.tab = e.tab; zeichne(); }
+    return;
+  }
+});
+
+/* Der Tab-Streifen hat ausgedient - alles steht links. */
+viewKurs = function(){
+  const k = kursVon(R.kursId);
+  if (!k){ R.view="home"; return viewHome(); }
+  let html = "";
+  if (R.tab==="sitzplan" || R.tab==="liste") html += kursKopfzeile(k);
+  if (R.tab==="sitzplan") html += viewSitzplan(k);
+  else if (R.tab==="anwesenheit") html += anwesenheitDialogHtml(k, true);
+  else if (R.tab==="liste") html += viewListe(k);
+  else if (R.tab==="stunden") html += viewStunden(k);
+  else if (R.tab==="jahr") html += viewJahr(k);
+  else if (R.tab==="arbeiten") html += viewArbeiten(k);
+  else if (R.tab==="auswertung") html += viewAuswertung(k);
+  else if (R.tab==="kurscfg") html += viewKursCfg(k);
+  return html;
+};
+
+zeichne();
+
+/* Die Stundenzeiten müssen zu ändern sein - sie entscheiden, welche Klasse der
+   Schnellzugriff zeigt. Eine falsche Vorgabe, die man nicht korrigieren kann,
+   wäre schlimmer als gar keine. */
+const einstellungenOhneZeiten = viewEinstellungen;
+viewEinstellungen = function(){
+  const zeiten = stundenzeiten();
+  const eigene = Array.isArray(S.einstellungen.stundenzeiten) && S.einstellungen.stundenzeiten.length;
+
+  let karte = '<div class="karte"><h2>Stundenzeiten</h2>'+
+    '<p class="hinweis">Nach ihnen zeigt die Startseite, welche Stunde gerade läuft. '+
+    (eigene ? 'Von Ihnen gesetzt.' : '<b>Noch die Vorgabe - bitte gegen den Plan Ihrer Schule prüfen.</b>')+'</p>'+
+    '<table class="tab"><tr><th>Stunde</th><th>von</th><th>bis</th></tr>';
+  for (const z of zeiten)
+    karte += '<tr><td><b>'+z.stunde+'.</b></td>'+
+      '<td><input type="time" id="zeitVon'+z.stunde+'" value="'+esc(z.von)+'"></td>'+
+      '<td><input type="time" id="zeitBis'+z.stunde+'" value="'+esc(z.bis)+'"></td></tr>';
+  karte += '</table><div class="abstand"></div>'+
+    '<div class="zeile"><button class="primar" data-a="zeitenSpeichern">Zeiten speichern</button>'+
+    (eigene ? '<button data-a="zeitenZuruecksetzen">Auf Vorgabe zurücksetzen</button>' : '')+'</div></div>';
+
+  return einstellungenOhneZeiten() + karte;
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  if (el.dataset.a === "zeitenSpeichern"){
+    const neu = [];
+    for (const z of stundenzeiten()){
+      const von = document.getElementById("zeitVon"+z.stunde);
+      const bis = document.getElementById("zeitBis"+z.stunde);
+      if (!von || !bis || !von.value || !bis.value) continue;
+      if (bis.value <= von.value) return alertBox("Die "+z.stunde+". Stunde endet vor ihrem Beginn.");
+      neu.push({stunde:z.stunde, von:von.value, bis:bis.value});
+    }
+    if (!neu.length) return alertBox("Keine Zeiten eingetragen.");
+    S.einstellungen.stundenzeiten = neu;
+    speichern(); zeichne(); toast("Stundenzeiten gespeichert");
+  }
+  else if (el.dataset.a === "zeitenZuruecksetzen"){
+    delete S.einstellungen.stundenzeiten;
+    speichern(); zeichne(); toast("Vorgabe wiederhergestellt");
+  }
+});
+
 zeichne();
 
 </script>
