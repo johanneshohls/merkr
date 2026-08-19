@@ -47,6 +47,14 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
 #seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
 #seitenleiste{padding-top:8px;}
+/* Kursleiste: die Auswahl links, die Ansichten daneben. */
+.kursleiste{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
+.kurswahl{font-size:17px; font-weight:800; color:var(--akzent); background:var(--karte);
+  border:1px solid var(--linie); border-radius:12px; padding:9px 12px; min-height:44px; max-width:220px;}
+.kurstabs{display:flex; gap:6px; flex-wrap:wrap; flex:1;}
+.kurstabs button{background:transparent; color:var(--text2); border-radius:999px; padding:8px 14px;
+  font-weight:800; font-size:14px; min-height:40px;}
+.kurstabs button.aktiv{background:var(--akzent); color:#fff;}
 #seitenleiste .leistetrenner{margin:10px 2px 4px; padding-top:9px; border-top:1px solid var(--linie);
   text-align:center; font-size:10px; font-weight:800; color:var(--text2);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -4178,6 +4186,117 @@ document.addEventListener("click", ev=>{
     delete S.einstellungen.blockzeiten;
     speichern(); zeichne(); toast("Vorgabe wiederhergestellt");
   }
+});
+
+zeichne();
+
+/* ================= Unterrichtsfreie Tage =================
+   Der Wochenplan rechnete allein aus dem Stundenraster: Wochentag stimmt,
+   A/B-Woche stimmt, also Unterricht. Damit zeigte merkr auch in den
+   Sommerferien und vor dem ersten Schultag einen vollen Plan.
+
+   Das Raster weiß nichts über das Kalenderjahr - dafür sind Beginn, Ende und
+   die Ferien des Schuljahres da, und die kommen aus planr. */
+
+function unterrichtsfrei(iso){
+  const sj = aktivesSchuljahr();
+  if (!sj) return null;
+  if (sj.beginn && iso < sj.beginn) return "vor Schuljahresbeginn";
+  if (sj.ende && iso > sj.ende) return "nach Schuljahresende";
+  for (const f of (sj.ferien || []))
+    if (f && f.von && f.bis && iso >= f.von && iso <= f.bis) return f.name || "Ferien";
+  return null;
+}
+
+const kurseAmTagRoh = kurseAmTag;
+kurseAmTag = function(iso){
+  if (unterrichtsfrei(iso)) return [];
+  return kurseAmTagRoh(iso);
+};
+
+const rasterOhneFreie = viewWochenraster;
+viewWochenraster = function(){
+  const anker = R.wochenAnker || todayISO();
+  const tage = wochenTage(anker);
+  const gruende = tage.map(unterrichtsfrei);
+
+  if (gruende.every(Boolean)){
+    const namen = [...new Set(gruende)];
+    return '<div class="karte" style="text-align:center;padding:34px 18px">'+
+      '<div style="font-size:19px;font-weight:900">'+esc(namen.join(" · "))+'</div>'+
+      '<p class="hinweis" style="margin:6px 0 0">In dieser Woche ist kein Unterricht.</p></div>';
+  }
+
+  let html = rasterOhneFreie();
+
+  if (gruende.some(Boolean)){
+    const namen = tage.map((iso,i)=>gruende[i]
+      ? ["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(iso+"T12:00:00").getDay()]+": "+gruende[i] : null)
+      .filter(Boolean);
+    html += '<p class="hinweis" style="margin-top:8px">'+esc(namen.join(" · "))+'</p>';
+  }
+  return html;
+};
+
+/* ================= Kursleiste oben =================
+   Die Seitenleiste bleibt schmal und global. Alles, was zu einem Kurs gehört,
+   steht oben im Kurs selbst - mit einer Auswahl links, die den Kurs wechselt,
+   ohne den Umweg über die Liste. */
+
+zeichneSeitenleiste = function(){
+  let el = document.getElementById("seitenleiste");
+  if (!el){
+    el = document.createElement("nav");
+    el.id = "seitenleiste";
+    document.body.appendChild(el);
+  }
+  document.body.classList.add("mitleiste");
+  let html = "";
+  for (const e of LEISTE_GLOBAL){
+    const aktiv = R.view === e.view ||
+      (e.view==="kurse" && (R.view==="kurs" || R.view==="profil"));
+    html += '<button class="'+(aktiv?"aktiv":"")+'" data-a="leisteGlobal" data-id="'+e.id+'">'+
+      e.icon+'<span>'+e.label+'</span></button>';
+  }
+  el.innerHTML = html;
+};
+
+function kursLeiste(k){
+  const sj = aktivesSchuljahr();
+  const kurse = sj ? S.kurse.filter(x=>x.schuljahrId===sj.id) : [];
+
+  let html = '<div class="kursleiste">'+
+    '<select id="kursWahl" data-a-change="kursWechsel" class="kurswahl">';
+  for (const x of kurse)
+    html += '<option value="'+x.id+'"'+(x.id===k.id?" selected":"")+'>'+esc(x.name)+'</option>';
+  html += '</select><div class="kurstabs">';
+  for (const e of LEISTE_KURS)
+    html += '<button class="'+(R.tab===e.tab?"aktiv":"")+'" data-a="tab" data-id="'+e.tab+'">'+e.label+'</button>';
+  return html + '</div></div>';
+}
+
+viewKurs = function(){
+  const k = kursVon(R.kursId);
+  if (!k){ R.view="home"; return viewHome(); }
+  let html = kursLeiste(k);
+  if (R.tab==="sitzplan" || R.tab==="liste") html += kursKopfzeile(k);
+  if (R.tab==="sitzplan") html += viewSitzplan(k);
+  else if (R.tab==="anwesenheit") html += anwesenheitDialogHtml(k, true);
+  else if (R.tab==="liste") html += viewListe(k);
+  else if (R.tab==="stunden") html += viewStunden(k);
+  else if (R.tab==="jahr") html += viewJahr(k);
+  else if (R.tab==="arbeiten") html += viewArbeiten(k);
+  else if (R.tab==="auswertung") html += viewAuswertung(k);
+  else if (R.tab==="kurscfg") html += viewKursCfg(k);
+  return html;
+};
+
+document.addEventListener("change", ev=>{
+  const el = ev.target.closest('[data-a-change="kursWechsel"]');
+  if (!el) return;
+  R.kursId = el.value;
+  R.view = "kurs";
+  zeichne();
 });
 
 zeichne();
