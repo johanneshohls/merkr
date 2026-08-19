@@ -4968,6 +4968,47 @@ viewEinstellungen = function(){
 
 zeichne();
 
+/* ================= Klassenliste aus einer Datei =================
+   Namen abzutippen ist die laengste und fehleranfaelligste Arbeit beim
+   Einrichten. iDoceo gibt sie als CSV aus, eine Zeile je Name - genau das
+   Format, das nameParsen ohnehin liest.
+
+   Der Inhalt landet im Eingabefeld, nicht direkt in den Daten: erst sehen, dann
+   uebernehmen. */
+
+window.__KB_namenDatei = function(text){
+  const feld = document.getElementById("schuelerImport");
+  if (!feld){ alertBox("Bitte zuerst den Kurs oeffnen, in den die Namen sollen."); return "fehler"; }
+  const zeilen = String(text||"").split("\n").map(z=>z.trim()).filter(Boolean);
+  if (!zeilen.length){ alertBox("In der Datei steht kein Name."); return "leer"; }
+  feld.value = zeilen.join("\n");
+  toast(zeilen.length+(zeilen.length===1?" Name gelesen":" Namen gelesen")+" - jetzt pruefen und hinzufuegen");
+  return "ok";
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="namenDatei"]');
+  if (!el) return;
+  if (KB_MODE !== "scriptable") return alertBox("Der Dateiweg laeuft nur in Scriptable.");
+  sendeAnBridge({typ:"namenDatei"});
+});
+
+/* Der Knopf neben das Eingabefeld. */
+const kurscfgOhneDatei = viewKursCfg;
+viewKursCfg = function(k){
+  const html = kurscfgOhneDatei(k);
+  const marke = 'data-a="schuelerHinzufuegen"';
+  const stelle = html.indexOf(marke);
+  if (stelle < 0) return html;
+  const ende = html.indexOf("</button>", stelle);
+  if (ende < 0) return html;
+  return html.slice(0, ende+9) +
+    ' <button data-a="namenDatei">Aus Datei einlesen</button>' +
+    html.slice(ende+9);
+};
+
+zeichne();
+
 </script>
 </body>
 </html>

@@ -291,6 +291,16 @@ async function bruecke() {
         await DocumentPicker.export(pfad);
         fm.remove(pfad);
       } catch (e) { /* Export abgebrochen */ }
+    } else if (msg.typ === "namenDatei") {
+      // Eine Klassenliste als Textdatei: eine Zeile je Name. Der Inhalt wandert
+      // ins Eingabefeld, nicht direkt in die Daten - erst sehen, dann uebernehmen.
+      try {
+        const pfade = await DocumentPicker.open(["public.plain-text", "public.comma-separated-values-text", "public.text"]);
+        if (pfade && pfade.length) {
+          const inhalt = await gewaehlteLesen(pfade[0]);
+          await wv.evaluateJavaScript("window.__KB_namenDatei(" + JSON.stringify(inhalt || "") + ")", false);
+        }
+      } catch (e) { /* abgebrochen */ }
     } else if (msg.typ === "planimport") {
       try {
         const pfade = await DocumentPicker.open(["public.json", "public.text"]);
