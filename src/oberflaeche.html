@@ -135,6 +135,7 @@ body.mitleiste #app{padding-left:108px;}
 .stufenlegende{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:12px;font-size:12px;color:var(--text2);}
 .stufenlegende b{display:inline-flex;width:22px;height:20px;border-radius:6px;align-items:center;justify-content:center;
   font-size:10px;color:#fff;margin-right:5px;vertical-align:-5px;}
+.stile.lange-nicht{border:2px dashed var(--sm1);}
 .stile.fehlt{opacity:.45; border-top-color:var(--rot);}
 .stile.fehlt::after{content:"fehlt"; position:absolute; top:4px; right:6px; font-size:11px; color:var(--rot); font-weight:700;}
 
@@ -605,6 +606,34 @@ function zeichne(){
   else if (R.view==="profil") app.innerHTML = viewProfil();
   if (R.view==="kurs" && R.tab==="sitzplan") initSitzplanDrag();
 }
+
+/* Ein Neuzeichnen, das wartet, bis der Mensch fertig ist.
+   Der stille Abruf aus planr kann jederzeit hereinkommen - auch mitten in einer
+   Notiz oder bei offenem Dialog. zeichne() baut die Seite komplett neu, damit
+   wäre die halb getippte Zeile weg. Also erst schauen, ob gerade jemand
+   arbeitet, und sonst alle zwei Sekunden nachfragen. */
+function oberflaecheBeschaeftigt(){
+  const m = document.getElementById("modal");
+  if (m && m.classList.contains("offen")) return true;
+  const f = document.activeElement;
+  if (!f) return false;
+  return f.tagName==="INPUT" || f.tagName==="TEXTAREA" || f.tagName==="SELECT" || f.isContentEditable===true;
+}
+let zeichnenWartet = null;
+function zeichneWennFrei(){
+  if (!oberflaecheBeschaeftigt()){
+    if (zeichnenWartet){ clearInterval(zeichnenWartet); zeichnenWartet = null; }
+    zeichne();
+    return;
+  }
+  if (zeichnenWartet) return;
+  zeichnenWartet = setInterval(function(){
+    if (oberflaecheBeschaeftigt()) return;
+    clearInterval(zeichnenWartet); zeichnenWartet = null;
+    zeichne();
+  }, 2000);
+}
+
 function zeichneTopbar(){
   const sj = aktivesSchuljahr();
   let titel = "merkr", zurueck = "", rechts = "";
@@ -1460,6 +1489,10 @@ document.addEventListener("click", ev=>{
     st.thema = document.getElementById("stThema").value.trim();
     st.hausaufgabe = document.getElementById("stHa").value.trim();
     st.ausfall = document.getElementById("stAusfall").checked;
+    /* Ohne planr ist das Soll von Hand zu pflegen. Bisher stand das Feld im
+       Dialog, wurde beim Speichern aber nie gelesen. */
+    const gepl = document.getElementById("stGeplant");
+    if (gepl && !gepl.readOnly) st.geplant = gepl.value.trim();
     speichern(); schliessePopover(); zeichne(); toast("Stunde gespeichert");
   }
 
@@ -2029,7 +2062,13 @@ function stundeDialogHtml(st){
     (st.geplant ? '<p class="hinweis">Geplant: <b>'+esc(st.geplant)+'</b> <button class="klein" data-a="geplantUebernehmen" data-id="'+st.id+'">als Thema übernehmen</button></p>' : "")+
     '<div class="feld"><label>Thema / Inhalt der Stunde (Ist)</label><input id="stThema" value="'+esc(st.thema)+'"></div>'+
     '<div class="feld"><label>Hausaufgabe</label><input id="stHa" value="'+esc(st.hausaufgabe)+'"></div>'+
-    '<div class="feld"><label>Geplantes Thema (Soll, aus Langfristplanung)</label><input id="stGeplant" value="'+esc(st.geplant||"")+'"></div>'+
+    (planrGekoppelt()
+      ? '<div class="feld"><label>Geplantes Thema (Soll)</label>'+
+        '<input id="stGeplant" value="'+esc(st.geplant||"")+'" readonly>'+
+        '<p class="hinweis">Kommt aus planr und wird beim nächsten Abruf von dort überschrieben. '+
+        'Wenn es anders lief, gehört das oben ins Ist-Feld.</p></div>'
+      : '<div class="feld"><label>Geplantes Thema (Soll, aus Langfristplanung)</label>'+
+        '<input id="stGeplant" value="'+esc(st.geplant||"")+'"></div>')+
     '<div class="feld"><label><input type="checkbox" id="stAusfall" '+(st.ausfall?"checked":"")+' style="width:auto"> Ausfall / Vertretung</label></div>'+
     '<div class="zeile"><button class="primar" data-a="stundeSpeichern" data-id="'+st.id+'">Speichern</button>'+
     '<button data-a="modalZu">Abbrechen</button></div>';
@@ -2741,6 +2780,9 @@ document.addEventListener("click", ev=>{
    über das Feld planrKlasse zu und übernimmt die Halbjahresgrenze. */
 
 function planrBasis(){ return String(S.einstellungen.planrUrl || "").trim(); }
+/* Steht die Verbindung, ist planr die Quelle des Solls - dann ist das Feld im
+   Stundendialog nur noch zum Ansehen da. */
+function planrGekoppelt(){ return KB_MODE==="scriptable" && planrDa && !!planrBasis(); }
 
 function planrKarte(k){
   return '<div class="karte"><h2>Verbindung zu planr</h2>'+
@@ -2764,6 +2806,10 @@ function planImportieren(text){
   if (!sj) return {fehler:"Es ist kein Schuljahr angelegt - ohne das gibt es keinen Kalender, in den die Stunden passen."};
 
   let ferienNeu=0, themen=0, mitReihe=0, grenzeNeu=false;
+  /* Wie viel sich wirklich bewegt hat. Der stille Abruf beim Start soll nur
+     dann die Ansicht neu bauen und melden, wenn planr etwas anderes sagt als
+     beim letzten Mal - sonst zuckt die Oberfläche mehrmals täglich ohne Grund. */
+  let geaendert=0;
   const unbekannt=[];
 
   /* planr führt den Beginn des zweiten Halbjahres ohnehin. Ihn hier zu
@@ -2771,7 +2817,7 @@ function planImportieren(text){
      Grenze im Notenvorschlag nie. */
   if (plan.schuljahr && plan.schuljahr.halbjahrGrenze && sj.halbjahrGrenze !== plan.schuljahr.halbjahrGrenze){
     sj.halbjahrGrenze = String(plan.schuljahr.halbjahrGrenze);
-    grenzeNeu = true;
+    grenzeNeu = true; geaendert++;
   }
 
   if (Array.isArray(plan.ferien)){
@@ -2779,7 +2825,7 @@ function planImportieren(text){
     for (const f of plan.ferien){
       if (f && f.von && f.bis && !sj.ferien.some(x=>x.von===f.von && x.bis===f.bis)){
         sj.ferien.push({name:String(f.name||"Ferien"), von:f.von, bis:f.bis});
-        ferienNeu++;
+        ferienNeu++; geaendert++;
       }
     }
   }
@@ -2792,10 +2838,16 @@ function planImportieren(text){
 
       for (const th of p.themen||[]){
         if (!th || !th.datum || !/^\d{4}-\d{2}-\d{2}$/.test(th.datum)) continue;
+        const vorher = S.stunden.length;
         const st = ensureStunde(kurs.id, th.datum);
-        st.geplant = String(th.thema||"");
+        if (S.stunden.length !== vorher) geaendert++;
+
+        const neuesThema = String(th.thema||"");
+        if (st.geplant !== neuesThema){ st.geplant = neuesThema; geaendert++; }
+
         if (th.reihe!=null && String(th.reihe).trim()){
-          st.reihe = String(th.reihe).trim();
+          const neueReihe = String(th.reihe).trim();
+          if (st.reihe !== neueReihe){ st.reihe = neueReihe; geaendert++; }
           jahrFarbe(kurs, st.reihe);
           mitReihe++;
         } else if (st.reihe==null) st.reihe = "";
@@ -2805,7 +2857,7 @@ function planImportieren(text){
   }
 
   speichern();
-  return {ferienNeu, themen, unbekannt, mitReihe, grenzeNeu};
+  return {ferienNeu, themen, unbekannt, mitReihe, grenzeNeu, geaendert};
 }
 
 /* Abruf anstoßen. Das Wort liegt im Schlüsselbund, der Rahmen holt die Daten. */
@@ -2832,7 +2884,18 @@ window.__KB_planrAntwort = function(text){
     return "fehler";
   }
   S.einstellungen.planrZuletzt = new Date().toISOString();
-  speichern(); zeichne();
+  speichern();
+
+  /* Hat sich nichts bewegt, bleibt der stille Abruf auch still: kein
+     Neuzeichnen, keine Meldung. Wer selbst auf "Jetzt holen" getippt hat,
+     bekommt trotzdem eine Antwort - sonst wirkt der Knopf kaputt. */
+  if (!erg.geaendert){
+    if (planrStill) return "ok";
+    toast("Aus planr: nichts Neues");
+    return "ok";
+  }
+
+  zeichneWennFrei();
   const teile = [erg.themen+" Stunden"];
   if (erg.ferienNeu) teile.push(erg.ferienNeu+" Ferienzeiträume");
   if (erg.grenzeNeu) teile.push("Halbjahresgrenze");
@@ -2849,7 +2912,7 @@ einstellungenZusatz = function(){
     '<div class="karte"><h2>Stoffverteilung aus planr</h2>'+
     '<p class="hinweis">merkr holt die geplanten Stunden mit Datum, Thema und Einheit. '+
     'Sie landen im Soll-Feld; was tatsächlich lief, bleibt unberührt. '+
-    'Der Abruf läuft beim Start von selbst, höchstens einmal am Tag.</p>'+
+    'Der Abruf läuft beim Start von selbst, höchstens alle 30 Minuten.</p>'+
     '<div class="feld"><label>planr-Adresse</label>'+
     '<input id="planrUrl" value="'+esc(S.einstellungen.planrUrl||"")+'" placeholder="https://planr-ten.vercel.app"></div>'+
     (KB_MODE==="scriptable"
@@ -2909,16 +2972,21 @@ document.addEventListener("click", ev=>{
   }
 });
 
-/* Automatik: beim Start holen, höchstens einmal in zwölf Stunden. Still - wer
-   das Klassenbuch aufschlägt, will keine Meldung über einen Abruf, der ohnehin
-   nichts geändert hat. Ohne Netz passiert nichts und der Zeitstempel bleibt
-   stehen, der nächste Start versucht es wieder. */
+/* Automatik: beim Start holen, höchstens alle dreißig Minuten. Zwölf Stunden
+   waren zu lang - in planr wird auch am Unterrichtstag noch umgestellt, und
+   dann stand hier bis zum Abend das Soll von gestern. Dreißig Minuten heißt:
+   jedes Aufschlagen nach einer Pause holt frisch, mehrfaches Öffnen in
+   derselben Freistunde nicht. Still - wer das Klassenbuch aufschlägt, will
+   keine Meldung über einen Abruf, der nichts geändert hat. Ohne Netz passiert
+   nichts und der Zeitstempel bleibt stehen, der nächste Start versucht es
+   wieder. */
+const PLANR_PAUSE_MINUTEN = 30;
 (function planrAutomatik(){
   if (KB_MODE!=="scriptable" || !planrDa || !planrBasis()) return;
   const zuletzt = S.einstellungen.planrZuletzt;
   if (zuletzt){
-    const stunden = (Date.now() - new Date(zuletzt).getTime()) / 3600000;
-    if (!(stunden >= 12)) return;
+    const minuten = (Date.now() - new Date(zuletzt).getTime()) / 60000;
+    if (!(minuten >= PLANR_PAUSE_MINUTEN)) return;
   }
   planrHolen(true);
 })();
@@ -4984,6 +5052,125 @@ initSitzplanDrag = function(){
     if (aktiv) aktiv.style.opacity = "";
     aktiv = null;
   });
+};
+
+zeichne();
+
+/* ================= Wer gerät aus dem Blick =================
+   Drei Stellen, eine Rechnung (kern/beteiligung.js): der Sitzplan zeigt es, das
+   Aufrufen berücksichtigt es, die Auswertung führt es auf.
+
+   Der Gedanke dahinter: erfasst wird weiter nur, was auffällt. merkr sorgt
+   dafür, dass am Ende niemand ohne Grundlage dasteht. */
+
+function beteiligungVon(k){
+  const sj = aktivesSchuljahr();
+  const ab = sj ? MerkrNoten.halbjahrBeginn(sj, todayISO()) : null;
+  const stunden = S.stunden.filter(x=>x.kursId===k.id);
+  const ereignisse = S.ereignisse.filter(e=>e.kursId===k.id);
+  const liste = MerkrBeteiligung.uebersicht(kursSchueler(k.id), stunden, ereignisse, {ab});
+  const nach = new Map(liste.map(x=>[x.id, x]));
+  return {liste, nach, stunden: stunden.filter(x=>!x.ausfall && (!ab || x.datum >= ab)).length};
+}
+
+/* --- 1. Der Sitzplan zeigt es --- */
+const sitzplanOhneBlick = viewSitzplan;
+viewSitzplan = function(k){
+  const html = sitzplanOhneBlick(k);
+  if (!html.includes('class="stile')) return html;
+
+  const b = beteiligungVon(k);
+  /* Ab wann "lange nicht dran"? Drei Stunden sind gut zwei Wochen bei zwei
+     Wochenstunden - lange genug, dass es auffällt, kurz genug, um zu handeln. */
+  const schwelle = 3;
+  let markiert = 0;
+  let neu = html;
+  for (const [id, e] of b.nach){
+    if (e.stundenOhne < schwelle || !b.stunden) continue;
+    markiert++;
+    neu = neu.replace('data-sid="'+id+'"', 'data-sid="'+id+'" class-blick="1"');
+  }
+  /* Der Rand wird über ein Attribut gesetzt, damit die Kachel-Erzeugung
+     unangetastet bleibt. */
+  neu = neu.replace(/class="stile([^"]*)"([^>]*?)class-blick="1"/g,
+    'class="stile$1 lange-nicht"$2');
+
+  if (markiert)
+    neu = '<p class="hinweis" style="margin:0 0 8px">'+
+      markiert+(markiert===1?' Schüler hat':' Schüler haben')+' seit mindestens '+schwelle+
+      ' Stunden keine Notiz - im Plan gestrichelt umrandet.</p>' + neu;
+  return neu;
+};
+
+/* --- 2. Das Aufrufen bevorzugt sie --- */
+aufrufZiehen = function(k){
+  const kandidaten = aufrufbare(k).map(s=>s.id);
+  const topf = aufrufTopf(k);
+  const b = beteiligungVon(k);
+  const gewichte = {};
+  for (const id of kandidaten)
+    gewichte[id] = MerkrBeteiligung.gewicht(b.nach.get(id) ? b.nach.get(id).stundenOhne : 0);
+
+  /* Erst die Runde regeln (wer ist noch dran?), dann innerhalb der Runde
+     gewichten - so bleibt jeder einmal an der Reihe. */
+  const e = MerkrAufrufen.ziehen(kandidaten, topf, k.aufrufZuletzt || null,
+    () => 0); // gleich ersetzt: wir ziehen selbst
+  if (!e){ zeigeModal(aufrufDialog(k, null)); return; }
+
+  const rest = e.neueRunde
+    ? kandidaten.filter(id => kandidaten.length === 1 || id !== (k.aufrufZuletzt || null))
+    : MerkrAufrufen.topfPruefen(topf, kandidaten);
+  const gezogen = MerkrBeteiligung.zieheGewichtet(rest, gewichte) || e.gezogen;
+
+  k.aufrufTopf = (e.neueRunde ? kandidaten : rest).filter(id => id !== gezogen);
+  k.aufrufZuletzt = gezogen;
+  speichern();
+  zeigeModal(aufrufDialog(k, gezogen, e.neueRunde));
+};
+
+/* --- 3. Die Auswertung führt es auf --- */
+function viewMuendlich(k){
+  const b = beteiligungVon(k);
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return "";
+
+  const mit = b.liste.filter(x=>x.anzahl > 0).length;
+  const gesamt = b.liste.reduce((s,x)=>s+x.anzahl, 0);
+  const sortiert = b.liste.slice().sort((x,y)=> y.stundenOhne - x.stundenOhne || x.anzahl - y.anzahl);
+
+  let html = '<div class="karte"><div class="zeile raum" style="margin-bottom:10px">'+
+    '<h2 style="margin:0">Mündliche Mitarbeit</h2>'+
+    '<span class="hinweis">'+b.stunden+(b.stunden===1?' Stunde':' Stunden')+' im Halbjahr</span></div>'+
+    '<div style="display:flex;gap:26px;margin-bottom:14px">'+
+    '<div><div style="font-size:24px;font-weight:900">'+gesamt+'</div><div class="hinweis">Notizen</div></div>'+
+    '<div><div style="font-size:24px;font-weight:900'+(mit<schueler.length?';color:var(--sm1)':'')+'">'+
+    mit+' / '+schueler.length+'</div><div class="hinweis">mit mindestens einer</div></div>'+
+    '<div><div style="font-size:24px;font-weight:900">'+
+    (b.stunden ? fmtZahl(gesamt / b.stunden, 1) : "–")+'</div><div class="hinweis">je Stunde</div></div></div>';
+
+  html += '<table class="tab"><tr><th>Schüler</th><th>Notizen</th><th>Ø Stufe</th><th>zuletzt</th><th></th></tr>';
+  for (const e of sortiert){
+    const s = schuelerVon(e.id);
+    if (!s) continue;
+    const lang = b.stunden && e.stundenOhne >= 3;
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+      '<td>'+(e.anzahl || '<span class="hinweis">keine</span>')+'</td>'+
+      '<td>'+(e.mittel==null ? '–' :
+        '<span class="stufenpunkt" style="background:'+stufeInfo(Math.round(e.mittel)).hex+'"></span> '+fmtZahl(e.mittel,1))+'</td>'+
+      '<td'+(lang?' style="color:var(--sm1);font-weight:800"':'')+'>'+
+      (!b.stunden ? '–' : e.anzahl===0 ? 'noch nie' :
+        e.stundenOhne===0 ? 'letzte Stunde' :
+        e.stundenOhne===1 ? 'vorletzte Stunde' : 'vor '+e.stundenOhne+' Stunden')+'</td>'+
+      '<td><button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil</button></td></tr>';
+  }
+  html += '</table><p class="hinweis">Sortiert nach dem längsten Abstand. '+
+    'Gezählt werden nur mündliche Notizen dieses Halbjahres, ausgefallene Stunden bleiben außen vor.</p></div>';
+  return html;
+}
+
+const auswertungOhneMuendlich = viewAuswertung;
+viewAuswertung = function(k){
+  return viewMuendlich(k) + auswertungOhneMuendlich(k);
 };
 
 zeichne();
