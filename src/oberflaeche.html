@@ -48,12 +48,16 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
 #seitenleiste{padding-top:8px;}
 /* Kursleiste: die Auswahl links, die Ansichten daneben. */
-.kursleiste{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
-.kurswahl{font-size:17px; font-weight:800; color:var(--akzent); background:var(--karte);
-  border:1px solid var(--linie); border-radius:12px; padding:9px 12px; min-height:44px; max-width:220px;}
-.kurstabs{display:flex; gap:6px; flex-wrap:wrap; flex:1;}
+.kurswahl{font-size:16px; font-weight:800; color:var(--akzent); background:var(--karte);
+  border:1px solid var(--linie); border-radius:12px; padding:8px 10px; min-height:40px; max-width:190px;}
+
+/* Eine Reihe, seitlich zu schieben. Mit Umbruch fielen die acht Reiter auf dem
+   Handy in ein 2x4-Raster und nahmen den halben Bildschirm. */
+.kurstabs{display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; margin-bottom:14px;
+  scrollbar-width:none; -ms-overflow-style:none; padding-bottom:2px;}
+.kurstabs::-webkit-scrollbar{display:none;}
 .kurstabs button{background:transparent; color:var(--text2); border-radius:999px; padding:8px 14px;
-  font-weight:800; font-size:14px; min-height:40px;}
+  font-weight:800; font-size:14px; min-height:40px; white-space:nowrap; flex:0 0 auto;}
 .kurstabs button.aktiv{background:var(--akzent); color:#fff;}
 #seitenleiste .leistetrenner{margin:10px 2px 4px; padding-top:9px; border-top:1px solid var(--linie);
   text-align:center; font-size:10px; font-weight:800; color:var(--text2);
@@ -4298,6 +4302,58 @@ document.addEventListener("change", ev=>{
   R.view = "kurs";
   zeichne();
 });
+
+zeichne();
+
+/* ================= Kurswahl in die Kopfzeile =================
+   Sie gehört neben den Kursnamen, nicht in den Inhalt: dort steht sie einmal
+   und wandert nicht mit dem Reiter. Die Reiter darunter laufen in einer Reihe -
+   im Umbruch fielen sie auf dem Handy in ein 2x4-Raster und nahmen den halben
+   Bildschirm. */
+
+zeichneTopbar = function(){
+  const sj = aktivesSchuljahr();
+  let titel = "merkr", zurueck = "", mitte = "", rechts = "";
+  const wb = sj ? wochenBuchstabe(sj, R.datum) : null;
+
+  if (R.view==="home"){
+    titel = "merkr" + (sj ? " · "+esc(sj.name) : "");
+    rechts = '<button class="klein" data-a="go" data-view="einstellungen">Einstellungen</button>';
+  } else if (R.view==="kurse"){
+    titel = "Kurse";
+    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Home</button>';
+  } else if (R.view==="kurs"){
+    const k = kursVon(R.kursId);
+    const kurse = sj ? S.kurse.filter(x=>x.schuljahrId===sj.id) : [];
+    titel = "";
+    zurueck = '<button class="klein" data-a="go" data-view="kurse">‹ Kurse</button>';
+    if (k && kurse.length){
+      mitte = '<select id="kursWahl" data-a-change="kursWechsel" class="kurswahl">';
+      for (const x of kurse)
+        mitte += '<option value="'+x.id+'"'+(x.id===k.id?" selected":"")+'>'+esc(x.name)+'</option>';
+      mitte += '</select>';
+    } else if (k) titel = esc(k.name);
+    rechts = (wb ? '<span class="wochenbadge">'+wb+'-Woche</span>' : "");
+  } else if (R.view==="einstellungen"){
+    titel = "Einstellungen";
+    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Home</button>';
+  } else if (R.view==="profil"){
+    const s = schuelerVon(R.schuelerId);
+    titel = s ? esc(s.vorname+" "+s.name) : "Schülerprofil";
+    zurueck = '<button class="klein" data-a="go" data-view="kurs">‹ Zurück</button>';
+  }
+
+  document.getElementById("topbar").innerHTML =
+    zurueck + mitte + '<h1 class="titel">'+titel+'</h1>' + rechts;
+};
+
+/* Der Inhalt trägt nur noch die Reiter. */
+kursLeiste = function(k){
+  let html = '<div class="kurstabs">';
+  for (const e of LEISTE_KURS)
+    html += '<button class="'+(R.tab===e.tab?"aktiv":"")+'" data-a="tab" data-id="'+e.tab+'">'+e.label+'</button>';
+  return html + '</div>';
+};
 
 zeichne();
 
