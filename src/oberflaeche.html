@@ -1844,6 +1844,103 @@ function herkunftHtml(vs){
   return h + '</div>';
 }
 
+/* ---------- Notenverlauf als Diagramm ---------- */
+/* Inline-SVG statt Bibliothek: im Klassenraum ist das Netz manchmal weg, und in
+   Scriptable gibt es ohnehin kein npm. Gezeichnet wird in einem festen
+   Koordinatensystem und über viewBox skaliert - so passt es aufs Telefon wie
+   aufs iPad, ohne dass eine Messung nötig wäre. */
+function notenverlauf(schuelerId, kursId){
+  const kurs = kursVon(kursId), sj = aktivesSchuljahr();
+  if (!kurs || !sj) return null;
+  const heute = todayISO();
+  const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId);
+  const punkte = MerkrMitarbeit.verlauf(
+    S.stunden.filter(x=>x.kursId===kursId),
+    evs,
+    Object.assign({
+      typ: "noten", jetzt: new Date(), bis: heute,
+      halbjahrAb: function(d){ return MerkrNoten.halbjahrBeginn(sj, d); }
+    }, S.einstellungen.mitarbeitKurve || {})
+  );
+  return punkte.length ? punkte : null;
+}
+
+function mitarbeitVerlaufSvg(punkte, opt){
+  const o = opt || {};
+  const B = 640, H = 200, L = 28, RA = 8, T = 10, U = 22;
+  const iX = B - L - RA, iY = H - T - U;
+  const y = n => T + (n - 1) / 5 * iY;              // Note 1 oben, 6 unten
+  const x = i => punkte.length < 2 ? L + iX/2 : L + i / (punkte.length - 1) * iX;
+
+  let g = '';
+  /* Notenlinien. Die Drei bekommt mehr Kontrast: an ihr wird abgelesen, ob
+     jemand über oder unter dem Mittel liegt. */
+  for (const n of [1,2,3,4,5,6]){
+    const stark = n === 3;
+    g += '<line x1="'+L+'" y1="'+y(n).toFixed(1)+'" x2="'+(B-RA)+'" y2="'+y(n).toFixed(1)+
+      '" stroke="var(--linie)" stroke-width="'+(stark?1.4:0.8)+'" opacity="'+(stark?0.9:0.45)+'"/>'+
+      '<text x="'+(L-6)+'" y="'+(y(n)+3.5).toFixed(1)+'" text-anchor="end" font-size="10" '+
+      'fill="currentColor" opacity="'+(stark?0.75:0.45)+'">'+n+'</text>';
+  }
+
+  /* Balken für den Beitrag der einzelnen Stunde, an der Grundlinie gespiegelt.
+     Sie beantworten eine andere Frage als die Kurve: nicht "wie steht er",
+     sondern "was war an dem Tag". */
+  const maxB = Math.max(1, ...punkte.map(p=>Math.abs(p.beitrag)));
+  for (let i=0;i<punkte.length;i++){
+    const p = punkte[i];
+    if (!p.beitrag) continue;
+    const hoehe = Math.abs(p.beitrag) / maxB * (iY * 0.16);
+    const basis = H - U;
+    g += '<rect x="'+(x(i)-1.6).toFixed(1)+'" y="'+(p.beitrag>0 ? basis-hoehe : basis).toFixed(1)+
+      '" width="3.2" height="'+hoehe.toFixed(1)+'" rx="1.4" fill="'+
+      (p.beitrag>0 ? "var(--akzent)" : "var(--rot)")+'" opacity="0.5"/>';
+  }
+
+  /* Die Kurve bricht am Halbjahreswechsel ab, statt hinüberzuziehen - dort wird
+     neu gezählt, eine durchgehende Linie behauptete einen Zusammenhang, den es
+     nicht gibt. */
+  let d = "", vorher = null;
+  for (let i=0;i<punkte.length;i++){
+    const p = punkte[i];
+    d += (vorher === p.halbjahr ? " L" : " M") + x(i).toFixed(1) + " " + y(p.note).toFixed(1);
+    vorher = p.halbjahr;
+  }
+  g += '<path d="'+d.trim()+'" fill="none" stroke="var(--akzent)" stroke-width="2.4" '+
+    'stroke-linejoin="round" stroke-linecap="round"/>';
+
+  const letzte = punkte[punkte.length-1];
+  g += '<circle cx="'+x(punkte.length-1).toFixed(1)+'" cy="'+y(letzte.note).toFixed(1)+
+    '" r="4.5" fill="var(--akzent)"/>';
+
+  /* Monatsmarken. Angeschnittene fallen weg, sonst überschreiben sie sich am
+     Rand - dasselbe Problem wie in planrs Zeitschiene. */
+  const MON = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  let letzterMonat = "", letzteX = -99;
+  for (let i=0;i<punkte.length;i++){
+    const m = punkte[i].datum.slice(0,7);
+    if (m === letzterMonat) continue;
+    letzterMonat = m;
+    if (x(i) - letzteX < 34) continue;
+    letzteX = x(i);
+    g += '<text x="'+x(i).toFixed(1)+'" y="'+(H-2)+'" text-anchor="middle" font-size="10" '+
+      'fill="currentColor" opacity="0.5">'+MON[Number(m.slice(5,7))-1]+'</text>';
+  }
+
+  /* Der Halbjahreswechsel als senkrechte Marke. */
+  for (let i=1;i<punkte.length;i++){
+    if (punkte[i].halbjahr === punkte[i-1].halbjahr) continue;
+    const xm = (x(i) + x(i-1)) / 2;
+    g += '<line x1="'+xm.toFixed(1)+'" y1="'+T+'" x2="'+xm.toFixed(1)+'" y2="'+(H-U)+
+      '" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>'+
+      '<text x="'+(xm+4).toFixed(1)+'" y="'+(T+10)+'" font-size="9.5" fill="currentColor" '+
+      'opacity="0.55">2. Halbjahr</text>';
+  }
+
+  return '<svg viewBox="0 0 '+B+' '+H+'" width="100%" height="'+(o.hoehe||200)+'" '+
+    'style="display:block;overflow:visible" role="img" aria-label="Notenverlauf">'+g+'</svg>';
+}
+
 /* ---------- Plandatei-Import (KI-Workflow Stufe 1) ---------- */
 function planImportieren(text){
   let plan;
@@ -3487,6 +3584,24 @@ viewProfil = function(){
   }
   html += '</div>';
 
+  /* Der Verlauf steht direkt unter der Zahl. Eine Halbjahresnote ist ein
+     Standbild; ob jemand sich gefangen hat oder abgerutscht ist, sieht man erst
+     an der Bewegung - und genau danach wird im Elterngespräch gefragt. */
+  const vl = notenverlauf(s.id, k.id);
+  if (vl && vl.length > 1){
+    const erste = vl[0], letzte = vl[vl.length-1];
+    const diff = Math.round((erste.note - letzte.note) * 10) / 10;
+    html += '<div class="karte"><div class="zeile raum">'+
+      '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Verlauf über das Schuljahr</div>'+
+      '<div class="hinweis">'+(Math.abs(diff) < 0.15 ? "gleichbleibend"
+        : diff > 0 ? "um "+fmtZahl(Math.abs(diff),1)+" verbessert"
+                   : "um "+fmtZahl(Math.abs(diff),1)+" abgefallen")+'</div></div>'+
+      '<div style="margin:14px 0 2px;color:var(--text2)">'+mitarbeitVerlaufSvg(vl)+'</div>'+
+      '<p class="hinweis" style="margin:2px 0 0">Die Linie ist der Stand nach jeder Stunde, '+
+      'die Balken sind der Beitrag der einzelnen Stunde. Berechnet wie der Vorschlag oben, '+
+      'nur bis zum jeweiligen Tag.</p></div>';
+  }
+
   /* Notenstand und Mitarbeit nebeneinander */
   html += '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Mitarbeit nach Kategorie</div>';
   for (const kat of MITARBEIT_KATEGORIEN){
@@ -4897,11 +5012,22 @@ function aufrufDialog(k, gezogenId, neueRunde){
     '<div style="font-size:20px;font-weight:700;color:var(--text2)">'+esc(s.name)+'</div>'+
     '<p class="hinweis" style="margin:10px 0 0">noch '+offen+(offen===1?' Schüler':' Schüler')+' bis zur nächsten Runde</p></div>';
 
-  /* Direkt bewerten, ohne den Dialog zu verlassen - dafür wird aufgerufen. */
-  html += '<div class="abstand"></div><div class="hinweis" style="text-align:center;margin-bottom:6px">Qualität mündlich</div>'+
-    '<div class="zeile" style="justify-content:center">';
+  /* Direkt bewerten, ohne den Dialog zu verlassen - dafür wird aufgerufen.
+     Die Kategorie steht in R und nicht im Dialog: er wird bei jedem Ziehen neu
+     gebaut, und wer eine Runde lang die Menge notiert, will nicht bei jedem
+     Schüler neu umschalten. */
+  const kategorie = R.aufrufKategorie === "quant_m" ? "quant_m" : "qual_m";
+  html += '<div class="abstand"></div><div class="zeile" style="justify-content:center;gap:0;margin-bottom:8px">';
+  for (const kat of [["qual_m","Qualität"],["quant_m","Menge"]]){
+    const an = kategorie === kat[0];
+    html += '<button data-a="aufrufKategorie" data-id="'+kat[0]+'" style="'+
+      'border-radius:'+(kat[0]==="qual_m"?"999px 0 0 999px":"0 999px 999px 0")+';'+
+      (an ? 'background:var(--akzent);color:#fff;font-weight:800' : 'opacity:.6')+
+      ';min-width:100px">'+kat[1]+'</button>';
+  }
+  html += '</div><div class="zeile" style="justify-content:center">';
   for (const stufe of STUFEN)
-    html += '<button data-a="aufrufStufe" data-id="'+s.id+'" data-stufe="'+stufe.v+'" '+
+    html += '<button data-a="aufrufStufe" data-id="'+s.id+'" data-stufe="'+stufe.v+'" data-kat="'+kategorie+'" '+
       'style="background:'+stufe.hex+';color:#fff;font-weight:900;min-width:56px">'+stufe.label+'</button>';
   html += '</div>';
 
@@ -4937,6 +5063,12 @@ document.addEventListener("click", ev=>{
     const k = kursVon(a==="aufrufen" ? el.dataset.id : el.dataset.id);
     if (k) aufrufZiehen(k);
   }
+  else if (a==="aufrufKategorie"){
+    R.aufrufKategorie = el.dataset.id;
+    const k = kursVon(R.kursId);
+    /* Nicht neu ziehen - es ist derselbe Schüler, nur eine andere Frage an ihn. */
+    if (k && R.aufrufAktuell) zeigeModal(aufrufDialog(k, R.aufrufAktuell, false));
+  }
   else if (a==="aufrufKeineAntwort"){
     const k = kursVon(R.kursId);
     if (!k) return;
@@ -4948,7 +5080,7 @@ document.addEventListener("click", ev=>{
   else if (a==="aufrufStufe"){
     const k = kursVon(R.kursId);
     if (!k) return;
-    addEreignis(el.dataset.id, k.id, "qual_m", Number(el.dataset.stufe), "");
+    addEreignis(el.dataset.id, k.id, el.dataset.kat || "qual_m", Number(el.dataset.stufe), "");
     const s = schuelerVon(el.dataset.id);
     toast((s?s.vorname+": ":"")+stufeInfo(Number(el.dataset.stufe)).label+" notiert");
     aufrufZiehen(k);
@@ -5222,6 +5354,7 @@ aufrufZiehen = function(k){
 
   k.aufrufTopf = (e.neueRunde ? kandidaten : rest).filter(id => id !== gezogen);
   k.aufrufZuletzt = gezogen;
+  R.aufrufAktuell = gezogen;
   speichern();
   zeigeModal(aufrufDialog(k, gezogen, e.neueRunde));
 };

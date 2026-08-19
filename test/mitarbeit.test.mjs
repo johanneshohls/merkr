@@ -160,3 +160,49 @@ test("die Note bleibt zwischen 1 und 6", () => {
   assert.equal(oben.note, 1);
   assert.equal(unten.note, 6);
 });
+
+test("der Verlauf liefert einen Punkt je gehaltener Stunde", () => {
+  const sts = stunden();
+  const v = M.verlauf(sts, notizen(sts, "quant_m", 0, 2), { jetzt: JETZT });
+  assert.equal(v.length, 20);
+  assert.deepEqual(v.map(x => x.datum), sts.map(x => x.datum).sort());
+});
+
+test("der Verlauf zeigt eine Verbesserung als fallende Note", () => {
+  const sts = stunden(20);
+  // erst nichts, ab der Hälfte jede Stunde ein Beitrag
+  const v = M.verlauf(sts, notizen(sts.slice(10), "quant_m", 0, 1), { jetzt: JETZT });
+  assert.equal(v[9].note, 3.5, "vor dem Umschwung steht die Basis");
+  assert.ok(v[19].note < v[9].note, "danach wird es besser: " + v[19].note);
+  for (let i = 11; i < 20; i++)
+    assert.ok(v[i].note <= v[i-1].note, "die Kurve läuft monoton in eine Richtung");
+});
+
+test("der Verlauf setzt am Halbjahreswechsel neu an", () => {
+  const sts = stunden(20);
+  const mitte = sts[10].datum;
+  const evs = notizen(sts.slice(0, 10), "keine_antwort", null, 1);
+  const v = M.verlauf(sts, evs, {
+    jetzt: JETZT,
+    halbjahrAb: d => (d >= mitte ? mitte : null)
+  });
+  assert.ok(v[9].note > 5, "im ersten Halbjahr schlägt die Verweigerung durch: " + v[9].note);
+  assert.equal(v[10].note, 3.5, "im zweiten Halbjahr zählt sie nicht mehr mit");
+});
+
+test("der Verlauf trägt den Beitrag der einzelnen Stunde mit", () => {
+  const sts = stunden();
+  const v = M.verlauf(sts, notizen(sts, "qual_m", 2, 2), { jetzt: JETZT });
+  assert.equal(v[0].beitrag, 3, "eine Notiz ++ ist drei wert");
+  assert.equal(v[1].beitrag, 0, "eine Stunde ohne Notiz trägt nichts");
+  assert.equal(v[0].notizen, 1);
+});
+
+test("der Verlauf rechnet mit demselben Weg wie der Vorschlag", () => {
+  const sts = stunden();
+  const evs = notizen(sts, "quant_m", 0, 2).concat(notizen(sts, "stoerung", null, 5));
+  const letzte = sts[sts.length - 1].datum;
+  const v = M.verlauf(sts, evs, { jetzt: JETZT });
+  const direkt = M.vorschlag(sts, evs, { jetzt: new Date(letzte + "T12:00:00Z"), bis: letzte });
+  assert.equal(v[v.length - 1].note, direkt.note);
+});

@@ -184,8 +184,73 @@ const MerkrMitarbeit = (function () {
     };
   }
 
+  /**
+   * Der Notenverlauf über das Schuljahr: was der Vorschlag nach jeder Stunde
+   * gewesen wäre.
+   *
+   * Rückwirkend gerechnet, indem `bis` auf jede Stunde gesetzt wird - dieselbe
+   * Funktion, kein zweiter Rechenweg. Das ist wichtiger, als es klingt: eine
+   * eigene Formel für die Kurve wäre irgendwann eine andere Aussage als die
+   * Zahl darüber.
+   *
+   * Die Halbjahresgrenze wandert mit. Wer im zweiten Halbjahr steht, sieht die
+   * Kurve dort neu ansetzen - das ist keine Lücke, sondern die Regel: in die
+   * Halbjahresnote gehört nur, was im Halbjahr passiert ist.
+   *
+   * @param opt zusätzlich {halbjahrAb: (isoDatum) => isoDatum|null}
+   * @returns [{datum, note, wert, wertM, wertS, beitrag, halbjahr}]
+   */
+  function verlauf(stunden, ereignisse, opt) {
+    const o = Object.assign({}, VORGABE, opt || {});
+    if (!o.jetzt) o.jetzt = new Date();
+    const grenze = o.halbjahrAb || function () { return o.ab || null; };
+
+    const sts = (stunden || []).filter(function (st) {
+      if (!st || st.ausfall) return false;
+      if (o.bis && st.datum > o.bis) return false;
+      return true;
+    }).slice().sort(function (a, b) { return String(a.datum).localeCompare(String(b.datum)); });
+
+    /* Was an genau dieser Stunde notiert wurde - der Punkt auf der Kurve, im
+       Unterschied zum Stand, den sie beschreibt. */
+    const proStunde = new Map();
+    for (const e of ereignisse || []) {
+      if (!e) continue;
+      const istM = MUENDLICH.indexOf(e.typ) >= 0 || VERWEIGERT.indexOf(e.typ) >= 0;
+      const istS = SCHRIFTLICH.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0;
+      if (!istM && !istS) continue;
+      const k = proStunde.get(e.stundeId) || { m: 0, s: 0, n: 0 };
+      if (istM) k.m += beitragswert(e); else k.s += beitragswert(e);
+      k.n++;
+      proStunde.set(e.stundeId, k);
+    }
+
+    return sts.map(function (st) {
+      const r = vorschlag(stunden, ereignisse, Object.assign({}, o, {
+        ab: grenze(st.datum),
+        bis: st.datum,
+        /* Von diesem Tag aus gesehen ist die Stunde von damals frisch. Sonst
+           bekäme jeder Punkt der Kurve das Gewicht von heute, und der
+           September-Stand sähe aus wie ein September-Rest im Juni. */
+        jetzt: new Date(st.datum + "T12:00:00Z")
+      }));
+      const k = proStunde.get(st.id);
+      return {
+        datum: st.datum,
+        note: r.note,
+        wert: r.wert,
+        wertM: Math.round(r.achsen.m.wert * 100) / 100,
+        wertS: Math.round(r.achsen.s.wert * 100) / 100,
+        beitrag: k ? begrenzen(k.m, o.stundeMin, o.stundeMax) + begrenzen(k.s, o.stundeMin, o.stundeMax) : 0,
+        notizen: k ? k.n : 0,
+        halbjahr: grenze(st.datum)
+      };
+    });
+  }
+
   return {
     VORGABE: VORGABE,
+    verlauf: verlauf,
     MUENDLICH: MUENDLICH,
     SCHRIFTLICH: SCHRIFTLICH,
     VERWEIGERT: VERWEIGERT,
