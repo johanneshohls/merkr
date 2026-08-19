@@ -4820,6 +4820,70 @@ viewSitzplan = function(k){
 
 zeichne();
 
+/* ================= Sitzplan auch ohne Unterricht =================
+   Die Bindung an den Stundenplan war zu streng: an Tagen ohne Unterricht
+   verschwand der ganze Sitzplan. Zum Notieren ist das richtig, zum Einrichten
+   der Sitzordnung nicht - in den Ferien und vor dem ersten Schultag will man
+   die Plätze sortieren, ohne dass merkr behauptet, es sei nichts zu tun.
+
+   Jetzt: sehen immer, notieren nur an Unterrichtstagen. */
+
+const sitzplanStreng = viewSitzplan;
+viewSitzplan = function(k){
+  if (hatUnterricht(k.id, R.datum)) return sitzplanStreng(k);
+
+  /* Ohne Unterricht: dieselben Kacheln, aber ein Band darüber und kein Aufruf. */
+  const grund = unterrichtsfrei(R.datum);
+  const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
+  const band = '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:10px">'+
+    '<span style="width:9px;height:9px;border-radius:50%;background:var(--s0);flex:0 0 9px"></span>'+
+    '<div style="flex:1"><b>'+esc(fmtDatum(R.datum))+' · kein Unterricht</b>'+
+    '<div class="hinweis">'+(grund ? esc(grund)+" - " : "")+
+    'Plätze lassen sich einrichten, notiert wird erst wieder an einem Unterrichtstag.</div></div>'+
+    (vor ? '<button data-a="anwTag" data-datum="'+vor+'">Zur nächsten Stunde</button>' : '')+
+    '</div>';
+
+  /* sitzplanOhnePlan ist die Fassung VOR der Stundenplan-Bindung - sie zeichnet
+     die Kacheln ohne zu fragen, ob heute Unterricht ist. sitzplanOhneRaum wäre
+     falsch: die prüft selbst schon und gäbe wieder nur den Hinweis zurück. */
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length)
+    return band + leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
+
+  let nr = 0;
+  for (const s of schueler){
+    if (s.sitz && s.sitz[k.id]) continue;
+    if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
+    s.sitz[k.id] = platzPosition(nr++);
+  }
+  const marke = '<div id="sitzflaeche">';
+  const roh = sitzplanOhnePlan(k);
+  return band + (roh.includes(marke) ? roh.replace(marke, marke + raumHintergrund()) : roh);
+};
+
+/* An Tagen ohne Unterricht führt ein Tippen aufs Profil statt in die Erfassung -
+   notiert wird dort ohnehin nichts. */
+const popupStreng = oeffnePopupSchueler;
+oeffnePopupSchueler = function(schuelerId, ankerRect){
+  const k = kursVon(R.kursId);
+  if (k && !hatUnterricht(k.id, R.datum)){
+    R.schuelerId = schuelerId; R.view = "profil"; zeichne();
+    return;
+  }
+  return popupStreng(schuelerId, ankerRect);
+};
+
+/* ================= Liste führt ins Profil =================
+   Aus einer Namensliste heraus will man den Menschen sehen, nicht die
+   Schnellerfassung: dafür ist der Sitzplan da, wo man den Platz vor Augen hat. */
+
+const listeMitPopup = viewListe;
+viewListe = function(k){
+  return listeMitPopup(k).replace(/data-a="popupSchueler"/g, 'data-a="profilOeffnen"');
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
