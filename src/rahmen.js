@@ -32,6 +32,16 @@ const SCHLUESSEL_NAME = "merkr.anthropic";
 // Auch das gehört in den Schlüsselbund und nicht in die Datendatei.
 const SCHLUESSEL_PLANR = "merkr.planr";
 
+// Das Wort, mit dem merkr die Punkte einer Arbeit aus checkr holt
+// (CHECKR_ROSTER_TOKEN).
+const SCHLUESSEL_CHECKR = "merkr.checkr";
+
+function schluesselName(name) {
+  if (name === "planr") return SCHLUESSEL_PLANR;
+  if (name === "checkr") return SCHLUESSEL_CHECKR;
+  return SCHLUESSEL_NAME;
+}
+
 /**
  * Wo die Daten liegen. iCloud, wenn erreichbar und beschreibbar - die
  * Schreibprobe ist nötig, weil FileManager.iCloud() auch dann ein Objekt
@@ -172,6 +182,7 @@ try {
 
 const schluesselDa = Keychain.contains(SCHLUESSEL_NAME);
 const planrDa = Keychain.contains(SCHLUESSEL_PLANR);
+const checkrDa = Keychain.contains(SCHLUESSEL_CHECKR);
 
 // Daten als Zeichenkette uebergeben und in der Seite parsen: so kann weder ein
 // </script> noch ein Zeilentrenner in einem Namen die Seite zerlegen.
@@ -184,6 +195,7 @@ function baueHtml(datenText) {
     .replace('/*__KURSBUCH_MODE__*/"standalone"', function () { return '"scriptable"'; })
     .replace('/*__KURSBUCH_SCHLUESSEL__*/false', function () { return schluesselDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_PLANR__*/false', function () { return planrDa ? "true" : "false"; })
+    .replace('/*__KURSBUCH_CHECKR__*/false', function () { return checkrDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_DATA__*/null', function () { return "JSON.parse(" + literal + ")"; });
 }
 
@@ -286,11 +298,11 @@ async function bruecke() {
       } catch (e) { /* abgebrochen */ }
     } else if (msg.typ === "schluesselSetzen") {
       try {
-        Keychain.set(msg.name === "planr" ? SCHLUESSEL_PLANR : SCHLUESSEL_NAME, String(msg.key || ""));
+        Keychain.set(schluesselName(msg.name), String(msg.key || ""));
       } catch (e) { console.error("Schlüssel nicht abgelegt: " + e); }
     } else if (msg.typ === "schluesselEntfernen") {
       try {
-        const name = msg.name === "planr" ? SCHLUESSEL_PLANR : SCHLUESSEL_NAME;
+        const name = schluesselName(msg.name);
         if (Keychain.contains(name)) Keychain.remove(name);
       } catch (e) { console.error("Schlüssel nicht entfernt: " + e); }
     } else if (msg.typ === "planrAbruf") {
@@ -313,6 +325,26 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrAntwort(" + JSON.stringify(antwort) + ")", false);
       } catch (e) { console.error("planr-Antwort nicht zugestellt: " + e); }
+    } else if (msg.typ === "checkrAbruf") {
+      // Punkte einer Arbeit je Kürzel. Der Weg ist derselbe wie bei planr, nur
+      // ein anderes Wort und eine andere Adresse.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_CHECKR)) throw new Error("Kein checkr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine checkr-Adresse eingetragen.");
+        const job = String(msg.job || "").trim();
+        if (!job) throw new Error("Keine Auftragskennung.");
+        const req = new Request(basis + "/api/jobs/" + encodeURIComponent(job) + "/scores-report");
+        req.headers = { authorization: "Bearer " + Keychain.get(SCHLUESSEL_CHECKR) };
+        antwort = await req.loadString();
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_checkrAntwort(" + JSON.stringify(antwort) + ")", false);
+      } catch (e) { console.error("checkr-Antwort nicht zugestellt: " + e); }
     } else if (msg.typ === "anthropic") {
       try {
         if (!Keychain.contains(SCHLUESSEL_NAME)) throw new Error("Kein API-Schlüssel im Schlüsselbund.");

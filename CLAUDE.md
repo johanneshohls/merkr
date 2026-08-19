@@ -51,6 +51,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Kürzel und checkr-Ausgabe | fertig, 5 Tests |
 | Anthropic-Schlüssel in den Schlüsselbund | gebaut, auf dem Gerät ungetestet |
 | Stoffverteilung aus planr, automatisch | gebaut, gegen echte planr-Daten geprüft |
+| Ergebnisse aus checkr je Kürzel | gebaut, gegen einen echten Korrekturauftrag geprüft |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud

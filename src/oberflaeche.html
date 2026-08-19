@@ -200,6 +200,8 @@ const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
 let schluesselDa = /*__KURSBUCH_SCHLUESSEL__*/false;
 /* Ob ein planr-Wort im Schlüsselbund liegt. */
 let planrDa = /*__KURSBUCH_PLANR__*/false;
+/* Ob ein checkr-Wort im Schlüsselbund liegt. */
+let checkrDa = /*__KURSBUCH_CHECKR__*/false;
 /* Rückfall für den Browser, der keinen Keychain hat: nur im Arbeitsspeicher, nie gespeichert. */
 let browserSchluessel = "";
 const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
@@ -2933,6 +2935,181 @@ document.addEventListener("click", ev=>{
   }
   planrHolen(true);
 })();
+
+/* ================= Ergebnisse aus checkr =================
+   checkr korrigiert und kennt nur den Code vom Deckblatt. Hier wird er wieder
+   zum Menschen - das ist die einzige Stelle, an der beides zusammenkommt.
+   Gerechnet und zugeordnet wird in kern/ergebnisse.js. */
+
+function checkrBasis(){ return String(S.einstellungen.checkrUrl || "").trim(); }
+
+/* Eingefügt werden darf die ganze Adresse aus dem Browser. Eine Kennung von Hand
+   abzutippen ist eine Fehlerquelle, die man sich sparen kann. */
+function checkrKennung(eingabe){
+  const text = String(eingabe||"").trim();
+  if (!text) return "";
+  const treffer = text.match(/[?&]job=([A-Za-z0-9_-]{6,64})/);
+  if (treffer) return treffer[1];
+  if (/^[A-Za-z0-9_-]{6,64}$/.test(text)) return text;
+  const letzter = text.split("/").filter(Boolean).pop() || "";
+  return /^[A-Za-z0-9_-]{6,64}$/.test(letzter) ? letzter : "";
+}
+
+let checkrBericht = null;
+
+function checkrDialogHtml(){
+  return '<h2>Ergebnisse aus checkr</h2>'+
+    '<p class="hinweis">Kennung des Korrekturauftrags oder die ganze Adresse aus dem Browser.</p>'+
+    '<div class="feld"><input id="checkrJob" placeholder="https://check-r.org/app/review?job=…"></div>'+
+    '<div class="zeile"><button class="primar" data-a="checkrHolen">Holen</button>'+
+    '<button data-a="modalZu">Abbrechen</button>'+
+    '<span id="checkrStatus" class="hinweis"></span></div>';
+}
+
+function checkrVorschauHtml(k){
+  const b = checkrBericht;
+  if (!b) return checkrDialogHtml();
+  const sys = notensystem(k);
+  const erg = MerkrErgebnisse.zuordnen(kursSchueler(k.id), b.schueler, sys.typ);
+  checkrBericht.zuordnung = erg;
+
+  let html = '<h2>'+esc(b.titel || (b.fach ? b.fach+" "+fmtDatum(b.datum) : "Arbeit aus checkr"))+'</h2>'+
+    '<p class="hinweis">'+esc(b.klasse||"")+' · '+fmtDatum(b.datum)+' · '+erg.treffer.length+
+    ' von '+b.schueler.length+' Zeilen zugeordnet</p>';
+
+  if (erg.ohneSchueler.length)
+    html += '<p class="hinweis" style="color:var(--rot)"><b>Kein Schüler zu: '+esc(erg.ohneSchueler.join(", "))+'.</b> '+
+      'Diese Zeilen bleiben liegen - geraten wird nicht.</p>';
+  if (erg.doppelt.length)
+    html += '<p class="hinweis" style="color:var(--rot)">Doppelt in checkr: '+esc(erg.doppelt.join(", "))+'. Nur die erste Zeile zählt.</p>';
+  if (erg.ohneArbeit.length)
+    html += '<p class="hinweis">Ohne Ergebnis: '+esc(erg.ohneArbeit.join(", "))+'.</p>';
+
+  html += '<table class="tab"><tr><th>Schüler</th><th>Kürzel</th><th>Punkte</th><th>%</th><th>'+(sys.typ==="punkte"?"Punkte":"Note")+'</th></tr>';
+  for (const t of erg.treffer){
+    const s = schuelerVon(t.schuelerId);
+    html += '<tr><td><b>'+esc(s ? s.name+", "+s.vorname : "?")+'</b></td>'+
+      '<td class="hinweis">'+esc(t.code)+'</td>'+
+      '<td>'+fmtZahl(t.erreicht,1)+' / '+fmtZahl(t.maximal,1)+'</td>'+
+      '<td>'+t.prozent+'</td><td><b>'+t.wert+'</b></td></tr>';
+  }
+  html += '</table><p class="hinweis">Umgerechnet nach dem Notenschlüssel Sek I M-V (96/80/60/40/20 %). '+
+    'Was schon eingetragen ist, bleibt stehen.</p>'+
+    '<div class="zeile"><button class="primar" data-a="checkrUebernehmen">'+
+    (erg.treffer.length===1 ? "Ein Ergebnis übernehmen" : erg.treffer.length+" Ergebnisse übernehmen")+'</button>'+
+    '<button data-a="modalZu">Abbrechen</button></div>';
+  return html;
+}
+
+window.__KB_checkrAntwort = function(text){
+  const status = document.getElementById("checkrStatus");
+  let daten = null;
+  try { daten = JSON.parse(text); } catch(e){ daten = null; }
+  if (!daten || daten.fehler || !Array.isArray(daten.schueler)){
+    const grund = daten && daten.fehler ? daten.fehler : "Antwort nicht lesbar.";
+    if (status) status.textContent = "Fehlgeschlagen: "+grund;
+    else alertBox("Abruf aus checkr fehlgeschlagen: "+grund);
+    return "fehler";
+  }
+  checkrBericht = daten;
+  const k = kursVon(R.kursId);
+  if (k) zeigeModal(checkrVorschauHtml(k));
+  return "ok";
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+
+  if (a==="checkrDialog"){
+    checkrBericht = null;
+    zeigeModal(checkrDialogHtml());
+  }
+  else if (a==="checkrHolen"){
+    if (KB_MODE!=="scriptable") return alertBox("Der Abruf läuft nur in Scriptable.");
+    if (!checkrDa) return alertBox("Bitte zuerst das checkr-Wort in den Schlüsselbund legen (Einstellungen).");
+    if (!checkrBasis()) return alertBox("Bitte zuerst die checkr-Adresse eintragen (Einstellungen).");
+    const feld = document.getElementById("checkrJob");
+    const job = checkrKennung(feld ? feld.value : "");
+    if (!job) return alertBox("Daraus wird keine Kennung. Bitte die Adresse aus dem Browser einfügen.");
+    const status = document.getElementById("checkrStatus");
+    if (status) status.textContent = "wird geholt …";
+    sendeAnBridge({typ:"checkrAbruf", url: checkrBasis(), job});
+  }
+  else if (a==="checkrUebernehmen"){
+    const k = kursVon(R.kursId);
+    const b = checkrBericht;
+    if (!k || !b || !b.zuordnung) return;
+
+    /* Dieselbe Arbeit zweimal zu holen darf keine zweite Zeile anlegen - sonst
+       zählt sie doppelt in den Notenstand. */
+    let arb = S.arbeiten.find(x=>x.kursId===k.id && x.checkrJob===b.job_id);
+    if (!arb){
+      arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
+        art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
+        ergebnisse:{}, checkrJob: b.job_id};
+      S.arbeiten.push(arb);
+    }
+    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, b.zuordnung.treffer);
+    arb.ergebnisse = zus.ergebnisse;
+    speichern(); schliessePopover(); zeichne();
+    toast(zus.neu+(zus.neu===1?" Ergebnis übernommen":" Ergebnisse übernommen")+
+      (zus.behalten ? ", "+zus.behalten+" vorhandene behalten" : ""));
+    checkrBericht = null;
+  }
+  else if (a==="checkrWortSetzen"){
+    const feld = document.getElementById("checkrKey");
+    const key = feld ? feld.value.trim() : "";
+    if (!key) return alertBox("Bitte das Wort eintragen.");
+    const urlFeld = document.getElementById("checkrUrl");
+    if (urlFeld) S.einstellungen.checkrUrl = urlFeld.value.trim().replace(/\/+$/,"");
+    sendeAnBridge({typ:"schluesselSetzen", name:"checkr", key});
+    checkrDa = true;
+    speichern(); zeichne(); toast("Wort im Schlüsselbund abgelegt");
+  }
+  else if (a==="checkrWortEntfernen"){
+    sendeAnBridge({typ:"schluesselEntfernen", name:"checkr"});
+    checkrDa = false;
+    zeichne(); toast("Wort entfernt");
+  }
+  else if (a==="checkrUrlSpeichern"){
+    const feld = document.getElementById("checkrUrl");
+    if (!feld) return;
+    S.einstellungen.checkrUrl = feld.value.trim().replace(/\/+$/,"");
+    speichern(); zeichne(); toast("Adresse gespeichert");
+  }
+});
+
+/* Knopf auf der Arbeiten-Seite. */
+const checkrArbeitenVorher = viewArbeiten;
+viewArbeiten = function(k){
+  return '<div class="zeile" style="margin-bottom:10px">'+
+    '<button data-a="checkrDialog">Ergebnisse aus checkr holen</button></div>' +
+    checkrArbeitenVorher(k);
+};
+
+/* Die Karte in den Einstellungen. */
+const checkrEinstellungenVorher = einstellungenZusatz;
+einstellungenZusatz = function(){
+  return checkrEinstellungenVorher() +
+    '<div class="karte"><h2>Ergebnisse aus checkr</h2>'+
+    '<p class="hinweis">checkr liefert die Punkte einer Arbeit unter dem Kürzel, das hier vergeben wurde. '+
+    'Namen kennt checkr nicht - die Zuordnung passiert in merkr.</p>'+
+    '<div class="feld"><label>checkr-Adresse</label>'+
+    '<input id="checkrUrl" value="'+esc(S.einstellungen.checkrUrl||"")+'" placeholder="https://check-r.org"></div>'+
+    (KB_MODE==="scriptable"
+      ? '<div class="feld"><label>Wort für den Abruf (CHECKR_ROSTER_TOKEN)</label>'+
+        (checkrDa
+          ? '<p class="hinweis">Liegt im Schlüsselbund des Geräts. '+
+            '<button class="klein gefahr" data-a="checkrWortEntfernen">Entfernen</button></p>'
+          : '<div class="zeile"><input type="password" id="checkrKey" placeholder="…">'+
+            '<button class="klein primar" data-a="checkrWortSetzen">In den Schlüsselbund</button></div>')+
+        '</div>'
+      : '<p class="hinweis">Der Abruf läuft nur in Scriptable.</p>')+
+    '<div class="zeile"><button data-a="checkrUrlSpeichern">Adresse speichern</button>'+
+    '<span class="hinweis">Geholt wird im Tab „Arbeiten" des Kurses.</span></div></div>';
+};
 
 </script>
 </body>
