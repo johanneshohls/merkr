@@ -5009,6 +5009,59 @@ viewKursCfg = function(k){
 
 zeichne();
 
+/* ================= Dieselbe Klasse in zwei Fächern =================
+   Die 9a hat Mathematik und Physik bei derselben Lehrkraft. Beide Kurse noch
+   einmal aus der Datei zu füllen, hieße dieselben Kinder zweimal anzulegen -
+   mit eigenen Kürzeln, eigenen Notizen und einem doppelten Eintrag in jeder
+   Liste. Ein Schüler traegt in merkr aber mehrere kursIds; er gehoert also in
+   beide Kurse, nicht zweimal in die Datei.
+
+   Deshalb hier der zweite Weg: aus einem anderen Kurs uebernehmen. */
+
+function uebernahmeKarte(k){
+  const sj = aktivesSchuljahr();
+  const andere = (sj ? S.kurse.filter(x=>x.schuljahrId===sj.id && x.id!==k.id) : [])
+    .map(x=>({kurs:x, anzahl: kursSchueler(x.id).length}))
+    .filter(x=>x.anzahl > 0);
+  if (!andere.length) return "";
+
+  let html = '<div class="karte"><h2>Schüler aus einem anderen Kurs</h2>'+
+    '<p class="hinweis">Für dieselbe Klasse in einem zweiten Fach. Die Schüler werden nicht kopiert, '+
+    'sondern diesem Kurs zusätzlich zugeordnet - ein Kürzel, ein Profil, zwei Kurse.</p>'+
+    '<div class="zeile"><select id="uebernahmeKurs">';
+  for (const a of andere)
+    html += '<option value="'+a.kurs.id+'">'+esc(a.kurs.name)+' ('+a.anzahl+')</option>';
+  html += '</select><button class="primar" data-a="schuelerUebernehmen" data-id="'+k.id+'">Übernehmen</button></div></div>';
+  return html;
+}
+
+const kurscfgOhneUebernahme = viewKursCfg;
+viewKursCfg = function(k){
+  return kurscfgOhneUebernahme(k) + uebernahmeKarte(k);
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="schuelerUebernehmen"]');
+  if (!el) return;
+  const ziel = kursVon(el.dataset.id);
+  const wahl = document.getElementById("uebernahmeKurs");
+  const quelle = wahl ? kursVon(wahl.value) : null;
+  if (!ziel || !quelle) return;
+
+  let neu = 0, schon = 0;
+  for (const s of kursSchueler(quelle.id)){
+    if (!Array.isArray(s.kursIds)) s.kursIds = [];
+    if (s.kursIds.includes(ziel.id)){ schon++; continue; }
+    s.kursIds.push(ziel.id);
+    neu++;
+  }
+  speichern(); zeichne();
+  toast(neu ? neu+(neu===1?" Schüler übernommen":" Schüler übernommen")+(schon?", "+schon+" waren schon da":"")
+            : "Alle waren schon in diesem Kurs");
+});
+
+zeichne();
+
 </script>
 </body>
 </html>
