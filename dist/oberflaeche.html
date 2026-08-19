@@ -4054,6 +4054,198 @@ document.addEventListener("click", ev=>{
   zeichne();
 });
 
+/* ================= Wochenplan auf der Startseite =================
+   Die Startseite zeigt die laufende Woche, nicht mehr die Kursliste. Die Kurse
+   stehen jetzt hinter einem eigenen Ziel in der Seitenleiste - auf der
+   Startseite beantwortet merkr die Frage "was ist wann", nicht "was habe ich". */
+
+function kurseAmTag(iso){
+  const sj = aktivesSchuljahr(); if(!sj) return [];
+  const wt = new Date(iso+"T12:00:00").getDay();
+  const wb = wochenBuchstabe(sj, iso);
+  const liste = [];
+  for (const k of S.kurse.filter(x=>x.schuljahrId===sj.id))
+    for (const slot of (k.slots||[]))
+      if (slot.tag===wt && (slot.woche==="AB" || slot.woche===wb))
+        liste.push({kurs:k, stunde:slot.stunde, woche:slot.woche});
+  return liste.sort((a,b)=>a.stunde-b.stunde);
+}
+
+function wochenTage(iso){
+  const mo = mondayOf(iso);
+  const tage = [];
+  for (let i=0; i<5; i++){
+    const d = new Date(mo.getTime() + i*86400000);
+    tage.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"));
+  }
+  return tage;
+}
+
+function stundenKarte(e, iso, istHeute){
+  const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===iso);
+  const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
+  const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
+  const gehalten = st && st.thema;
+
+  return '<div class="karte" data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+iso+'" '+
+    /* Feste Breite statt Dehnen: eine einzelne Stunde soll nicht die ganze Zeile
+       füllen, sonst steht daneben ein leeres Feld ohne Bedeutung. */
+    'style="cursor:pointer;padding:11px 13px;margin:0;flex:0 1 250px;min-width:210px;'+
+    (istHeute?'border:1px solid var(--akzent)':'')+'">'+
+    '<div class="zeile raum" style="align-items:flex-start">'+
+    '<div style="min-width:0"><b>'+e.stunde+'. · '+esc(e.kurs.name)+'</b>'+
+    '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">'+
+    (thema ? esc(thema) : "kein Thema") + '</div></div>'+
+    '<span style="width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:5px;background:'+
+    (notizen ? "var(--s2)" : gehalten ? "var(--s0)" : "var(--linie)")+'" title="'+
+    (notizen ? notizen+" Notizen" : gehalten ? "gehalten, nichts notiert" : "steht noch aus")+'"></span>'+
+    '</div></div>';
+}
+
+viewHome = function(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+
+  const heute = todayISO();
+  const anker = R.wochenAnker || heute;
+  const tage = wochenTage(anker);
+  const wb = wochenBuchstabe(sj, tage[0]);
+  const imZweiten = sj.halbjahrGrenze && heute >= sj.halbjahrGrenze;
+  const dieseWoche = wochenTage(heute)[0] === tage[0];
+
+  const monat = (iso) => ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(iso.slice(5,7))-1];
+
+  let html = '<div class="zeile raum" style="align-items:flex-end;margin-bottom:18px">'+
+    '<div><h1 style="font-size:30px;font-weight:900;letter-spacing:-.5px;margin:0">'+
+    (dieseWoche ? "Diese Woche" : "Woche ab "+Number(tage[0].slice(8,10))+". "+monat(tage[0]))+'</h1>'+
+    '<p class="hinweis" style="margin:4px 0 0">'+
+    (wb ? "Woche "+wb+" · " : "")+"Halbjahr "+(imZweiten?2:1)+" · Notenschlüssel MV"+'</p></div>'+
+    '<div class="zeile"><button data-a="wocheZurueck">‹</button>'+
+    (dieseWoche ? '' : '<button data-a="wocheHeute">Diese Woche</button>')+
+    '<button data-a="wocheVor">›</button></div></div>';
+
+  let stundenGesamt = 0;
+  for (const iso of tage){
+    const liste = kurseAmTag(iso);
+    stundenGesamt += liste.length;
+    const istHeute = iso === heute;
+    const wt = ["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(iso+"T12:00:00").getDay()];
+
+    html += '<div style="margin-bottom:14px">'+
+      '<div class="zeile" style="gap:9px;margin-bottom:6px">'+
+      '<b style="font-size:13px;'+(istHeute?'color:var(--akzent)':'color:var(--text2)')+'">'+
+      wt+', '+Number(iso.slice(8,10))+'. '+monat(iso)+'</b>'+
+      (istHeute ? '<span style="background:var(--akzent);color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800">heute</span>' : '')+
+      '</div>';
+
+    if (!liste.length){
+      html += '<p class="hinweis" style="margin:0 0 2px">kein Unterricht</p>';
+    } else {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:9px">';
+      for (const e of liste) html += stundenKarte(e, iso, istHeute);
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (!stundenGesamt)
+    html += leer("In dieser Woche steht kein Unterricht im Stundenplan.", "Kurse ansehen", "go", "kurse");
+
+  /* Offene Punkte bleiben, sie gehören zum Tagesgeschäft. */
+  const of = offeneFehlzeiten(), bt = backupAlterTage();
+  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
+  const punkte = [];
+  if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
+    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
+  if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
+    "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
+  else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",
+    "letzte Sicherung vor "+bt+" Tagen", "Jetzt sichern", "backupDialog", null]);
+
+  if (punkte.length){
+    html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">Offene Punkte</h2>';
+    for (const [art, titel, unter, knopf, aktion, id] of punkte)
+      html += '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px">'+
+        '<span style="width:9px;height:9px;border-radius:50%;background:'+(art==="rot"?"var(--rot)":"var(--s0)")+'"></span>'+
+        '<div style="flex:1"><b>'+esc(titel)+'</b><div class="hinweis">'+esc(unter)+'</div></div>'+
+        '<button data-a="'+aktion+'"'+(id?' data-id="'+id+'"':'')+'>'+knopf+'</button></div>';
+  }
+  return html;
+};
+
+/* --- Die Kurse, jetzt an eigener Stelle --- */
+function viewKurse(){
+  const sj = aktivesSchuljahr();
+  if (!sj) return viewSchuljahrAnlegen();
+  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
+
+  let html = '<h1 style="font-size:26px;font-weight:900;margin:0 0 4px">Kurse</h1>'+
+    '<p class="hinweis" style="margin:0 0 18px">'+esc(sj.name)+' · '+kurse.length+
+    (kurse.length===1?" Lerngruppe":" Lerngruppen")+'</p>';
+
+  if (!kurse.length) return html + leer("Noch kein Kurs angelegt.", "Kurs anlegen", "kursNeuDialog");
+
+  for (const k of kurse){
+    const anz = kursSchueler(k.id).length, sys = notensystem(k);
+    const slots = (k.slots||[]).slice().sort((a,b)=>a.tag-b.tag||a.stunde-b.stunde)
+      .map(s=>["","Mo","Di","Mi","Do","Fr"][s.tag]+" "+s.stunde+"."+(s.woche==="AB"?"":" ("+s.woche+")")).join(" · ");
+    html += '<div class="karte" style="display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:9px;cursor:pointer" '+
+      'data-a="kursOeffnen" data-id="'+k.id+'">'+
+      '<div style="width:8px;height:40px;border-radius:99px;background:'+esc(k.farbe||"var(--akzent)")+'"></div>'+
+      '<div style="flex:1;min-width:0"><b style="font-size:17px">'+esc(k.name)+'</b>'+
+      '<div class="hinweis">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+' Schüler · '+
+      (sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div>'+
+      (slots ? '<div class="hinweis" style="margin-top:2px">'+esc(slots)+'</div>'
+             : '<div class="hinweis" style="margin-top:2px;color:var(--sm1)">kein Stundenplan hinterlegt</div>')+
+      '</div><div style="color:var(--text2);font-size:20px">›</div></div>';
+  }
+  return html + '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">Kurs anlegen</button>';
+}
+
+/* Die neue Ansicht in das Zeichnen einhängen. */
+const zeichneOhneKurse = zeichne;
+zeichne = function(){
+  if (R.view === "kurse"){
+    zeichneTopbar();
+    document.getElementById("app").innerHTML = viewKurse();
+    zeichneSeitenleiste();
+    return;
+  }
+  zeichneOhneKurse();
+};
+
+/* Kurse als eigenes Ziel in der Leiste, zwischen Heute und Sitzplan. */
+LEISTE.splice(1, 0, {
+  id: "kurse", label: "Kurse", view: "kurse", tab: null,
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
+});
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+
+  if (a==="stundeOeffnen"){
+    /* Die Stunde des angetippten Tages öffnen, nicht die von heute. */
+    R.kursId = el.dataset.id;
+    R.datum = el.dataset.datum || todayISO();
+    R.view = "kurs"; R.tab = "sitzplan";
+    zeichne();
+  }
+  else if (a==="wocheZurueck" || a==="wocheVor"){
+    const tage = wochenTage(R.wochenAnker || todayISO());
+    const d = new Date(tage[0]+"T12:00:00");
+    d.setDate(d.getDate() + (a==="wocheVor" ? 7 : -7));
+    R.wochenAnker = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    zeichne();
+  }
+  else if (a==="wocheHeute"){ R.wochenAnker = null; zeichne(); }
+});
+
+/* Erst hier ist alles definiert. Der Startlauf weiter oben zeichnete noch ohne
+   Seitenleiste - deshalb stand die Startseite bisher ohne sie da. */
+zeichne();
+
 </script>
 </body>
 </html>
