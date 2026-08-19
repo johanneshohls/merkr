@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Kursbuch</title>
+<title>merkr</title>
 <style>
 :root{
   --akzent:#3d7a4e; --akzent-hell:#e8f2ea; --bg:#f4f5f2; --karte:#ffffff;
@@ -171,9 +171,9 @@ window.onerror = function(msg, quelle, zeile){
       d.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#7a1f1f;color:#fff;padding:12px 16px;font:14px -apple-system,sans-serif;";
       (document.body || document.documentElement).appendChild(d);
     }
-    d.textContent = "Kursbuch-Startfehler: " + window.__KB_startFehlerText;
+    d.textContent = "merkr-Startfehler: " + window.__KB_startFehlerText;
     var la = document.getElementById("ladeanzeige");
-    if (la) la.innerHTML = "<b>Kursbuch konnte nicht starten.</b><br><br>" +
+    if (la) la.innerHTML = "<b>merkr konnte nicht starten.</b><br><br>" +
       String(window.__KB_startFehlerText).replace(/&/g,"&amp;").replace(/</g,"&lt;");
   }catch(e){}
 };
@@ -182,7 +182,7 @@ window.__KB_startOk = false;
 <div id="testbanner" style="display:none">Testmodus ohne Scriptable – Änderungen werden <b>nicht dauerhaft</b> gespeichert.</div>
 <div id="topbar"></div>
 <div id="ladeanzeige" style="padding:24px;font:16px -apple-system,sans-serif;background:#171d19;color:#e9efe6">
-<b>Kursbuch startet …</b><br><br>Bleibt dieser Text stehen, bricht das Skript ab.
+<b>merkr startet …</b><br><br>Bleibt dieser Text stehen, bricht das Skript ab.
 </div>
 <div id="app"></div>
 <div id="overlay"></div>
@@ -360,7 +360,7 @@ window.__KB_importData = function(jsonText){
     speichern(); R = { view:"home", kursId:null, tab:"sitzplan", schuelerId:null, datum: todayISO() };
     zeichne(); toast("Daten importiert");
     return "ok";
-  }catch(e){ alertBox("Import fehlgeschlagen: Datei ist keine gültige Kursbuch-Sicherung."); return "fehler"; }
+  }catch(e){ alertBox("Import fehlgeschlagen: Datei ist keine gültige merkr-Sicherung."); return "fehler"; }
 };
 
 let speicherTimer = null;
@@ -539,10 +539,10 @@ function zeichne(){
 }
 function zeichneTopbar(){
   const sj = aktivesSchuljahr();
-  let titel = "Kursbuch", zurueck = "", rechts = "";
+  let titel = "merkr", zurueck = "", rechts = "";
   const wb = sj ? wochenBuchstabe(sj, R.datum) : null;
   if (R.view==="home"){
-    titel = "Kursbuch" + (sj? " · "+esc(sj.name):"");
+    titel = "merkr" + (sj? " · "+esc(sj.name):"");
     rechts = '<button class="klein" data-a="go" data-view="einstellungen">Einstellungen</button>';
   } else if (R.view==="kurs"){
     const k = kursVon(R.kursId);
@@ -582,7 +582,7 @@ function viewHome(){
 }
 function viewSchuljahrAnlegen(){
   const j = new Date().getFullYear();
-  return '<div class="karte"><h2>Willkommen im Kursbuch</h2>'+
+  return '<div class="karte"><h2>Willkommen bei merkr</h2>'+
   '<p class="hinweis">Legen Sie zuerst das Schuljahr an. Die A/B-Wochen werden über den Montag einer beliebigen A-Woche verankert.</p>'+
   '<div class="feld"><label>Bezeichnung</label><input id="sjName" value="'+j+'/'+String(j+1).slice(2)+'"></div>'+
   '<div class="zeile">'+
@@ -1096,7 +1096,7 @@ function viewEinstellungen(){
 
   html += '<div class="karte"><h2>Datensicherung</h2>'+
     '<p class="hinweis">'+(KB_MODE==="scriptable" ?
-      "Daten liegen lokal auf dem iPad (Dateien-App → Scriptable → KursbuchDaten). Letzte Sicherung: "+(S.einstellungen.letztesBackup?fmtDatum(S.einstellungen.letztesBackup.slice(0,10)):"noch nie") :
+      "Daten liegen in iCloud Drive (Dateien-App → iCloud Drive → Scriptable → MerkrDaten), gesichert einmal je Tag. Letzte Sicherung: "+(S.einstellungen.letztesBackup?fmtDatum(S.einstellungen.letztesBackup.slice(0,10)):"noch nie") :
       "Testmodus: Ohne Scriptable werden Daten nicht dauerhaft gespeichert.")+'</p>'+
     '<div class="zeile"><button class="primar" data-a="exportieren">Sicherung exportieren</button>'+
     '<button data-a="importieren">Sicherung importieren</button></div>'+
@@ -1556,7 +1556,7 @@ function sperrAnsicht(){
     tasten += '<button data-a="pinTaste" data-id="'+t+'" style="width:76px;height:64px;font-size:22px;border-radius:14px;'+
       (t==="OK"?'background:var(--akzent);color:#14210f;':'')+'">'+t+'</button>';
   return '<div style="max-width:300px;margin:60px auto;text-align:center">'+
-    '<h2>Kursbuch gesperrt</h2><div style="margin:18px 0">'+punkte+'</div>'+
+    '<h2>merkr gesperrt</h2><div style="margin:18px 0">'+punkte+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,76px);gap:10px;justify-content:center">'+tasten+'</div>'+
     '<p class="hinweis" id="pinFehler"></p></div>';
 }
@@ -1825,7 +1825,7 @@ function profilPdfErzeugen(schuelerId, kursId){
   let y = 56;
 
   pdfText(p, L, y, s0.vorname+" "+s0.name, 20, true, "#14210f");
-  pdfText(p, Rr-pdfTextBreite("Kursbuch · erstellt am "+fmtDatum(todayISO()),9), y, "Kursbuch · erstellt am "+fmtDatum(todayISO()), 9, false, "#777777");
+  pdfText(p, Rr-pdfTextBreite("merkr · erstellt am "+fmtDatum(todayISO()),9), y, "merkr · erstellt am "+fmtDatum(todayISO()), 9, false, "#777777");
   y += 18;
   pdfText(p, L, y, kurs.name+" ("+(kurs.fach||"")+", Jahrgang "+kurs.jahrgang+") · Schuljahr "+(sj?sj.name:"–"), 11);
   y += 22; pdfLinie(p, L, y, Rr, y, "#3d7a4e", 1.2); y += 24;
@@ -1910,7 +1910,7 @@ function profilPdfErzeugen(schuelerId, kursId){
   }
   if (evs.length>gezeigt) pdfText(p, L, y, "… "+(evs.length-gezeigt)+" weitere Ereignisse in der App", 9, false, "#777777");
   pdfLinie(p, L, 812, Rr, 812);
-  pdfText(p, L, 824, "Kursbuch – persönliche Unterrichtsdokumentation. Nur für den dienstlichen Gebrauch.", 8, false, "#999999");
+  pdfText(p, L, 824, "merkr – persönliche Unterrichtsdokumentation. Nur für den dienstlichen Gebrauch.", 8, false, "#999999");
   return pdfFertig(doc);
 }
 /* ================= PHASE 2: Oberfläche (ersetzt einzelne Phase-1-Ansichten) ================= */
@@ -2151,7 +2151,7 @@ function viewEinstellungen(){
   const bt = backupAlterTage();
   html += '<div class="karte"><h2>Datensicherung</h2>'+
     '<p class="hinweis">'+(KB_MODE==="scriptable" ?
-      "Daten liegen lokal auf dem iPad (Dateien-App → Scriptable → KursbuchDaten). " :
+      "Daten liegen in iCloud Drive (Dateien-App → iCloud Drive → Scriptable → MerkrDaten), gesichert einmal je Tag, 60 Tage Vorhalt. " :
       "Testmodus: Ohne Scriptable werden Daten nicht dauerhaft gespeichert. ")+
       "Letzte Sicherung: "+(bt===null?"noch nie":(bt===0?"heute":"vor "+bt+" Tagen"))+
       (cryptoVerfuegbar()?"":" · Hinweis: Verschlüsselung ist in dieser Umgebung nicht verfügbar, Export erfolgt unverschlüsselt.")+'</p>'+
@@ -2164,7 +2164,7 @@ function viewEinstellungen(){
     (S.einstellungen.pin ?
       '<p class="hinweis">PIN ist aktiv. Die App sperrt sich beim Start und nach 5 Minuten im Hintergrund.</p>'+
       '<button class="gefahr" data-a="pinEntfernen">PIN entfernen</button>' :
-      '<p class="hinweis">Zusätzlich zur Gerätesperre: 4- bis 6-stellige PIN beim Öffnen von Kursbuch.</p>'+
+      '<p class="hinweis">Zusätzlich zur Gerätesperre: 4- bis 6-stellige PIN beim Öffnen von merkr.</p>'+
       '<div class="zeile"><input id="pinNeu" inputmode="numeric" maxlength="6" placeholder="PIN (4–6 Ziffern)" style="width:180px">'+
       '<button class="primar" data-a="pinSetzen">PIN aktivieren</button></div>')+
     '</div>';
@@ -2324,7 +2324,7 @@ window.__KB_planImport = function(text){
 const __zeichneAlt = zeichne;
 zeichne = function(){
   if (gesperrt){
-    document.getElementById("topbar").innerHTML = '<h1 class="titel">Kursbuch</h1>';
+    document.getElementById("topbar").innerHTML = '<h1 class="titel">merkr</h1>';
     document.getElementById("app").innerHTML = sperrAnsicht();
     return;
   }
@@ -2341,7 +2341,7 @@ function pdfTabellenDokument(titel, untertitel, spalten, zeilen, fussnote){
   const kopf = ()=>{
     p = pdfSeite(doc);
     pdfText(p, L, 56, titel, 16, true, "#14210f");
-    pdfText(p, Rr-pdfTextBreite("Kursbuch · "+fmtDatum(todayISO()),9), 56, "Kursbuch · "+fmtDatum(todayISO()), 9, false, "#777777");
+    pdfText(p, Rr-pdfTextBreite("merkr · "+fmtDatum(todayISO()),9), 56, "merkr · "+fmtDatum(todayISO()), 9, false, "#777777");
     pdfText(p, L, 74, untertitel, 10, false, "#555555");
     pdfLinie(p, L, 84, Rr, 84, "#3d7a4e", 1.2);
     let x=L;

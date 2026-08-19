@@ -246,9 +246,9 @@ if (String(zustand).indexOf("ok|") !== 0) {
   console.log(bericht);
   try { Pasteboard.copy(bericht); } catch (e) { }
   const a = new Alert();
-  a.title = "Kursbuch-Startkontrolle";
+  a.title = "merkr-Startkontrolle";
   a.message = bericht + (ohneDaten
-    ? "\n\nKursbuch startet ohne Ihre Daten. Es wird nichts gespeichert, damit Ihr Datenstand erhalten bleibt."
+    ? "\n\nmerkr startet ohne Ihre Daten. Es wird nichts gespeichert, damit Ihr Datenstand erhalten bleibt."
     : "") + "\n\nDer Text liegt in der Zwischenablage.";
   a.addAction("Weiter");
   await a.present();
@@ -257,9 +257,9 @@ if (String(zustand).indexOf("ok|") !== 0) {
       await wv.loadHTML(
         "<meta name=viewport content='width=device-width,initial-scale=1'>" +
         "<body style=\"background:#7a1f1f;color:#fff;font:15px -apple-system,sans-serif;padding:24px\">" +
-        "<h2>Kursbuch konnte nicht starten</h2><pre style='white-space:pre-wrap'>" +
+        "<h2>merkr konnte nicht starten</h2><pre style='white-space:pre-wrap'>" +
         bericht.replace(/&/g, "&amp;").replace(/</g, "&lt;") +
-        "</pre><p>Ihre Daten in KursbuchDaten sind unveraendert.</p></body>");
+        "</pre><p>Ihre Daten sind unveraendert.</p></body>");
     } catch (e) { console.error(e); }
   }
 }
