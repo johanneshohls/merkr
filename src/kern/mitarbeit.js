@@ -1,17 +1,31 @@
 /**
- * Notenvorschlag für die Mitarbeit: Basis und zwei Ausschläge.
+ * Notenvorschlag für die Mitarbeit: ein Wert je Unterrichtsstunde.
  *
- * Das Modell folgt der Praxis, nicht der Rechenbequemlichkeit. Wer sich nie
- * meldet, aber schriftlich ordentlich arbeitet, steht bei einer Drei minus -
- * nicht bei "kein Vorschlag". Von dort aus zieht Beteiligung nach oben und
- * Stören nach unten.
+ * Das Modell folgt der Beschlussvorlage der Fachschaft Mathematik am EBG
+ * ("Bewertung der mündlichen Mitarbeit", Tabelle Seite 2). Sie beschreibt jede
+ * Note über die Häufigkeit der Äußerungen *pro Unterrichtsstunde*, dann über
+ * ihre Richtigkeit, dann über die Menge bearbeiteter Aufgaben.
  *
- *     Note = BASIS  −  mündlich  −  schriftlich  +  Störung
+ *     Note = BASIS  −  SPANNE_M · Stundenwert(mündlich)
+ *                   −  SPANNE_S · Stundenwert(schriftlich)
  *
- * Der entscheidende Unterschied zum Stufenmittel in noten.js: dort kürzt sich
- * die Anzahl heraus. Eine einzige Notiz "++" ergibt dasselbe Mittel wie zwanzig
- * davon, und damit lässt sich Quantität nicht bewerten. Hier ist die Quote der
- * Träger und die Stufe verstärkt sie nur.
+ * Der Stundenwert ist das zeitgewichtete Mittel über **alle** gehaltenen
+ * Stunden, auch die ohne Notiz. Darin liegt der Unterschied zu einem Mittel
+ * über die Notizen: eine einzelne Glanzleistung im Halbjahr ergibt einen
+ * kleinen Stundenwert, zwanzig ergeben einen großen. Die Menge ist damit im
+ * Nenner aufgehoben, statt sich herauszukürzen.
+ *
+ * Drei Eigenschaften, die aus dem Abgleich mit der Tabelle folgen:
+ *
+ * 1. **Die Skala reicht nach unten.** Ein Beitrag der Stufe "−−" ist −1 wert,
+ *    eine Verweigerung ebenso. Ohne das endet jede Rechnung bei der Basis, und
+ *    die Zeilen 5 und 6 der Tabelle wären unerreichbar.
+ * 2. **Mehrere Beiträge in einer Stunde zählen mehrfach.** Die Tabelle trennt
+ *    Note 1 und 2 über "besonders häufig" gegen "häufig pro Unterrichtsstunde" -
+ *    ein Unterschied innerhalb einer Stunde, den ein blosser Anteil wegwirft.
+ * 3. **Stören ist keine eigene Achse.** Wer stört, arbeitet nicht mit; das ist
+ *    fehlende Leistung und keine Verhaltensnote. Es zählt deshalb als negativer
+ *    Beitrag derselben Stunde und nicht als Abzug daneben.
  *
  * Reine Funktionen ohne DOM und ohne Zustand, prüfbar in `node --test`.
  * bau.mjs setzt die Datei beim Bauen in die Oberfläche ein.
@@ -21,41 +35,47 @@ const MerkrMitarbeit = (function () {
 
   const MUENDLICH   = ["qual_m", "quant_m"];
   const SCHRIFTLICH = ["qual_s", "quant_s"];
-  /** Zieht die Note nach unten. Hausaufgaben sind dabei, weil sie über selbr
-      nachprüfbar sind - Arbeitsverhalten mit Beleg, keine Bauchentscheidung. */
-  const STOEREND    = ["stoerung", "ha_vergessen"];
+  /** Zählt als mündliche Verweigerung: in dieser Stunde keine Leistung. */
+  const VERWEIGERT  = ["stoerung", "keine_antwort"];
+  /** Zählt als fehlende praktische Leistung - die Tabelle führt sie unter
+      "Menge an bearbeiteten Aufgaben", nicht als Abzug. */
+  const UNERLEDIGT  = ["ha_vergessen", "material"];
 
-  /**
-   * Vorgabewerte. Alle einzeln überschreibbar, damit die Kurve ohne Eingriff in
-   * den Code justierbar bleibt - die Zahlen sind eine pädagogische Setzung und
-   * keine Naturkonstante.
-   */
   const VORGABE = {
-    /** Note bei gar keiner Notiz und keiner Störung. */
+    /** Stundenwert 0 ergibt diese Note: die Stunde lief ohne Auffälligkeit. */
     basis: 3.5,
-    /** Um so viel hebt volle mündliche Beteiligung bei mittlerer Stufe. */
-    muendlich: 1.5,
-    /** Wie stark die Stufe die mündliche Beteiligung verstärkt oder dreht. */
-    muendlichStufe: 0.75,
-    /** Schriftliches wiegt halb - es ist Beiwerk zur mündlichen Note, nicht ihr Ersatz. */
-    schriftlich: 0.75,
-    schriftlichStufe: 0.375,
-    /** Malus je Störung und Unterrichtsstunde. Bei jeder zweiten Stunde eine
-        Störung ergibt das 0,7 - aus der Basis wird eine Vier. */
-    stoerung: 1.4,
-    /** Weiter als zwei Noten zieht Stören nicht. Sonst landet ein schwieriges
-        Halbjahr bei einer Sechs, und die ist für Leistung reserviert. */
-    stoerungDeckel: 2.0,
+    /** Notenschritte je Punkt Stundenwert, mündlich.
+        Nach unten steiler als nach oben, weil die Notenskala es auch ist: von
+        der Drei bis zur Eins sind es zwei Stufen, bis zur Sechs drei. Mit einem
+        symmetrischen Faktor bliebe entweder die Fünf unerreichbar oder die
+        regelmässige Beteiligung käme zu gut weg - beides an der Tabelle geprüft. */
+    muendlich: 1.25,
+    muendlichAb: 1.75,
+    /** Schriftliches wiegt halb. Es ergänzt die mündliche Note, ersetzt sie nicht. */
+    schriftlich: 0.625,
+    schriftlichAb: 0.875,
+    /** Wertspanne einer einzelnen Stunde. Nach oben Luft für mehrere Beiträge,
+        nach unten so weit, dass eine verweigerte Stunde durchschlägt. */
+    stundeMax: 4,
+    stundeMin: -2,
     halbwertszeitWochen: 8
   };
 
+  /**
+   * Was ein einzelner Eintrag zur Stunde beiträgt.
+   *
+   * Eine Notiz der Stufe s ist 1 + s wert: "o" ist ein Beitrag, "+" wiegt zwei,
+   * "−−" zieht. Eine Verweigerung ist −1 - so viel, wie ein normaler Beitrag
+   * einbringt, mit umgekehrtem Vorzeichen.
+   */
+  function beitragswert(e) {
+    if (VERWEIGERT.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0) return -1;
+    return 1 + (e.stufe == null ? 0 : Number(e.stufe));
+  }
+
   function alsDatum(x) { return x instanceof Date ? x : new Date(x); }
   function begrenzen(x, min, max) { return Math.max(min, Math.min(max, x)); }
-
-  /** Alter in Tagen zwischen zwei ISO-Daten oder Date-Objekten. */
-  function alterTage(ts, jetzt) {
-    return (alsDatum(jetzt) - alsDatum(ts)) / TAG_MS;
-  }
+  function alterTage(ts, jetzt) { return (alsDatum(jetzt) - alsDatum(ts)) / TAG_MS; }
 
   /** Exponentielles Gewicht nach Alter. Älteres wird leiser, ohne zu verschwinden. */
   function zeitgewicht(tage, halbwertszeitWochen) {
@@ -63,115 +83,92 @@ const MerkrMitarbeit = (function () {
     return Math.pow(0.5, tage / ((halbwertszeitWochen || VORGABE.halbwertszeitWochen) * 7));
   }
 
-  /**
-   * Anteil und Stufenmittel einer Gruppe von Kategorien.
-   *
-   * Beides zeitgewichtet, und zwar über dieselben Stundengewichte: eine Stunde
-   * aus dem September zählt im Zähler so wenig wie im Nenner. Ohne das wäre die
-   * Quote ein Jahresdurchschnitt, während die Stufe schon auf das Halbjahresende
-   * schaut - zwei Maßstäbe in einer Formel.
-   */
-  function anteilUndStufe(stunden, ereignisse, typen, opt) {
-    const o = opt || {};
-    const jetzt = o.jetzt || new Date();
-    const hw = o.halbwertszeitWochen;
-    const passt = new Set(typen);
+  /** Die Stunden des Zeitraums, ohne Ausfall und ohne noch nicht Gehaltenes. */
+  function zaehlendeStunden(stunden, o) {
+    return (stunden || []).filter(function (st) {
+      if (!st || st.ausfall) return false;
+      if (o.ab && st.datum < o.ab) return false;
+      if (o.bis && st.datum > o.bis) return false;
+      return true;
+    });
+  }
 
-    const proStunde = new Map();
-    let stufeSumme = 0, stufeGewicht = 0, anzahl = 0;
+  /**
+   * Mittlerer Stundenwert einer Achse.
+   *
+   * Zähler und Nenner tragen dasselbe Zeitgewicht: eine Stunde aus dem September
+   * zählt oben so wenig wie unten. Sonst wäre die Menge ein Jahresdurchschnitt,
+   * während die Qualität schon aufs Halbjahresende schaut.
+   */
+  function achse(stunden, ereignisse, typen, o) {
+    const passt = new Set(typen);
+    const jeStunde = new Map();
+    let anzahl = 0, summeRoh = 0;
 
     for (const e of ereignisse || []) {
       if (!e || !passt.has(e.typ)) continue;
-      if (o.ab && String(e.ts || "").slice(0, 10) < o.ab) continue;
-      if (o.bis && String(e.ts || "").slice(0, 10) > o.bis) continue;
-      if (!proStunde.has(e.stundeId)) proStunde.set(e.stundeId, true);
+      const tag = String(e.ts || "").slice(0, 10);
+      if (o.ab && tag < o.ab) continue;
+      if (o.bis && tag > o.bis) continue;
+      const w = beitragswert(e);
+      jeStunde.set(e.stundeId, (jeStunde.get(e.stundeId) || 0) + w);
+      summeRoh += w;
       anzahl++;
-      if (e.stufe == null || !e.ts) continue;
-      const g = zeitgewicht(alterTage(e.ts, jetzt), hw);
-      stufeSumme += Number(e.stufe) * g;
-      stufeGewicht += g;
     }
 
-    let mitNotiz = 0, alle = 0;
-    for (const st of stunden || []) {
-      if (!st || st.ausfall) continue;
-      if (o.ab && st.datum < o.ab) continue;
-      if (o.bis && st.datum > o.bis) continue;
-      const g = zeitgewicht(alterTage(st.datum, jetzt), hw);
-      alle += g;
-      if (proStunde.has(st.id)) mitNotiz += g;
+    const sts = zaehlendeStunden(stunden, o);
+    let summe = 0, gewichtSumme = 0, mitNotiz = 0;
+    for (const st of sts) {
+      const g = zeitgewicht(alterTage(st.datum, o.jetzt), o.halbwertszeitWochen);
+      const roh = jeStunde.get(st.id) || 0;
+      if (jeStunde.has(st.id)) mitNotiz++;
+      summe += begrenzen(roh, o.stundeMin, o.stundeMax) * g;
+      gewichtSumme += g;
     }
 
     return {
-      quote: alle > 0 ? mitNotiz / alle : 0,
-      mittel: stufeGewicht > 0 ? stufeSumme / stufeGewicht : 0,
+      wert: gewichtSumme > 0 ? summe / gewichtSumme : 0,
       anzahl: anzahl,
-      stunden: (stunden || []).filter(s => s && !s.ausfall &&
-        (!o.ab || s.datum >= o.ab) && (!o.bis || s.datum <= o.bis)).length
+      jeStunde: sts.length ? anzahl / sts.length : 0,
+      stundenMitNotiz: mitNotiz,
+      stunden: sts.length,
+      /** Mittlere Stufe der gestuften Notizen - nur zur Anzeige, nicht in der Rechnung. */
+      mittel: anzahl ? summeRoh / anzahl - 1 : 0
     };
   }
 
-  /** Störungen je gehaltener Unterrichtsstunde, zeitgewichtet wie alles andere. */
-  function stoerungsanteil(stunden, ereignisse, opt) {
-    const o = opt || {};
-    const jetzt = o.jetzt || new Date();
-    const passt = new Set(STOEREND);
-    let summe = 0, anzahl = 0;
-
-    for (const e of ereignisse || []) {
-      if (!e || !passt.has(e.typ)) continue;
-      if (o.ab && String(e.ts || "").slice(0, 10) < o.ab) continue;
-      if (o.bis && String(e.ts || "").slice(0, 10) > o.bis) continue;
-      anzahl++;
-      summe += zeitgewicht(alterTage(e.ts || (o.datumVon && o.datumVon(e)) || jetzt, jetzt), o.halbwertszeitWochen);
-    }
-
-    let alle = 0;
-    for (const st of stunden || []) {
-      if (!st || st.ausfall) continue;
-      if (o.ab && st.datum < o.ab) continue;
-      if (o.bis && st.datum > o.bis) continue;
-      alle += zeitgewicht(alterTage(st.datum, jetzt), o.halbwertszeitWochen);
-    }
-    return { je: alle > 0 ? summe / alle : 0, anzahl: anzahl };
-  }
-
   /**
-   * Runden zugunsten des Schülers.
-   *
-   * Bei Noten ist kleiner besser, bei Punkten größer - eine glatte 3,5 wird also
-   * zur 3 und 7,5 Punkte werden 8. Das ist keine Rechenschwäche, sondern die
-   * übliche Richtung im Zweifel; die Basis liegt bewusst genau auf so einer
-   * Kante.
+   * Runden zugunsten des Schülers: bei Noten ist kleiner besser, bei Punkten
+   * größer. Eine glatte 3,5 wird zur 3, 7,5 Punkte werden 8. Die Basis liegt
+   * bewusst auf so einer Kante.
    */
   function runden(wert, typ) {
     if (typ === "punkte") return Math.floor(wert + 0.5);
     return Math.ceil(wert - 0.5);
   }
 
-  /** Note in die Punkteskala der Oberstufe. 3 → 8, 1 → 14, 6 → 0. */
+  /** Note in die Punkteskala. Trifft die Spannen der Beschlussvorlage:
+      1 → 14 (13-15), 2 → 11 (10-12), 3 → 8 (7-9), 4 → 5 (4-6), 5 → 2 (1-3), 6 → 0. */
   function alsPunkte(note) { return begrenzen(17 - 3 * note, 0, 15); }
 
   /**
-   * @param stunden     [{id, datum, ausfall}] - gehaltene Stunden des Zeitraums
+   * @param stunden     [{id, datum, ausfall}] - Stunden des Kurses
    * @param ereignisse  [{ts, typ, stufe, stundeId}] - Notizen dieses Schülers
-   * @param opt         {jetzt, typ, ...VORGABE}
-   * @returns {wert, genau, basis, muendlich, schriftlich, stoerung, anteile}
+   * @param opt         {jetzt, ab, bis, typ, ...VORGABE}
+   * @returns {wert, genau, note, basis, muendlich, schriftlich, achsen, stunden}
    */
   function vorschlag(stunden, ereignisse, opt) {
     const o = Object.assign({}, VORGABE, opt || {});
-    const m = anteilUndStufe(stunden, ereignisse, MUENDLICH, o);
-    const s = anteilUndStufe(stunden, ereignisse, SCHRIFTLICH, o);
-    const stoer = stoerungsanteil(stunden, ereignisse, o);
+    if (!o.jetzt) o.jetzt = new Date();
 
-    const teilM = m.quote * (o.muendlich + o.muendlichStufe * m.mittel);
-    const teilS = s.quote * (o.schriftlich + o.schriftlichStufe * s.mittel);
-    const teilStoer = Math.min(o.stoerungDeckel, o.stoerung * stoer.je);
+    const m = achse(stunden, ereignisse, MUENDLICH.concat(VERWEIGERT), o);
+    const s = achse(stunden, ereignisse, SCHRIFTLICH.concat(UNERLEDIGT), o);
 
-    const roh = o.basis - teilM - teilS + teilStoer;
+    const teilM = (m.wert < 0 ? o.muendlichAb : o.muendlich) * m.wert;
+    const teilS = (s.wert < 0 ? o.schriftlichAb : o.schriftlich) * s.wert;
+    const roh = o.basis - teilM - teilS;
     const note = begrenzen(roh, 1, 6);
-    const inPunkten = o.typ === "punkte";
-    const genau = inPunkten ? alsPunkte(note) : note;
+    const genau = o.typ === "punkte" ? alsPunkte(note) : note;
 
     return {
       wert: runden(genau, o.typ),
@@ -180,10 +177,9 @@ const MerkrMitarbeit = (function () {
       basis: o.basis,
       muendlich: Math.round(teilM * 100) / 100,
       schriftlich: Math.round(teilS * 100) / 100,
-      stoerung: Math.round(teilStoer * 100) / 100,
-      gedeckelt: o.stoerung * stoer.je > o.stoerungDeckel,
-      anteile: { m: m, s: s, stoer: stoer },
-      anzahl: m.anzahl + s.anzahl + stoer.anzahl,
+      gedeckelt: roh < 1 || roh > 6,
+      achsen: { m: m, s: s },
+      anzahl: m.anzahl + s.anzahl,
       stunden: m.stunden
     };
   }
@@ -192,10 +188,11 @@ const MerkrMitarbeit = (function () {
     VORGABE: VORGABE,
     MUENDLICH: MUENDLICH,
     SCHRIFTLICH: SCHRIFTLICH,
-    STOEREND: STOEREND,
+    VERWEIGERT: VERWEIGERT,
+    UNERLEDIGT: UNERLEDIGT,
+    beitragswert: beitragswert,
     zeitgewicht: zeitgewicht,
-    anteilUndStufe: anteilUndStufe,
-    stoerungsanteil: stoerungsanteil,
+    achse: achse,
     runden: runden,
     alsPunkte: alsPunkte,
     vorschlag: vorschlag

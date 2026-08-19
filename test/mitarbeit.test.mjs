@@ -7,100 +7,126 @@ const M = require("../src/kern/mitarbeit.js");
 
 const JETZT = new Date("2026-11-20T10:00:00Z");
 
-/** 20 Unterrichtsstunden, alle zwei Tage vor heute. */
-function stunden(n = 20, opt = {}) {
+function stunden(n = 20) {
   const liste = [];
-  for (let i = n; i >= 1; i--) {
-    const d = new Date(JETZT.getTime() - i * 2 * 86400000);
-    liste.push({ id: "st" + i, datum: d.toISOString().slice(0, 10), ausfall: false });
-  }
-  return opt.dazu ? liste.concat(opt.dazu) : liste;
+  for (let i = n; i >= 1; i--)
+    liste.push({ id: "st" + i, datum: new Date(JETZT.getTime() - i*2*86400000).toISOString().slice(0,10), ausfall: false });
+  return liste;
 }
 
-/** Notiz in jeder k-ten Stunde. */
-function notizen(sts, typ, stufe, jede) {
-  return sts.filter((_, i) => i % jede === 0)
-    .map((st, n) => ({ id: "e" + typ + n, typ, stufe, stundeId: st.id, ts: st.datum + "T09:00:00Z" }));
+let z = 0;
+/** `proStunde` Einträge in jeder `jede`-ten Stunde. */
+function notizen(sts, typ, stufe, jede, proStunde = 1) {
+  const out = [];
+  sts.forEach((st, i) => { if (i % jede === 0) for (let j = 0; j < proStunde; j++)
+    out.push({ id: "e" + (z++), typ, stufe, stundeId: st.id, ts: st.datum + "T09:00:00Z" }); });
+  return out;
 }
 
-test("wer gar nicht auffällt, bekommt die Basis", () => {
+test("wer nicht auffällt, steht bei der Basis", () => {
   const r = M.vorschlag(stunden(), [], { jetzt: JETZT });
   assert.equal(r.note, 3.5);
-  assert.equal(r.wert, 3, "3,5 rundet zugunsten des Schülers auf 3");
-  assert.equal(r.anzahl, 0);
+  assert.equal(r.wert, 3, "3,5 rundet zugunsten des Schülers");
 });
 
-test("volle mündliche Beteiligung bei mittlerer Stufe ergibt eine 2", () => {
+test("die sechs Zeilen der Beschlussvorlage treffen ihre Punktspanne", () => {
   const sts = stunden();
-  const r = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1), { jetzt: JETZT });
-  assert.equal(r.anteile.m.quote, 1);
-  assert.equal(r.note, 2);
+  const faelle = [
+    [notizen(sts,"qual_m",1,1,2).concat(notizen(sts,"quant_s",1,2)), 13, 15],
+    [notizen(sts,"qual_m",0,1).concat(notizen(sts,"quant_s",0,3)),   10, 12],
+    [notizen(sts,"quant_m",0,2),                                      7,  9],
+    [notizen(sts,"quant_m",-1,3).concat(notizen(sts,"stoerung",null,4)), 4, 6],
+    [notizen(sts,"keine_antwort",null,2).concat(notizen(sts,"qual_m",-2,5)), 1, 3],
+    [notizen(sts,"keine_antwort",null,1).concat(notizen(sts,"ha_vergessen",null,2)), 0, 0]
+  ];
+  faelle.forEach(([evs, lo, hi], i) => {
+    const p = M.vorschlag(sts, evs, { jetzt: JETZT, typ: "punkte" }).wert;
+    assert.ok(p >= lo && p <= hi, "Zeile " + (i+1) + ": " + p + " nicht in " + lo + "-" + hi);
+  });
 });
 
-test("Qualität verstärkt die Beteiligung, statt eigenständig zu wirken", () => {
+test("mehrere Beiträge in einer Stunde zählen mehrfach", () => {
   const sts = stunden();
-  const viel = M.vorschlag(sts, notizen(sts, "qual_m", 1, 1), { jetzt: JETZT });
-  const selten = M.vorschlag(sts, notizen(sts, "qual_m", 1, 10), { jetzt: JETZT });
-  assert.ok(viel.note < 1.5, "jede Stunde stark: " + viel.note);
-  assert.ok(selten.note > 3, "zweimal stark im Halbjahr bleibt nahe der Basis: " + selten.note);
+  const einmal  = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1, 1), { jetzt: JETZT });
+  const zweimal = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1, 2), { jetzt: JETZT });
+  assert.ok(zweimal.note < einmal.note, "besonders häufig muss von häufig trennbar sein");
+  assert.equal(einmal.achsen.m.wert, 1);
+  assert.equal(zweimal.achsen.m.wert, 2);
 });
 
-test("wer stört, landet bei einer 4 oder schlechter", () => {
+test("die Menge kürzt sich nicht heraus - ein Glanzstück ist kein Halbjahr", () => {
   const sts = stunden();
-  const r = M.vorschlag(sts, notizen(sts, "stoerung", null, 2), { jetzt: JETZT });
-  assert.ok(r.note >= 4, "jede zweite Stunde eine Störung: " + r.note);
+  const einmal = M.vorschlag(sts, notizen(sts, "qual_m", 2, 20), { jetzt: JETZT });
+  const immer  = M.vorschlag(sts, notizen(sts, "qual_m", 2, 1), { jetzt: JETZT });
+  assert.ok(einmal.note > 3, "eine einzige Spitzennotiz bleibt nahe der Basis: " + einmal.note);
+  assert.equal(immer.note, 1);
 });
 
-test("vergessene Hausaufgaben zählen wie Störungen", () => {
+test("Stören ist fehlende Mitarbeit, kein Abzug daneben", () => {
   const sts = stunden();
-  const ha = M.vorschlag(sts, notizen(sts, "ha_vergessen", null, 2), { jetzt: JETZT });
-  const st = M.vorschlag(sts, notizen(sts, "stoerung", null, 2), { jetzt: JETZT });
-  assert.equal(ha.note, st.note);
+  const nurStoerung   = M.vorschlag(sts, notizen(sts, "stoerung", null, 1), { jetzt: JETZT });
+  const nurVerweigert = M.vorschlag(sts, notizen(sts, "keine_antwort", null, 1), { jetzt: JETZT });
+  assert.equal(nurStoerung.note, nurVerweigert.note, "beides ist dieselbe fehlende Leistung");
+  assert.equal(nurStoerung.schriftlich, 0, "es darf keine zweite Achse belasten");
+  assert.ok(nurStoerung.note >= 5);
 });
 
-test("Beteiligung und Störung verrechnen sich nicht weg, beide stehen einzeln", () => {
+test("wer sich beteiligt und stört, wird verrechnet statt doppelt belegt", () => {
   const sts = stunden();
-  const evs = notizen(sts, "quant_m", 0, 2).concat(notizen(sts, "stoerung", null, 3));
-  const r = M.vorschlag(sts, evs, { jetzt: JETZT });
-  assert.ok(r.muendlich > 0 && r.stoerung > 0);
-  const ausTeilen = 3.5 - r.muendlich - r.schriftlich + r.stoerung;
-  assert.ok(Math.abs(r.note - ausTeilen) < 0.06,
-    "die ausgewiesenen Teile ergeben die Note: " + r.note + " gegen " + ausTeilen);
+  const evs = notizen(sts, "quant_m", 0, 1).concat(notizen(sts, "stoerung", null, 2));
+  const r = M.vorschlag(sts, evs, { jetzt: JETZT, halbwertszeitWochen: 1e6 });
+  assert.equal(Math.round(r.achsen.m.wert*1e4)/1e4, 0.5, "20 Beiträge, 10 Verweigerungen, 20 Stunden");
+  assert.ok(r.note > 2.5 && r.note < 3.5);
 });
 
-test("Stören zieht höchstens zwei Noten", () => {
+test("vergessene Hausaufgaben zählen als fehlende praktische Leistung", () => {
+  const sts = stunden();
+  const r = M.vorschlag(sts, notizen(sts, "ha_vergessen", null, 1), { jetzt: JETZT });
+  assert.ok(r.schriftlich < 0, "sie gehören auf die schriftliche Achse");
+  assert.equal(r.muendlich, 0, "und nicht auf die mündliche");
+});
+
+test("hohe Aufgabenmenge rettet bei wenig Beteiligung mindestens die Drei", () => {
+  const sts = stunden();
+  const r = M.vorschlag(sts, notizen(sts, "quant_s", 0, 1), { jetzt: JETZT });
+  assert.ok(r.wert <= 3, "Regel aus dem informellen Teil, Seite 1: " + r.note);
+});
+
+test("die Skala reicht nach unten steiler als nach oben", () => {
+  const sts = stunden();
+  const o = { jetzt: JETZT, halbwertszeitWochen: 1e6 };
+  const hoch = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1), o);
+  const tief = M.vorschlag(sts, notizen(sts, "keine_antwort", null, 1), o);
+  assert.equal(hoch.achsen.m.wert, 1);
+  assert.equal(tief.achsen.m.wert, -1);
+  assert.equal(hoch.muendlich, 1.25, "je Punkt nach oben");
+  assert.equal(tief.muendlich, -1.75, "je Punkt nach unten");
+});
+
+test("eine einzelne Stunde kann die Rechnung nicht kippen", () => {
   const sts = stunden();
   const evs = [];
-  for (const st of sts) for (let i = 0; i < 5; i++)
-    evs.push({ id: "s" + st.id + i, typ: "stoerung", stufe: null, stundeId: st.id, ts: st.datum + "T09:00:00Z" });
-  const r = M.vorschlag(sts, evs, { jetzt: JETZT });
-  assert.equal(r.stoerung, 2);
-  assert.ok(r.gedeckelt);
-});
-
-test("Schriftliches wiegt halb so schwer wie Mündliches", () => {
-  const sts = stunden();
-  const m = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1), { jetzt: JETZT });
-  const s = M.vorschlag(sts, notizen(sts, "quant_s", 0, 1), { jetzt: JETZT });
-  assert.equal(Math.round(m.muendlich * 100), Math.round(s.schriftlich * 200));
+  for (let i = 0; i < 12; i++)
+    evs.push({ id: "v"+i, typ: "qual_m", stufe: 2, stundeId: sts[0].id, ts: sts[0].datum+"T09:00:00Z" });
+  const r = M.vorschlag(sts, evs, { jetzt: JETZT, halbwertszeitWochen: 1e6 });
+  assert.equal(Math.round(r.achsen.m.wert*1e4)/1e4, 0.2, "zwölf Beiträge in einer Stunde zählen als vier");
 });
 
 test("künftige Stunden zählen nicht in den Nenner", () => {
   const sts = stunden();
-  const kuenftig = [{ id: "zukunft1", datum: "2026-12-15", ausfall: false },
-                    { id: "zukunft2", datum: "2027-01-10", ausfall: false }];
   const evs = notizen(sts, "quant_m", 0, 1);
   const ohne = M.vorschlag(sts, evs, { jetzt: JETZT, bis: "2026-11-20" });
-  const mit = M.vorschlag(sts.concat(kuenftig), evs, { jetzt: JETZT, bis: "2026-11-20" });
-  assert.equal(mit.note, ohne.note, "der importierte Plan darf die Quote nicht verwässern");
+  const mit = M.vorschlag(sts.concat([
+    { id: "z1", datum: "2026-12-15", ausfall: false },
+    { id: "z2", datum: "2027-01-10", ausfall: false }]), evs, { jetzt: JETZT, bis: "2026-11-20" });
+  assert.equal(mit.note, ohne.note, "der importierte Plan darf die Rechnung nicht verwässern");
   assert.equal(mit.stunden, 20);
 });
 
 test("ausgefallene Stunden zählen nicht", () => {
   const sts = stunden();
   sts[0].ausfall = true;
-  const r = M.vorschlag(sts, [], { jetzt: JETZT });
-  assert.equal(r.stunden, 19);
+  assert.equal(M.vorschlag(sts, [], { jetzt: JETZT }).stunden, 19);
 });
 
 test("die Halbjahresgrenze schneidet Notizen und Stunden ab", () => {
@@ -114,24 +140,23 @@ test("die Halbjahresgrenze schneidet Notizen und Stunden ab", () => {
 
 test("frische Notizen wiegen schwerer als alte", () => {
   const sts = stunden(40);
-  const frueh = sts.slice(0, 20), spaet = sts.slice(20);
-  const a = M.vorschlag(sts, notizen(frueh, "quant_m", 0, 1), { jetzt: JETZT });
-  const b = M.vorschlag(sts, notizen(spaet, "quant_m", 0, 1), { jetzt: JETZT });
-  assert.ok(b.note < a.note, "spätere Beteiligung ergibt die bessere Note: " + b.note + " vs " + a.note);
+  const a = M.vorschlag(sts, notizen(sts.slice(0,20), "quant_m", 0, 1), { jetzt: JETZT });
+  const b = M.vorschlag(sts, notizen(sts.slice(20), "quant_m", 0, 1), { jetzt: JETZT });
+  assert.ok(b.note < a.note, "spätere Beteiligung ergibt die bessere Note");
 });
 
-test("Punkteskala: die Basis wird zu 7 Punkten, volle Beteiligung zu 11", () => {
-  const sts = stunden();
-  const leer = M.vorschlag(sts, [], { jetzt: JETZT, typ: "punkte" });
-  assert.equal(leer.genau, 6.5);
-  assert.equal(leer.wert, 7, "6,5 Punkte runden zugunsten des Schülers auf 7");
-  const voll = M.vorschlag(sts, notizen(sts, "quant_m", 0, 1), { jetzt: JETZT, typ: "punkte" });
-  assert.equal(voll.wert, 11);
+test("die Punkteskala trifft die Spannen der Vorlage", () => {
+  [[1,13,15],[2,10,12],[3,7,9],[4,4,6],[5,1,3],[6,0,0]].forEach(([note, lo, hi]) => {
+    const p = M.alsPunkte(note);
+    assert.ok(p >= lo && p <= hi, "Note " + note + " -> " + p + ", erwartet " + lo + "-" + hi);
+  });
 });
 
 test("die Note bleibt zwischen 1 und 6", () => {
   const sts = stunden();
-  const evs = notizen(sts, "qual_m", 2, 1).concat(notizen(sts, "quant_m", 2, 1));
-  const r = M.vorschlag(sts, evs, { jetzt: JETZT });
-  assert.equal(r.note, 1);
+  const oben = M.vorschlag(sts, notizen(sts, "qual_m", 2, 1, 4), { jetzt: JETZT });
+  const unten = M.vorschlag(sts, notizen(sts, "keine_antwort", null, 1, 3)
+    .concat(notizen(sts, "ha_vergessen", null, 1, 3)), { jetzt: JETZT });
+  assert.equal(oben.note, 1);
+  assert.equal(unten.note, 6);
 });
