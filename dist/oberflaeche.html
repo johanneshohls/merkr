@@ -4776,6 +4776,81 @@ kursLeiste = function(k){
 
 zeichne();
 
+/* ================= Anwesenheit hängt am Stundenplan =================
+   Die Anwesenheit hing schon immer an einer Stunde, nicht an einem Tag - aber
+   die Stunde entstand aus dem freien Datumsfeld. Damit ließ sich sonntags,
+   in den Ferien und an Tagen ohne diesen Kurs eine Anwesenheit erfassen, und
+   ensureStunde legte dafür eine Stunde an, die es im Plan nie gab.
+
+   Jetzt kommt der Tag aus dem Plan: hat der Kurs an diesem Datum Unterricht?
+   Wenn nicht, wird nichts angelegt, sondern der Weg zur nächsten oder letzten
+   Stunde angeboten. */
+
+function hatUnterricht(kursId, iso){
+  return kurseAmTag(iso).some(e=>e.kurs.id===kursId);
+}
+
+/** Der nächste Unterrichtstag dieses Kurses ab iso, in Richtung schritt. */
+function naechsterUnterrichtstag(kursId, iso, schritt){
+  const sj = aktivesSchuljahr();
+  if (!sj) return null;
+  const d = new Date(iso+"T12:00:00");
+  for (let i=0; i<200; i++){
+    d.setDate(d.getDate() + schritt);
+    const tag = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    if (sj.beginn && tag < sj.beginn) return null;
+    if (sj.ende && tag > sj.ende) return null;
+    if (hatUnterricht(kursId, tag)) return tag;
+  }
+  return null;
+}
+
+const anwesenheitOhnePlan = anwesenheitDialogHtml;
+anwesenheitDialogHtml = function(k, alsTab){
+  const grund = unterrichtsfrei(R.datum);
+  const passt = hatUnterricht(k.id, R.datum);
+
+  if (!passt){
+    const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
+    const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
+    const wt = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][new Date(R.datum+"T12:00:00").getDay()];
+
+    let html = '<h2>Anwesenheit</h2><div class="karte" style="text-align:center;padding:30px 18px">'+
+      '<div style="font-size:17px;font-weight:900">'+esc(fmtDatum(R.datum))+' · '+wt+'</div>'+
+      '<p class="hinweis" style="margin:6px 0 14px">'+
+      (grund ? esc(grund)+" - kein Unterricht." : esc(k.name)+" hat an diesem Tag laut Stundenplan keinen Unterricht.")+
+      '<br>Anwesenheit wird an der Stunde festgehalten, nicht am Kalendertag.</p><div class="zeile" style="justify-content:center">';
+    if (zurueck) html += '<button data-a="anwTag" data-datum="'+zurueck+'">‹ '+fmtDatum(zurueck)+'</button>';
+    if (vor) html += '<button class="primar" data-a="anwTag" data-datum="'+vor+'">'+fmtDatum(vor)+' ›</button>';
+    if (!zurueck && !vor) html += '<span class="hinweis">Für diesen Kurs steht kein Stundenplan.</span>';
+    return html + '</div></div>';
+  }
+
+  /* Blättern zwischen den Unterrichtstagen, statt im Kalender zu suchen. */
+  const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
+  const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
+  const kopf = '<div class="zeile raum" style="margin-bottom:10px">'+
+    '<div class="zeile">'+
+    (zurueck ? '<button class="klein" data-a="anwTag" data-datum="'+zurueck+'">‹</button>' : '')+
+    '<b>'+esc(fmtDatum(R.datum))+'</b>'+
+    (vor ? '<button class="klein" data-a="anwTag" data-datum="'+vor+'">›</button>' : '')+
+    '</div>'+
+    (R.datum !== todayISO() ? '<button class="klein" data-a="anwTag" data-datum="'+todayISO()+'">Heute</button>' : '')+
+    '</div>';
+
+  return kopf + anwesenheitOhnePlan(k, alsTab);
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="anwTag"]');
+  if (!el) return;
+  R.datum = el.dataset.datum;
+  R.view = "kurs"; R.tab = "anwesenheit";
+  zeichne();
+});
+
+zeichne();
+
 </script>
 </body>
 </html>
