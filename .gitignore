@@ -1,3 +1,9 @@
 node_modules/
 .DS_Store
 *.log
+
+# Datendateien und Sicherungen gehören nie ins Repo - merkr ist das einzige Modul mit Klarnamen.
+*.json
+!package.json
+Kursbuch*
+merkr-sicherung*
