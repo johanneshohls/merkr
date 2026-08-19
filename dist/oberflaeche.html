@@ -5370,6 +5370,110 @@ viewListe = function(k){
 
 zeichne();
 
+/* ================= Tafel unten, Kacheln rasten auf Plätze =================
+   Die Tafel steht jetzt unten - Gewohnheitssache, und der Raum liest sich für
+   den, der ihn benutzt, nicht für den, der ihn zeichnet.
+
+   Und das Einrasten: es lief auf ein 28-Pixel-Raster, das mit den Tischen
+   nichts zu tun hatte. Deshalb landete jede Kachel "leicht daneben". Jetzt
+   rastet sie auf einen der dreißig Plätze; ist der besetzt, tauschen die
+   beiden. */
+
+RAUM.randOben = 20;
+RAUM.tafelOben = RAUM.randOben + RAUM.reihen * (RAUM.tischHoehe + RAUM.reihenLuecke) + 6;
+
+raumHintergrund = function(){
+  let html = "";
+  for (let r = 0; r < RAUM.reihen; r++)
+    for (let s = 0; s < RAUM.spalten; s++)
+      html += '<div class="tisch" style="left:'+
+        (RAUM.randLinks + s * (RAUM.tischBreite + RAUM.luecke))+'px;top:'+
+        (RAUM.randOben + r * (RAUM.tischHoehe + RAUM.reihenLuecke))+'px;width:'+
+        RAUM.tischBreite+'px;height:'+RAUM.tischHoehe+'px"></div>';
+  html += '<div class="tafel" style="left:'+RAUM.randLinks+'px;top:'+RAUM.tafelOben+'px;width:'+
+    (RAUM.spalten * RAUM.tischBreite + (RAUM.spalten-1) * RAUM.luecke)+'px;height:30px">TAFEL</div>';
+  return html;
+};
+
+/** Der Platz, dessen Mitte einem Punkt am nächsten liegt. */
+function naechsterPlatz(x, y){
+  let beste = 0, abstand = Infinity;
+  for (let i = 0; i < RAUM.spalten * RAUM.reihen * 2; i++){
+    const p = platzPosition(i);
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < abstand){ abstand = d; beste = i; }
+  }
+  return beste;
+}
+
+/** Wer sitzt auf diesem Platz - verglichen wird über die Position. */
+function werSitztAuf(kursId, index, ausser){
+  const ziel = platzPosition(index);
+  return kursSchueler(kursId).find(s=>{
+    if (s.id === ausser) return false;
+    const pos = s.sitz && s.sitz[kursId];
+    return pos && Math.abs(pos.x - ziel.x) < 6 && Math.abs(pos.y - ziel.y) < 6;
+  }) || null;
+}
+
+initSitzplanDrag = function(){
+  const flaeche = document.getElementById("sitzflaeche");
+  if (!flaeche) return;
+  let aktiv = null, startX = 0, startY = 0, ox = 0, oy = 0, bewegt = false;
+
+  flaeche.addEventListener("pointerdown", ev=>{
+    const kachel = ev.target.closest(".stile"); if (!kachel) return;
+    aktiv = kachel; bewegt = false;
+    startX = ev.clientX; startY = ev.clientY;
+    ox = kachel.offsetLeft; oy = kachel.offsetTop;
+    try { kachel.setPointerCapture(ev.pointerId); } catch(e) { /* synthetische Ereignisse */ }
+  });
+
+  flaeche.addEventListener("pointermove", ev=>{
+    if (!aktiv) return;
+    const dx = ev.clientX - startX, dy = ev.clientY - startY;
+    if (!bewegt && Math.hypot(dx, dy) < 8) return;
+    bewegt = true;
+    /* Beim Ziehen folgt die Kachel frei - eingerastet wird erst beim Loslassen,
+       sonst springt sie unter dem Finger. */
+    const nx = Math.max(0, Math.min(ox + dx, flaeche.clientWidth - aktiv.offsetWidth));
+    const ny = Math.max(0, Math.min(oy + dy, flaeche.clientHeight - aktiv.offsetHeight));
+    aktiv.style.left = nx + "px"; aktiv.style.top = ny + "px";
+    aktiv.style.opacity = ".85";
+  });
+
+  flaeche.addEventListener("pointerup", ()=>{
+    if (!aktiv) return;
+    const kachel = aktiv; aktiv = null;
+    kachel.style.opacity = "";
+    if (!bewegt){ oeffnePopupSchueler(kachel.dataset.sid, kachel.getBoundingClientRect()); return; }
+
+    const s = schuelerVon(kachel.dataset.sid);
+    const k = kursVon(R.kursId);
+    if (!s || !k) return;
+    if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
+
+    const index = naechsterPlatz(kachel.offsetLeft, kachel.offsetTop);
+    const ziel = platzPosition(index);
+    const nachbar = werSitztAuf(k.id, index, s.id);
+    if (nachbar){
+      /* Platztausch: der andere bekommt den, den dieser gerade verlässt. */
+      const vorher = s.sitz[k.id] || ziel;
+      if (!nachbar.sitz || typeof nachbar.sitz !== "object") nachbar.sitz = {};
+      nachbar.sitz[k.id] = {x: vorher.x, y: vorher.y};
+    }
+    s.sitz[k.id] = ziel;
+    speichern(); zeichne();
+  });
+
+  flaeche.addEventListener("pointercancel", ()=>{
+    if (aktiv) aktiv.style.opacity = "";
+    aktiv = null;
+  });
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
