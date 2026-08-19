@@ -21,7 +21,13 @@ Vollständiger Plan mit Etappen und Begründungen:
 
 ```bash
 node bau.mjs
+node --test test/*.mjs
 ```
+
+`src/kern/` enthält die Rechenteile ohne DOM - Notenvorschlag und Kürzelvergabe. bau.mjs setzt sie
+an der Stelle `/*__KERN__*/` in die Oberfläche, damit dieselben Zeilen im WebView und unter node
+laufen. Wer dort etwas ändert, ändert es an einer Stelle und kann es prüfen, ohne ein iPad in die
+Hand zu nehmen.
 
 `node bau.mjs --pruefe <datei>` vergleicht das Ergebnis byteweise mit einer Vorgabe. Beim ersten
 Commit war das die Ausgangsdatei `Kursbuch-Jahr.js` - der Umbau vom String-Patch auf diesen Build
@@ -33,3 +39,18 @@ Grundlage ist ein Scriptable-Kursbuch, das vor merkr per String-Ersetzung erweit
 zweites Skript las den fertigen Text und fügte einen Block vor `</script>` ein, worauf die
 erweiterte Fassung als Grundlage der nächsten Runde gesperrt war. Der erste Commit hier ist dieser
 Bestand, unverändert - jede spätere Änderung steht im Diff.
+
+## Stand
+
+| Etappe | Stand |
+|---|---|
+| Repo mit Build statt String-Patch | fertig |
+| iCloud-Ablage, Sicherung je Kalendertag | gebaut, auf dem Gerät ungetestet |
+| Notenvorschlag mit Halbjahresgrenze und Zeitgewichtung | fertig, 8 Tests |
+| Kürzel und checkr-Ausgabe | fertig, 5 Tests |
+| Anthropic-Schlüssel in den Keychain | offen |
+| Einrichten, Probelauf, Parallelbetrieb | offen |
+
+Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
+unbestätigt - er kopiert den Bestand aus `KursbuchDaten`, benennt die alte Datei um und löscht
+nichts.
