@@ -192,7 +192,409 @@ window.__KB_startOk = false;
 <script>
 "use strict";
 /* ============ Injektion durch Scriptable ============ */
-/*__KERN__*/
+/* --- kern/ergebnisse.js --- */
+/**
+ * Ergebnisse einer Arbeit aus checkr übernehmen.
+ *
+ * checkr liefert je Schüler den Code vom Deckblatt und die Punkte. Die
+ * Auflösung Code zu Mensch passiert hier - checkr kennt keine Namen.
+ *
+ * Zwei Regeln stecken darin, beide aus dem gleichen Grund: eine Arbeit, deren
+ * Punkte beim falschen Kind landen, merkt man erst im Elterngespräch.
+ *   1. Nicht raten. Ein Code ohne passenden Schüler wird gemeldet, nicht verteilt.
+ *   2. Nichts überschreiben. Was schon eingetragen ist, bleibt stehen.
+ */
+const MerkrErgebnisse = (function () {
+
+  /**
+   * Notenschlüssel Sek I M-V. Die Prozentgrenzen sind vorgegeben, nicht
+   * verhandelbar - dieselben, die auch planr fürs Korrekturformular führt.
+   */
+  const SCHLUESSEL = [
+    { note: 1, abProzent: 96 },
+    { note: 2, abProzent: 80 },
+    { note: 3, abProzent: 60 },
+    { note: 4, abProzent: 40 },
+    { note: 5, abProzent: 20 },
+    { note: 6, abProzent: 0 },
+  ];
+
+  function norm(x) {
+    return String(x == null ? "" : x).trim().toLowerCase();
+  }
+
+  function noteAusProzent(prozent) {
+    const p = Number(prozent);
+    if (!isFinite(p)) return null;
+    for (const stufe of SCHLUESSEL) if (p >= stufe.abProzent) return stufe.note;
+    return 6;
+  }
+
+  /**
+   * Punkte der Oberstufe aus dem Prozentsatz.
+   *
+   * Anders als der Notenschlüssel ist diese Staffel NICHT amtlich vorgegeben -
+   * sie bildet nur die übliche Zuordnung ab (15 Punkte ab 95 %, 5 Punkte an der
+   * Vier-Grenze). Wer sie anders braucht, ändert sie hier an einer Stelle.
+   */
+  function punkteAusProzent(prozent) {
+    const p = Number(prozent);
+    if (!isFinite(p)) return null;
+    const staffel = [95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 33, 27, 20];
+    for (let i = 0; i < staffel.length; i++) if (p >= staffel[i]) return 15 - i;
+    return 0;
+  }
+
+  function wertAusProzent(prozent, typ) {
+    return typ === "punkte" ? punkteAusProzent(prozent) : noteAusProzent(prozent);
+  }
+
+  /**
+   * Die Zeilen aus checkr den Schülern zuordnen.
+   *
+   * @param schueler [{id, name, vorname, kuerzel}]
+   * @param zeilen [{code, erreicht, maximal, prozent}]
+   * @param typ "noten" | "punkte"
+   * @returns {treffer, ohneSchueler, ohneArbeit, doppelt}
+   *   treffer      - was eingetragen werden kann
+   *   ohneSchueler - Codes aus checkr, zu denen hier niemand passt
+   *   ohneArbeit   - Schüler ohne Zeile in checkr (nicht mitgeschrieben)
+   *   doppelt      - Codes, die checkr mehrfach liefert
+   */
+  function zuordnen(schueler, zeilen, typ) {
+    const nachKuerzel = new Map();
+    for (const s of schueler || []) {
+      const k = norm(s.kuerzel);
+      if (k) nachKuerzel.set(k, s);
+    }
+
+    const treffer = [];
+    const ohneSchueler = [];
+    const doppelt = [];
+    const gesehen = new Set();
+    const getroffen = new Set();
+
+    for (const z of zeilen || []) {
+      const code = String(z && z.code != null ? z.code : "").trim();
+      const key = norm(code);
+      if (!key) continue;
+      if (gesehen.has(key)) { doppelt.push(code); continue; }
+      gesehen.add(key);
+
+      const s = nachKuerzel.get(key);
+      if (!s) { ohneSchueler.push(code); continue; }
+
+      // Wer nicht mitgeschrieben hat, steht in checkr bei 0 von 0. Daraus eine
+      // Sechs zu machen wäre eine Note für nichts.
+      if (!(Number(z.maximal) > 0)) continue;
+
+      getroffen.add(s.id);
+      treffer.push({
+        schuelerId: s.id,
+        code: code,
+        erreicht: Number(z.erreicht) || 0,
+        maximal: Number(z.maximal) || 0,
+        prozent: Number(z.prozent) || 0,
+        wert: wertAusProzent(z.prozent, typ),
+      });
+    }
+
+    const ohneArbeit = (schueler || [])
+      .filter((s) => !getroffen.has(s.id))
+      .map((s) => (s.name ? s.name + ", " + s.vorname : s.vorname) || String(s.id));
+
+    return { treffer, ohneSchueler, ohneArbeit, doppelt };
+  }
+
+  /**
+   * Treffer in die Ergebnisse einer Arbeit schreiben, ohne Vorhandenes zu
+   * überschreiben. Von Hand nachgetragene Werte gewinnen gegen den Abruf - wer
+   * etwas eingetragen hat, hatte einen Grund.
+   */
+  function zusammenfuehren(vorhanden, treffer) {
+    const ergebnisse = Object.assign({}, vorhanden || {});
+    let neu = 0, behalten = 0;
+    for (const t of treffer || []) {
+      const alt = ergebnisse[t.schuelerId];
+      if (alt !== undefined && alt !== null && alt !== "") { behalten++; continue; }
+      ergebnisse[t.schuelerId] = t.wert;
+      neu++;
+    }
+    return { ergebnisse, neu, behalten };
+  }
+
+  return {
+    SCHLUESSEL: SCHLUESSEL,
+    noteAusProzent: noteAusProzent,
+    punkteAusProzent: punkteAusProzent,
+    wertAusProzent: wertAusProzent,
+    zuordnen: zuordnen,
+    zusammenfuehren: zusammenfuehren,
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrErgebnisse;
+
+/* --- kern/kuerzel.js --- */
+/**
+ * Kürzel: der Schlüssel zwischen merkr und checkr.
+ *
+ * checkr speichert nie Klarnamen - beim Job-Start wird der Name durch den Code
+ * ersetzt, die Auflösung findet ausdrücklich außerhalb statt. merkr ist dieses
+ * Außerhalb. Hinaus geht das Kürzel, der Name bleibt hier.
+ *
+ * Warum der Code und nicht eine UUID: checkrs Notenbuch ordnet die Schüler einer
+ * Arbeit dem Klassen-Roster über den normalisierten Namen zu, nicht über die Id.
+ * Wer denselben Code auf beiden Seiten führt, trifft genau diesen Weg, ohne dass
+ * in checkr eine Zeile geändert werden muss.
+ */
+const MerkrKuerzel = (function () {
+
+  /** Wie checkr vergleicht: klein, getrimmt, Mehrfach-Leerzeichen zusammengezogen. */
+  function normalisiert(x) {
+    return String(x == null ? "" : x).toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  function sortierschluessel(s) {
+    return ((s.name || "") + " " + (s.vorname || "")).toLowerCase();
+  }
+
+  /**
+   * Fehlende Kürzel vergeben, vorhandene unangetastet lassen - ein Kürzel, das
+   * schon auf einer Arbeit steht, darf sich nie ändern.
+   *
+   * @param schueler [{id, name, vorname, kuerzel}] - die des Kurses
+   * @param praefix z.B. "9d"
+   * @param belegt Iterable schon vergebener Kürzel, auch aus anderen Kursen
+   * @returns [{id, kuerzel}] nur für die, die eines bekommen haben
+   */
+  function vergeben(schueler, praefix, belegt) {
+    const genommen = new Set();
+    for (const x of belegt || []) if (normalisiert(x)) genommen.add(normalisiert(x));
+    for (const s of schueler) if (normalisiert(s.kuerzel)) genommen.add(normalisiert(s.kuerzel));
+
+    const stamm = String(praefix || "SuS").trim().replace(/\s+/g, "");
+    const neu = [];
+    let lfd = 1;
+    for (const s of schueler.slice().sort((a, b) => sortierschluessel(a).localeCompare(sortierschluessel(b), "de"))) {
+      if (normalisiert(s.kuerzel)) continue;
+      let kandidat;
+      do {
+        kandidat = stamm + "-" + String(lfd).padStart(2, "0");
+        lfd++;
+      } while (genommen.has(normalisiert(kandidat)));
+      genommen.add(normalisiert(kandidat));
+      neu.push({ id: s.id, kuerzel: kandidat });
+    }
+    return neu;
+  }
+
+  /**
+   * Kürzel, die mehrfach vorkommen. Zwei gleiche Codes wären in checkr ein
+   * einziger Schüler - die Arbeit des einen landete beim anderen.
+   */
+  function doppelte(schueler) {
+    const zaehler = new Map();
+    for (const s of schueler) {
+      const k = normalisiert(s.kuerzel);
+      if (!k) continue;
+      zaehler.set(k, (zaehler.get(k) || 0) + 1);
+    }
+    return [...zaehler.entries()].filter(([, n]) => n > 1).map(([k]) => k);
+  }
+
+  /**
+   * Das, was nach checkr geht: `PUT /api/classes/{id}/students` erwartet
+   * [{name}] und vergibt die UUIDs selbst. Namen gehen nicht mit - das ist der
+   * ganze Punkt.
+   */
+  function checkrListe(schueler) {
+    return schueler
+      .filter((s) => normalisiert(s.kuerzel))
+      .map((s) => ({ name: String(s.kuerzel).trim() }))
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  }
+
+  return {
+    normalisiert: normalisiert,
+    vergeben: vergeben,
+    doppelte: doppelte,
+    checkrListe: checkrListe
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrKuerzel;
+
+/* --- kern/noten.js --- */
+/**
+ * Notenvorschlag aus Mitarbeitsnotizen.
+ *
+ * Reine Funktionen ohne DOM und ohne Zustand, damit sie in `node --test` prüfbar
+ * sind. bau.mjs setzt diese Datei beim Bauen in die Oberfläche ein.
+ *
+ * Der Vorschlag ist ein Vorschlag. Die Note wird gesetzt, nicht gerechnet - der
+ * pädagogische Beurteilungsspielraum ist kein Rundungsfehler. Deshalb liefert
+ * `vorschlag` auch mit, worauf er beruht: ohne die Anzahl der Notizen und ihre
+ * Verteilung über die Zeit ist eine Zahl nicht überprüfbar.
+ */
+const MerkrNoten = (function () {
+  const TAG_MS = 24 * 60 * 60 * 1000;
+
+  /** Nach so vielen Wochen zählt eine Notiz halb. */
+  const HALBWERTSZEIT_WOCHEN = 8;
+
+  /**
+   * Stufenmittel 0 ("o") ergibt diese Note.
+   *
+   * Vorher stand hier 3,5 - durchgehend mittelmäßige Mitarbeit landete damit auf
+   * einer 4. Die MV-Formulierung für befriedigend lautet "entspricht den
+   * Anforderungen im Allgemeinen", und das ist ein "o". Die Punkteskala der
+   * Oberstufe rechnete ohnehin schon so: 7,5 + 3,75 · 0 sind 8 Punkte, also eine
+   * glatte 3. Beide Skalen sagen jetzt dasselbe.
+   */
+  const NULLPUNKT = 3.0;
+
+  /** Notenschritte je Stufe. Bei ++ (Mittel 2) ergibt das eine 1, bei −− eine 6 (gerundet). */
+  const SPANNE = 1.25;
+
+  function alsDatum(x) {
+    return x instanceof Date ? x : new Date(x);
+  }
+
+  function begrenzen(x, min, max) {
+    return Math.max(min, Math.min(max, x));
+  }
+
+  /**
+   * Gewicht einer Notiz nach ihrem Alter. Exponentiell, damit Älteres leiser
+   * wird, ohne je ganz zu verschwinden - eine harte Kante ("nur die letzten acht
+   * Wochen") würde eine Notiz über Nacht wertlos machen.
+   */
+  function gewicht(alterTage, halbwertszeitWochen) {
+    if (!(alterTage > 0)) return 1;
+    const hw = (halbwertszeitWochen || HALBWERTSZEIT_WOCHEN) * 7;
+    return Math.pow(0.5, alterTage / hw);
+  }
+
+  /**
+   * Beginn des laufenden Halbjahres. Die Grenze ist hart: in die Halbjahresnote
+   * gehört nur, was im Halbjahr passiert ist. Ohne gepflegte Grenze bleibt es
+   * beim Schuljahresbeginn.
+   */
+  function halbjahrBeginn(schuljahr, heuteIso) {
+    if (!schuljahr) return null;
+    const grenze = schuljahr.halbjahrGrenze;
+    if (grenze && heuteIso && heuteIso >= grenze) return grenze;
+    return schuljahr.beginn || null;
+  }
+
+  function noteAusMittel(mittel, typ) {
+    if (typ === "punkte") return begrenzen(Math.round(7.5 + 3.75 * mittel), 0, 15);
+    return begrenzen(Math.round(NULLPUNKT - SPANNE * mittel), 1, 6);
+  }
+
+  /**
+   * @param ereignisse [{ts, stufe}] - ts als ISO-Zeitstempel, stufe -2..+2
+   * @param opt {jetzt, ab, typ, halbwertszeitWochen}
+   * @returns null ohne verwertbare Notiz, sonst
+   *          {wert, mittel, anzahl, anzahlFrisch, aeltestes, juengstes}
+   */
+  function vorschlag(ereignisse, opt) {
+    const o = opt || {};
+    const jetzt = alsDatum(o.jetzt || new Date());
+    const ab = o.ab || null;
+
+    let summe = 0, gewichtSumme = 0, anzahl = 0, anzahlFrisch = 0;
+    let aeltestes = null, juengstes = null;
+
+    for (const e of ereignisse || []) {
+      if (!e || e.stufe == null || !e.ts) continue;
+      if (ab && String(e.ts).slice(0, 10) < ab) continue;
+
+      const alterTage = (jetzt - alsDatum(e.ts)) / TAG_MS;
+      const g = gewicht(alterTage, o.halbwertszeitWochen);
+      summe += Number(e.stufe) * g;
+      gewichtSumme += g;
+      anzahl++;
+      if (alterTage <= 28) anzahlFrisch++;
+      if (!aeltestes || e.ts < aeltestes) aeltestes = e.ts;
+      if (!juengstes || e.ts > juengstes) juengstes = e.ts;
+    }
+
+    if (!anzahl || !gewichtSumme) return null;
+    const mittel = summe / gewichtSumme;
+    return {
+      wert: noteAusMittel(mittel, o.typ),
+      mittel: mittel,
+      anzahl: anzahl,
+      anzahlFrisch: anzahlFrisch,
+      aeltestes: aeltestes,
+      juengstes: juengstes
+    };
+  }
+
+  return {
+    HALBWERTSZEIT_WOCHEN: HALBWERTSZEIT_WOCHEN,
+    NULLPUNKT: NULLPUNKT,
+    gewicht: gewicht,
+    halbjahrBeginn: halbjahrBeginn,
+    noteAusMittel: noteAusMittel,
+    vorschlag: vorschlag
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrNoten;
+
+/* --- kern/planr.js --- */
+/**
+ * Zuordnung zwischen planr-Kursen und merkr-Kursen.
+ *
+ * Die Stelle, an der es schiefgeht: planr führt "9a" zweimal, einmal Mathematik
+ * und einmal Physik, und in merkr heißt derselbe Kurs vielleicht "Mathe 9a".
+ * Deshalb ein eigenes Feld `planrKlasse` am Kurs statt eines Namensvergleichs -
+ * dasselbe Muster, das planr für `selbrKlasse` nutzt, und aus demselben Grund:
+ * Namen wandern, Kopplungen sollen es nicht.
+ */
+const MerkrPlanr = (function () {
+
+  function norm(x) {
+    return String(x == null ? "" : x).trim().toLowerCase();
+  }
+
+  /**
+   * Welcher merkr-Kurs gehört zu diesem planr-Eintrag?
+   *
+   * Reihenfolge: gepflegte Zuordnung schlägt alles. Ist keine gepflegt, gilt der
+   * Kursname - so funktioniert der Abruf ohne Einrichtung, solange die Namen
+   * zufällig passen.
+   *
+   * @param kurse [{id, name, planrKlasse, schuljahrId}]
+   * @param eintrag {kurs, klasseId} aus der planr-Antwort
+   * @param schuljahrId nur Kurse dieses Schuljahres
+   */
+  function kursFuer(kurse, eintrag, schuljahrId) {
+    const gesucht = norm(eintrag && eintrag.kurs);
+    const kennung = eintrag && eintrag.klasseId != null ? String(eintrag.klasseId) : "";
+
+    for (const k of kurse || []) {
+      if (schuljahrId != null && k.schuljahrId !== schuljahrId) continue;
+      const zuordnung = norm(k.planrKlasse);
+      if (!zuordnung) continue;
+      if (zuordnung === gesucht || (kennung && zuordnung === kennung)) return k;
+    }
+    for (const k of kurse || []) {
+      if (schuljahrId != null && k.schuljahrId !== schuljahrId) continue;
+      if (norm(k.planrKlasse)) continue;
+      if (norm(k.name) === gesucht) return k;
+    }
+    return null;
+  }
+
+  return { norm: norm, kursFuer: kursFuer };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrPlanr;
+
 const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
 /* Ob im Keychain ein API-Schlüssel liegt. Der Schlüssel selbst kommt nie in die
    Seite: er lag früher in S.einstellungen.apiKey und wanderte damit in jeden

@@ -45,6 +45,13 @@ if (!rahmen.includes(PLATZHALTER)) {
 // Ersatz als Funktion: sonst deutet String.replace $-Zeichen im HTML als Rückverweis.
 const ergebnis = rahmen.replace(PLATZHALTER, () => JSON.stringify(html));
 
+// Die zusammengesetzte Oberfläche auch einzeln ablegen: so lässt sie sich im
+// Browser öffnen und prüfen, ohne ein iPad. Im Standalone-Modus speichert sie
+// nichts - genau richtig zum Durchklicken.
+const vorschau = path.join(hier, "dist/oberflaeche.html");
+fs.mkdirSync(path.dirname(vorschau), { recursive: true });
+fs.writeFileSync(vorschau, html);
+
 const ziel = path.join(hier, "dist/merkr.js");
 fs.mkdirSync(path.dirname(ziel), { recursive: true });
 fs.writeFileSync(ziel, ergebnis);
