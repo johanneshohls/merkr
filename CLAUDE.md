@@ -57,6 +57,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Anthropic-Schlüssel in den Schlüsselbund | am 19.08. wieder entfallen, siehe unten |
 | Stoffverteilung aus planr, automatisch | gebaut, gegen echte planr-Daten geprüft |
 | Ergebnisse aus checkr je Kürzel | gebaut, gegen einen echten Korrekturauftrag geprüft |
+| Rückmeldung an planr, was gewackelt hat | gebaut, Weg gegen planr geprüft, auf dem Gerät ungetestet |
 | Umbenennung auf merkr, auch auf dem Bildschirm | fertig |
 | Die drei Hebel aus dem Wendwerk-Review | umgesetzt, im Browser gemessen |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
@@ -100,3 +101,24 @@ Der Hinweis in der Datensicherung stimmte seit der iCloud-Umstellung nicht mehr 
 auf dem iPad"). Jetzt steht dort, wo sie wirklich liegen, samt Tagesrhythmus und 60 Tagen Vorhalt.
 
 Für die nächste Runde an der Oberfläche liegt ein Prompt in `docs/design-prompt.md`.
+
+## Der Rückweg zu planr (seit 2026-08-20)
+
+planr liefert mit der Stoffverteilung je Termin `tuThemen` - woraus die TÜ dieser Stunde gebaut ist,
+aktuelles Thema und Auffrischung zusammen. Im Stundendialog stehen sie als Ankreuzliste: was
+gewackelt hat, geht per `POST /api/rueckmeldung` zurück, und die nächste TÜ zieht es vor.
+
+Freien Text gibt es dort bewusst nicht. Ein Thema, das drüben keine Aufgabe trifft, stünde sechs
+Wochen offen und ginge bei jeder TÜ als Keyword mit hinaus, das drillr nicht zuordnen kann. planr
+prüft das inzwischen selbst - die Ankreuzliste ist trotzdem die richtige Bedienung, weil sie die
+Frage beantwortbar macht, statt sie zu stellen.
+
+Gemeldet wird über denselben Schlüssel wie der Abruf (`merkr.planr` im Schlüsselbund), nur als POST.
+Der Haken bleibt lokal stehen (`stunde.gewackelt`), auch wenn das iPad gerade kein Netz hat; dasselbe
+Thema zweimal zu melden legt drüben nichts doppelt an.
+
+`kurs.planrName` und `kurs.planrFach` kommen aus dem Abruf und werden dort gepflegt: drüben heißt der
+Kurs "9d" mit Fach "Mathematik", hier vielleicht "Mathe 9d". Ein Kurs ohne diese Herkunft meldet
+nichts - dasselbe Muster wie `planrKlasse` bei der Zuordnung.
+
+Namen gehen nicht hinaus. Die Rückmeldung kennt Kurs, Datum und Thema, sonst nichts.

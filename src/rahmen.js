@@ -338,6 +338,31 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrAntwort(" + JSON.stringify(antwort) + ")", false);
       } catch (e) { console.error("planr-Antwort nicht zugestellt: " + e); }
+    } else if (msg.typ === "planrRueckmeldung") {
+      // Der Rückweg: was in der Stunde gewackelt hat, geht als Signal nach planr.
+      // Derselbe Schlüssel wie beim Abruf, nur ein POST - die Rückmeldung gehört
+      // demselben Zugang wie die Planung, die sie betrifft.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_PLANR)) throw new Error("Kein planr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine planr-Adresse eingetragen.");
+        if (!msg.brief) throw new Error("Nichts zu melden.");
+        const req = new Request(basis + "/api/rueckmeldung");
+        req.method = "POST";
+        req.headers = {
+          authorization: "Bearer " + Keychain.get(SCHLUESSEL_PLANR),
+          "content-type": "application/json",
+        };
+        req.body = JSON.stringify(msg.brief);
+        antwort = await req.loadString();
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_planrRueckAntwort(" + antwort + ")", false);
+      } catch (e) { console.error("planr-Rückmeldung nicht zugestellt: " + e); }
     } else if (msg.typ === "checkrAbruf") {
       // Punkte einer Arbeit je Kürzel. Der Weg ist derselbe wie bei planr, nur
       // ein anderes Wort und eine andere Adresse.
