@@ -23,3 +23,6 @@ find "$ORDNER" -maxdepth 1 -name "merkr [0-9]*.js" -delete 2>/dev/null || true
 cp dist/merkr.js "$ZIEL.neu"
 mv -f "$ZIEL.neu" "$ZIEL"
 echo "ausgeliefert: $(grep -o 'const VERSION = "[^"]*"' dist/merkr.js | cut -d'"' -f2)"
+echo "Kommt nichts auf dem Geraet an: im Finder in den Scriptable-Ordner gehen und"
+echo "auf das Wolkensymbol einer Datei klicken - das weckt den iCloud-Container."
+
