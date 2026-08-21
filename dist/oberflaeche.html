@@ -696,6 +696,12 @@ const MerkrMitarbeit = (function () {
     /** Schriftliches wiegt halb. Es ergänzt die mündliche Note, ersetzt sie nicht. */
     schriftlich: 0.625,
     schriftlichAb: 0.875,
+    /** Die Note einer einzelnen Stunde ohne jede Notiz.
+        Drei, nicht 3,5: die Stunde lief "den Anforderungen im Allgemeinen
+        entsprechend", und das ist die MV-Formulierung für befriedigend. Die
+        3,5 oben gilt fürs gemittelte Modell, wo sie die Kante zwischen 3 und 4
+        markiert - hier wird eine einzelne Stunde benotet, keine Bilanz. */
+    stundenBasis: 3,
     /** Wertspanne einer einzelnen Stunde. Nach oben Luft für mehrere Beiträge,
         nach unten so weit, dass eine verweigerte Stunde durchschlägt. */
     stundeMax: 4,
@@ -890,8 +896,77 @@ const MerkrMitarbeit = (function () {
     });
   }
 
+  /**
+   * Die Note dieser einen Stunde, aus dem, was in ihr notiert wurde.
+   *
+   * Derselbe Rechenweg wie `vorschlag`, nur ohne Mittelung: der Stundenwert ist
+   * hier die Stunde selbst. Wer sich einmal gut beteiligt, steht in dieser
+   * Stunde bei einer Eins - über zwanzig Stunden gemittelt ergibt das wieder
+   * das Bild, das `vorschlag` zeichnet. Zwei Wege, dieselbe Aussage.
+   *
+   * Ohne Notiz kommt `stundenBasis` heraus. Das ist der Regelfall und keine
+   * Verlegenheit: die meisten Kinder sind in den meisten Stunden da und
+   * unauffällig, und genau dafür steht die Drei.
+   *
+   * @param notizen [{typ, stufe}] - nur die dieser Stunde und dieses Schülers
+   * @param opt     {typ, ...VORGABE}
+   */
+  function stundennote(notizen, opt) {
+    const o = Object.assign({}, VORGABE, opt || {});
+    let m = 0, s = 0, n = 0;
+
+    for (const e of notizen || []) {
+      if (!e) continue;
+      const istM = MUENDLICH.indexOf(e.typ) >= 0 || VERWEIGERT.indexOf(e.typ) >= 0;
+      const istS = SCHRIFTLICH.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0;
+      if (!istM && !istS) continue;
+      if (istM) m += beitragswert(e); else s += beitragswert(e);
+      n++;
+    }
+
+    m = begrenzen(m, o.stundeMin, o.stundeMax);
+    s = begrenzen(s, o.stundeMin, o.stundeMax);
+    const teilM = (m < 0 ? o.muendlichAb : o.muendlich) * m;
+    const teilS = (s < 0 ? o.schriftlichAb : o.schriftlich) * s;
+    const roh = o.stundenBasis - teilM - teilS;
+    const note = begrenzen(roh, 1, 6);
+    const genau = o.typ === "punkte" ? alsPunkte(note) : note;
+
+    return {
+      wert: runden(genau, o.typ),
+      note: Math.round(note * 10) / 10,
+      notizen: n,
+      muendlich: m,
+      schriftlich: s,
+      ohneNotiz: n === 0
+    };
+  }
+
+  /**
+   * Die Halbjahresnote aus den bestätigten Stundennoten.
+   *
+   * Ein schlichtes Mittel, mit Absicht: diese Zahl muss im Elterngespräch in
+   * einem Satz erklärbar sein ("die achtzehn Stundennoten, geteilt durch
+   * achtzehn"). Die Zeitgewichtung aus `vorschlag` wäre hier fehl am Platz -
+   * eine bestätigte Note ist eine Entscheidung, kein Messwert, der altert.
+   *
+   * @param werte [Zahl] - die bestätigten Stundennoten des Halbjahres
+   */
+  function halbjahresnote(werte, typ) {
+    const zahlen = (werte || []).map(Number).filter(function (x) { return isFinite(x); });
+    if (!zahlen.length) return { wert: null, mittel: null, anzahl: 0 };
+    const mittel = zahlen.reduce(function (a, b) { return a + b; }, 0) / zahlen.length;
+    return {
+      wert: runden(mittel, typ),
+      mittel: Math.round(mittel * 100) / 100,
+      anzahl: zahlen.length
+    };
+  }
+
   return {
     VORGABE: VORGABE,
+    stundennote: stundennote,
+    halbjahresnote: halbjahresnote,
     verlauf: verlauf,
     MUENDLICH: MUENDLICH,
     SCHRIFTLICH: SCHRIFTLICH,
@@ -1168,6 +1243,97 @@ const MerkrRueckmeldung = (function () {
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueckmeldung;
+
+/* --- kern/tue.js --- */
+/**
+ * Die TÜ-Punkte eines Halbjahres zu einer Note.
+ *
+ * Fünf Übungen zu je zehn Punkten, drei davon zählen. TÜ 1 bis 3 schreibt
+ * jeder. TÜ 4 und 5 schreibt nur, wer sich ein Rückkaufrecht erspielt hat -
+ * damit darf die schlechteste Übung gestrichen werden, mit zwei Rechten die
+ * zwei schlechtesten. Am Ende zählen immer die besten drei.
+ *
+ * Daraus folgt eine Regel, die kürzer ist als ihre Erklärung: mit r Rechten
+ * kommen die Übungen 1 bis 3+r in den Topf, und aus dem Topf zählen die drei
+ * besten. Wer ein Recht hat, es aber nicht nutzt, verliert nichts; wer TÜ 4
+ * ohne Recht geschrieben hat, gewinnt nichts.
+ *
+ * Die Note macht diese Datei nicht - sie liefert Punkte und Prozent, den
+ * Schlüssel führt MerkrErgebnisse. Ein zweiter Notenschlüssel im Haus wäre
+ * einer zu viel.
+ *
+ * Reine Funktionen ohne DOM und ohne Zustand, prüfbar in `node --test`.
+ */
+const MerkrTue = (function () {
+  /** So viele Übungen zählen in die Note. */
+  const ZAEHLEN = 3;
+  /** Punkte je Übung. */
+  const MAX_JE = 10;
+  /** So viele Übungen gibt es im Halbjahr. */
+  const ANZAHL = 5;
+
+  function alsZahl(x) {
+    if (x === null || x === undefined || x === "") return null;
+    const n = Number(x);
+    return isFinite(n) ? n : null;
+  }
+
+  /**
+   * @param punkte    [p1..p5] - null oder "" für nicht geschrieben
+   * @param rueckkauf 0, 1 oder 2 - so viele Rechte hat der Schüler
+   * @returns {zaehlend, gestrichen, unzulaessig, summe, max, prozent, vollstaendig}
+   *          zaehlend/gestrichen/unzulaessig sind Nummern (1-basiert).
+   */
+  function auswertung(punkte, rueckkauf) {
+    const r = Math.max(0, Math.min(ANZAHL - ZAEHLEN, Number(rueckkauf) || 0));
+    const bisNr = ZAEHLEN + r;
+
+    const geschrieben = [];
+    const unzulaessig = [];
+    for (let i = 0; i < ANZAHL; i++) {
+      const p = alsZahl((punkte || [])[i]);
+      if (p === null) continue;
+      const eintrag = { nr: i + 1, punkte: Math.max(0, Math.min(MAX_JE, p)) };
+      /* Ohne Recht geschrieben: wird gezeigt, zählt aber nicht mit. Stillschweigend
+         mitrechnen wäre schlimmer als der Hinweis - es wäre ein zweites Regelwerk. */
+      if (eintrag.nr > bisNr) unzulaessig.push(eintrag.nr);
+      else geschrieben.push(eintrag);
+    }
+
+    const sortiert = geschrieben.slice().sort(function (a, b) {
+      return b.punkte - a.punkte || a.nr - b.nr;
+    });
+    const zaehlend = sortiert.slice(0, ZAEHLEN);
+    const gestrichen = sortiert.slice(ZAEHLEN);
+
+    const summe = zaehlend.reduce(function (s, x) { return s + x.punkte; }, 0);
+    /* Solange nicht alle drei geschrieben sind, ist es ein Zwischenstand: dann
+       misst sich die Summe an dem, was bisher möglich war. */
+    const max = Math.max(1, zaehlend.length * MAX_JE);
+
+    return {
+      zaehlend: zaehlend.map(function (x) { return x.nr; }),
+      gestrichen: gestrichen.map(function (x) { return x.nr; }).sort(function (a, b) { return a - b; }),
+      unzulaessig: unzulaessig,
+      summe: summe,
+      max: max,
+      prozent: Math.round((summe / max) * 1000) / 10,
+      vollstaendig: zaehlend.length === ZAEHLEN,
+      rechte: r,
+      offenBis: bisNr
+    };
+  }
+
+  return {
+    ZAEHLEN: ZAEHLEN,
+    MAX_JE: MAX_JE,
+    ANZAHL: ANZAHL,
+    MAX_GESAMT: ZAEHLEN * MAX_JE,
+    auswertung: auswertung,
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrTue;
 
 const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
 /* Ob im Keychain ein API-Schlüssel liegt. Der Schlüssel selbst kommt nie in die
@@ -6538,6 +6704,654 @@ zeichne = function(){
   }
   if (!ziel) return;
   reihe.scrollLeft = ziel.offsetLeft - reihe.clientWidth/2 + ziel.offsetWidth/2;
+};
+
+zeichne();
+
+/* ================= Die Stunde abschließen =================
+   Vier Kategorien mal fünfundzwanzig Kinder sind hundert Felder je Stunde. Das
+   füllt niemand, und was niemand füllt, ist keine Grundlage für eine Note.
+
+   Deshalb der umgekehrte Weg: merkr schlägt am Stundenende für jeden eine Note
+   vor - aus den Notizen, die während der Stunde entstanden sind, und für alle
+   anderen die Drei. Eine Runde drüber, korrigieren was nicht stimmt,
+   bestätigen. Die Notizen bleiben das, was sie sein sollten: die Begründung für
+   die Ausschläge, nicht die Pflichtübung für den Normalfall.
+
+   Gespeichert wird an der Stunde (st.mitarbeit), nicht am Schüler: eine Note
+   gehört zu dem Tag, an dem sie entstanden ist. */
+
+function halbjahrNr(iso){
+  const sj = aktivesSchuljahr();
+  if (!sj || !sj.halbjahrGrenze) return 1;
+  return iso >= sj.halbjahrGrenze ? 2 : 1;
+}
+function halbjahrSpanne(nr){
+  const sj = aktivesSchuljahr();
+  if (!sj) return {nr:1, ab:null, bis:null};
+  const g = sj.halbjahrGrenze || null;
+  if (!g) return {nr:1, ab:sj.beginn||null, bis:sj.ende||null};
+  return nr === 2 ? {nr:2, ab:g, bis:sj.ende||null} : {nr:1, ab:sj.beginn||null, bis:g};
+}
+function aktuellesHalbjahr(){ return halbjahrNr(todayISO()); }
+function imHalbjahr(iso, nr){
+  const s = halbjahrSpanne(nr);
+  if (s.ab && iso < s.ab) return false;
+  if (nr === 1 && s.bis && iso >= s.bis) return false;
+  if (nr === 2 && s.bis && iso > s.bis) return false;
+  return true;
+}
+
+function notizenDerStunde(schuelerId, stundeId){
+  return S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.stundeId===stundeId);
+}
+
+/** Was merkr für diese Stunde vorschlägt - ohne Notiz die Basis. */
+function stundennoteVorschlag(schuelerId, st, k){
+  return MerkrMitarbeit.stundennote(notizenDerStunde(schuelerId, st.id), {typ: notensystem(k).typ});
+}
+/** Die bestätigte Note dieser Stunde, oder undefined. */
+function stundennoteVon(st, schuelerId){
+  return st && st.mitarbeit ? st.mitarbeit[schuelerId] : undefined;
+}
+/** Alle bestätigten Stundennoten eines Schülers im Halbjahr, neueste zuerst. */
+function stundennotenListe(schuelerId, kursId, hjNr){
+  const liste = [];
+  for (const st of S.stunden){
+    if (st.kursId !== kursId || st.ausfall) continue;
+    if (hjNr && !imHalbjahr(st.datum, hjNr)) continue;
+    const w = stundennoteVon(st, schuelerId);
+    if (w === undefined || w === null || w === "") continue;
+    liste.push({datum: st.datum, wert: Number(w), stundeId: st.id, thema: st.thema || st.geplant || ""});
+  }
+  return liste.sort((a,b)=>b.datum.localeCompare(a.datum));
+}
+/** Die Mitarbeitsnote des Halbjahres: das Mittel der bestätigten Stunden. */
+function mitarbeitHalbjahr(schuelerId, kursId, hjNr){
+  const liste = stundennotenListe(schuelerId, kursId, hjNr);
+  const k = kursVon(kursId);
+  const r = MerkrMitarbeit.halbjahresnote(liste.map(x=>x.wert), k ? notensystem(k).typ : "noten");
+  r.liste = liste;
+  return r;
+}
+
+/** Wie viele Stunden des Halbjahres schon abgeschlossen sind. */
+function abgeschlosseneStunden(kursId, hjNr){
+  return S.stunden.filter(st=>st.kursId===kursId && !st.ausfall &&
+    (!hjNr || imHalbjahr(st.datum, hjNr)) && st.mitarbeitBestaetigt).length;
+}
+
+/* ---------- Der Dialog ---------- */
+
+function abschlussWerte(k, st){
+  if (!R.abschluss || R.abschluss.stundeId !== st.id){
+    const werte = {};
+    for (const s of kursSchueler(k.id)){
+      const gesetzt = stundennoteVon(st, s.id);
+      werte[s.id] = gesetzt !== undefined && gesetzt !== null && gesetzt !== ""
+        ? Number(gesetzt)
+        : stundennoteVorschlag(s.id, st, k).wert;
+    }
+    R.abschluss = {stundeId: st.id, werte: werte};
+  }
+  return R.abschluss.werte;
+}
+
+function stundeAbschliessenDialog(k, st){
+  const sys = notensystem(k);
+  const werte = abschlussWerte(k, st);
+  const schueler = kursSchueler(k.id);
+  const wt = wochentagName(new Date(st.datum+"T12:00:00").getDay());
+
+  /* Der Regelfall ist "passt so". Deshalb steht der Knopf oben und wandert
+     mit - wer nichts ändern will, soll nicht an fünfundzwanzig Zeilen
+     vorbeiscrollen, um das zu sagen. */
+  let h = '<div style="position:sticky;top:-20px;background:#fff;padding:2px 0 10px;margin:-2px 0 0;z-index:2">'+
+    '<div class="zeile raum">'+
+    '<h2 style="margin:0">Mitarbeit '+wt+', '+esc(fmtDatum(st.datum))+'</h2>'+
+    '<div class="zeile"><button class="klein" data-a="modalZu">Abbrechen</button>'+
+    '<button class="primar" data-a="abschlussSpeichern" data-id="'+st.id+'">'+
+    (st.mitarbeitBestaetigt ? 'Erneut bestätigen' : 'Bestätigen')+'</button></div></div>'+
+    '<p class="hinweis" style="margin:6px 0 0">Vorgeschlagen ist, was die Notizen dieser Stunde ergeben - '+
+    'ohne Notiz '+(sys.typ==="punkte" ? "acht Punkte" : "eine Drei")+'. Ändern, wo es nicht stimmt.</p></div>';
+
+  for (const s of schueler){
+    const anw = anwesenheitVon(s.id, st.id);
+    const fehlt = anw && anw.status === "fehlt";
+    const notizen = notizenDerStunde(s.id, st.id).filter(e=>e.stufe!=null || EINFACH_EREIGNISSE.some(x=>x.id===e.typ));
+    const vs = stundennoteVorschlag(s.id, st, k);
+
+    h += '<div class="zeile raum" style="padding:7px 0;border-bottom:1px solid var(--linie);gap:8px'+(fehlt?';opacity:.5':'')+'">'+
+      '<div style="min-width:120px;flex:1"><b>'+esc(s.name)+', '+esc(s.vorname)+'</b>'+
+      '<div class="hinweis" style="font-size:12px">'+
+      (fehlt ? 'fehlt heute'
+        : notizen.length
+          ? notizen.map(e=>esc(ereignisNameVonTyp(e.typ))+(e.stufe!=null?' '+stufeInfo(e.stufe).label:'')).join(' · ')
+          : 'ohne Notiz')+
+      '</div></div>';
+
+    if (fehlt){
+      h += '<span class="hinweis">keine Note</span>';
+    } else {
+      h += '<div class="wertknoepfe" style="flex:0 0 auto">';
+      for (const w of sys.werte)
+        h += '<button data-a="abschlussWert" data-id="'+s.id+'" data-wert="'+w+'"'+
+          (Number(werte[s.id])===w ? ' style="background:var(--akzent);color:#fff;border-color:var(--akzent);font-weight:800"' : '')+
+          '>'+w+'</button>';
+      h += '<button data-a="abschlussLeer" data-id="'+s.id+'"'+
+        (werte[s.id]==null ? ' style="background:var(--akzent-hell);border-color:var(--akzent-hell)"' : '')+
+        ' title="Diese Stunde für '+esc(s.vorname)+' nicht bewerten">–</button>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  const gezaehlt = Object.keys(werte).filter(id=>werte[id]!=null).length;
+  h += '<div class="zeile raum" style="margin-top:14px">'+
+    '<span class="hinweis">'+gezaehlt+' von '+schueler.length+' bekommen eine Note</span>'+
+    '<button class="primar" data-a="abschlussSpeichern" data-id="'+st.id+'">'+
+    (st.mitarbeitBestaetigt ? 'Erneut bestätigen' : 'Bestätigen')+'</button></div>';
+
+  zeigeModal(h);
+}
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+  const k = kursVon(R.kursId);
+
+  if (a === "stundeAbschliessen"){
+    if (!k) return;
+    const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum) || ensureStunde(k.id, R.datum);
+    R.abschluss = null;
+    stundeAbschliessenDialog(k, st);
+  }
+  else if (a === "abschlussWert" || a === "abschlussLeer"){
+    if (!k || !R.abschluss) return;
+    const st = stundeVon(R.abschluss.stundeId);
+    if (!st) return;
+    R.abschluss.werte[el.dataset.id] = a === "abschlussLeer" ? null : Number(el.dataset.wert);
+    stundeAbschliessenDialog(k, st);
+  }
+  else if (a === "abschlussSpeichern"){
+    const st = stundeVon(el.dataset.id);
+    if (!st || !R.abschluss) return;
+    const werte = R.abschluss.werte;
+    st.mitarbeit = {};
+    let n = 0;
+    for (const id in werte) if (werte[id] != null){ st.mitarbeit[id] = Number(werte[id]); n++; }
+    st.mitarbeitBestaetigt = new Date().toISOString();
+    R.abschluss = null;
+    speichern(); schliessePopover(); zeichne();
+    toast(n+(n===1?" Stundennote":" Stundennoten")+" festgehalten");
+  }
+});
+
+/* Der Knopf gehört dorthin, wo die Stunde ohnehin geführt wird. */
+const kopfzeileOhneAbschluss = kursKopfzeile;
+kursKopfzeile = function(k){
+  const html = kopfzeileOhneAbschluss(k);
+  if (!html || !hatUnterricht(k.id, R.datum)) return html;
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const fertig = st && st.mitarbeitBestaetigt;
+  const knopf = '<button class="klein'+(fertig?'':' primar')+'" data-a="stundeAbschliessen">'+
+    (fertig ? 'Mitarbeit steht' : 'Mitarbeit abschließen')+'</button>';
+  const marke = '<button class="klein" data-a="anwesenheitDialog">Anwesenheit</button>';
+  return html.includes(marke) ? html.replace(marke, marke + knopf) : html;
+};
+
+zeichne();
+
+/* Der bisherige Reiterinhalt wird zum letzten Block. */
+const arbeitenOhneNotenbuch = viewArbeiten;
+
+/* ================= Der Reiter Noten =================
+   Vorher standen dort Arbeiten untereinander, jede mit Boxplot - eine Ansicht
+   für die Arbeit, keine für den Kurs. Die Frage im Lehrerzimmer lautet aber
+   "wo steht die 9d" und "was hat Boll zusammen", und die beantwortet ein
+   Notenbuch: Namen in den Zeilen, Leistungen in den Spalten.
+
+   Vier Blöcke, jeder zusammenklappbar, weil man selten alle vier zugleich
+   braucht: die Mitarbeit aus den Stundennoten, das Notenbuch, die TÜ-Punkte
+   und der Rechner für die Frage, die am Halbjahresende jeder stellt. */
+
+(function notenStil(){
+  if (document.getElementById("notenStil")) return;
+  const s = document.createElement("style");
+  s.id = "notenStil";
+  s.textContent =
+    ".nblock{background:var(--karte); border-radius:var(--radius); box-shadow:var(--schatten); margin-bottom:14px; overflow:hidden;}"+
+    ".nkopf{display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;}"+
+    ".nkopf h2{margin:0; font-size:17px;}"+
+    ".nkopf .npfeil{color:var(--text2); font-size:13px; width:14px; flex:0 0 14px;}"+
+    ".nkopf .nsub{color:var(--text2); font-size:13px; flex:1; min-width:0; overflow:hidden;"+
+      "text-overflow:ellipsis; white-space:nowrap;}"+
+    ".ninhalt{padding:0 16px 16px;}"+
+    ".nrollen{overflow-x:auto; -webkit-overflow-scrolling:touch;}"+
+    ".nbuch{border-collapse:collapse; font-size:14px; white-space:nowrap;}"+
+    ".nbuch th{font-size:12px; color:var(--text2); font-weight:700; text-align:center; padding:6px 8px;"+
+      "border-bottom:1px solid var(--linie);}"+
+    ".nbuch th.links, .nbuch td.links{text-align:left;}"+
+    ".nbuch td{padding:6px 8px; text-align:center; border-bottom:1px solid var(--linie);}"+
+    ".nbuch tr:last-child td{border-bottom:none;}"+
+    ".nbuch .name{position:sticky; left:0; background:var(--karte); text-align:left; font-weight:700;"+
+      "min-width:150px;}"+
+    ".nbuch th.name{font-weight:700;}"+
+    ".nbuch .stand{font-weight:900;}"+
+    ".nbuch .leer{color:var(--linie);}"+
+    ".nbuch input.tp{width:44px; text-align:center; padding:5px 2px; font-size:14px;}"+
+    ".nbuch .gestrichen{opacity:.5; text-decoration:line-through;}"+
+    /* Ein Eingabefeld erbt die Durchstreichung nicht zuverlässig - deshalb
+       zusätzlich der graue Grund, der auch ohne sie eindeutig ist. */
+    ".nbuch td.gestrichen input.tp{color:var(--text2); background:#f4eff5; text-decoration:line-through;}"+
+    ".nstunden{display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;}"+
+    ".nstunde{font-size:12px; border:1px solid var(--linie); border-radius:8px; padding:2px 6px;}";
+  document.head.appendChild(s);
+})();
+
+function notenAufgeklappt(id){
+  if (!R.notenAuf) R.notenAuf = {buch:true};
+  return !!R.notenAuf[id];
+}
+function notenBlock(id, titel, unterzeile, inhalt){
+  const auf = notenAufgeklappt(id);
+  return '<div class="nblock"><div class="nkopf" data-a="notenKlappen" data-id="'+id+'">'+
+    '<span class="npfeil">'+(auf?'▾':'▸')+'</span>'+
+    '<h2>'+esc(titel)+'</h2>'+
+    '<span class="nsub">'+unterzeile+'</span></div>'+
+    (auf ? '<div class="ninhalt">'+inhalt()+'</div>' : '')+'</div>';
+}
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="notenKlappen"]');
+  if (!el) return;
+  if (!R.notenAuf) R.notenAuf = {buch:true};
+  R.notenAuf[el.dataset.id] = !R.notenAuf[el.dataset.id];
+  zeichne();
+});
+
+/** Welches Halbjahr der Reiter zeigt - vorbelegt mit dem laufenden. */
+function notenHalbjahr(){
+  if (!R.notenHj) R.notenHj = aktuellesHalbjahr();
+  return R.notenHj;
+}
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="notenHj"]');
+  if (!el) return;
+  R.notenHj = Number(el.dataset.hj);
+  zeichne();
+});
+
+/* ---------- TÜ-Punkte ---------- */
+
+function tueTopf(k, hj){
+  if (!k.tue || typeof k.tue !== "object") k.tue = {};
+  const schluessel = "hj"+hj;
+  if (!k.tue[schluessel] || typeof k.tue[schluessel] !== "object")
+    k.tue[schluessel] = {punkte:{}, rechte:{}};
+  const t = k.tue[schluessel];
+  if (!t.punkte || typeof t.punkte !== "object") t.punkte = {};
+  if (!t.rechte || typeof t.rechte !== "object") t.rechte = {};
+  return t;
+}
+function tuePunkteVon(k, hj, schuelerId){
+  const t = tueTopf(k, hj);
+  const a = t.punkte[schuelerId];
+  return Array.isArray(a) ? a.slice(0, MerkrTue.ANZAHL) : [];
+}
+function tueRechteVon(k, hj, schuelerId){
+  return Number(tueTopf(k, hj).rechte[schuelerId]) || 0;
+}
+/** Punkte, Streichungen und die Note daraus. */
+function tueStand(k, hj, schuelerId){
+  const a = MerkrTue.auswertung(tuePunkteVon(k, hj, schuelerId), tueRechteVon(k, hj, schuelerId));
+  const sys = notensystem(k);
+  a.wert = a.summe > 0 || a.zaehlend.length ? MerkrErgebnisse.wertAusProzent(a.prozent, sys.typ) : null;
+  return a;
+}
+
+document.addEventListener("change", ev=>{
+  const el = ev.target.closest('[data-a-change="tuePunkt"]');
+  if (!el) return;
+  const k = kursVon(R.kursId); if (!k) return;
+  const t = tueTopf(k, notenHalbjahr());
+  const id = el.dataset.id, nr = Number(el.dataset.nr) - 1;
+  const liste = Array.isArray(t.punkte[id]) ? t.punkte[id].slice() : [];
+  while (liste.length < MerkrTue.ANZAHL) liste.push(null);
+  const roh = String(el.value).trim().replace(",", ".");
+  liste[nr] = roh === "" ? null : Math.max(0, Math.min(MerkrTue.MAX_JE, Number(roh)));
+  t.punkte[id] = liste;
+  speichern(); zeichne();
+});
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="tueRecht"]');
+  if (!el) return;
+  const k = kursVon(R.kursId); if (!k) return;
+  const t = tueTopf(k, notenHalbjahr());
+  const id = el.dataset.id;
+  t.rechte[id] = ((Number(t.rechte[id]) || 0) + 1) % 3;
+  speichern(); zeichne();
+});
+
+/* ---------- Mitarbeit und TÜ zählen mit ---------- */
+
+/* Beide erscheinen als Note in der gewohnten Rechnung, statt daneben zu stehen.
+   Die Mitarbeit ist die mündliche Note, die TÜ eine sonstige Leistung mit
+   einfachem Gewicht - so wie eine LEK. */
+const schuelerNotenOhneStunden = schuelerNoten;
+schuelerNoten = function(schuelerId, kursId){
+  const k = kursVon(kursId);
+  if (!k) return schuelerNotenOhneStunden(schuelerId, kursId);
+  const hj = notenHalbjahr();
+
+  /* Nur das gewählte Halbjahr. Vorher zählten Arbeiten aus dem ersten Halbjahr
+     im zweiten weiter, während die Mitarbeit dort neu ansetzte - eine Zahl aus
+     zwei Zeiträumen. In die Halbjahresnote gehört, was im Halbjahr passiert
+     ist; welches gemeint ist, sagt der Umschalter oben. */
+  const liste = schuelerNotenOhneStunden(schuelerId, kursId)
+    .filter(n => !n.datum || imHalbjahr(n.datum, hj));
+
+  const m = mitarbeitHalbjahr(schuelerId, kursId, hj);
+  if (m.wert != null)
+    liste.push({wert:m.wert, bereich:"muendlich", label:"Mitarbeit", gewicht:1,
+      datum:todayISO(), ausMitarbeit:true});
+
+  const t = tueStand(k, hj, schuelerId);
+  if (t.wert != null && t.vollstaendig)
+    liste.push({wert:t.wert, bereich:"sonstige", label:"TÜ", gewicht:1,
+      datum:todayISO(), ausTue:true});
+
+  return liste;
+};
+
+/* ---------- Block 1: Mitarbeit ---------- */
+
+function notenMitarbeit(k){
+  const hj = notenHalbjahr();
+  const schueler = kursSchueler(k.id);
+  const sys = notensystem(k);
+  if (!schueler.length) return leer("Dieser Kurs hat noch keine Schüler.", "Schüler hinzufügen", "tab", "kurscfg");
+
+  const offen = S.stunden.filter(st=>st.kursId===k.id && !st.ausfall && imHalbjahr(st.datum, hj) &&
+    st.datum <= todayISO() && !st.mitarbeitBestaetigt);
+
+  let html = "";
+  if (offen.length)
+    html += '<p class="hinweis" style="margin:0 0 10px">'+offen.length+
+      (offen.length===1 ? ' gehaltene Stunde ist noch nicht abgeschlossen' : ' gehaltene Stunden sind noch nicht abgeschlossen')+
+      ' - zuletzt '+fmtDatum(offen[offen.length-1].datum)+'. '+
+      '<button class="klein" data-a="stundenTag" data-datum="'+offen[offen.length-1].datum+'">Dorthin</button></p>';
+
+  html += '<div class="nrollen"><table class="nbuch"><tr>'+
+    '<th class="name links">Schüler</th><th>Stunden</th><th>Mittel</th><th>Note</th><th class="links">Verlauf</th></tr>';
+  for (const s of schueler){
+    const m = mitarbeitHalbjahr(s.id, k.id, hj);
+    const letzte = m.liste.slice(0, 12).reverse();
+    html += '<tr data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer">'+
+      '<td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>'+
+      '<td>'+(m.anzahl || '<span class="leer">–</span>')+'</td>'+
+      '<td>'+(m.mittel==null ? '<span class="leer">–</span>' : fmtZahl(m.mittel, 2))+'</td>'+
+      '<td class="stand">'+(m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>'+
+      '<td class="links">'+(letzte.length
+        ? letzte.map(x=>'<span class="nstunde" title="'+esc(fmtDatum(x.datum)+(x.thema?" · "+x.thema:""))+'">'+x.wert+'</span>').join(" ")
+        : '<span class="hinweis">noch keine abgeschlossene Stunde</span>')+'</td></tr>';
+  }
+  html += '</table></div>'+
+    '<p class="hinweis" style="margin-top:10px">Das Mittel aller abgeschlossenen Stunden dieses Halbjahres'+
+    (sys.typ==="punkte" ? ' (Punkte 0–15)' : ' (Noten 1–6)')+
+    '. Eine Zeile antippen zeigt jede einzelne Stunde.</p>';
+  return html;
+}
+
+function mitarbeitVerlaufDialog(k, s){
+  const hj = notenHalbjahr();
+  const m = mitarbeitHalbjahr(s.id, k.id, hj);
+  let h = '<h2>Mitarbeit '+esc(s.vorname)+' '+esc(s.name)+'</h2>'+
+    '<p class="hinweis">'+(m.wert==null ? 'Noch keine abgeschlossene Stunde in diesem Halbjahr.'
+      : m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2)+' - daraus die '+m.wert+'.')+'</p>';
+  if (m.liste.length){
+    h += '<table class="tab"><tr><th>Datum</th><th>Thema</th><th>Note</th><th></th></tr>';
+    for (const x of m.liste)
+      h += '<tr><td>'+fmtDatum(x.datum)+'</td><td>'+esc(x.thema||"–")+'</td>'+
+        '<td><b>'+x.wert+'</b></td>'+
+        '<td><button class="klein" data-a="mitarbeitStunde" data-datum="'+x.datum+'">Ändern</button></td></tr>';
+    h += '</table>';
+  }
+  h += '<div class="zeile" style="margin-top:14px"><button data-a="modalZu">Schließen</button></div>';
+  zeigeModal(h);
+}
+document.addEventListener("click", ev=>{
+  const zeile = ev.target.closest('[data-a="mitarbeitAuf"]');
+  if (zeile){
+    const k = kursVon(R.kursId), s = schuelerVon(zeile.dataset.id);
+    if (k && s) mitarbeitVerlaufDialog(k, s);
+    return;
+  }
+  const el = ev.target.closest('[data-a="mitarbeitStunde"]');
+  if (!el) return;
+  const k = kursVon(R.kursId); if (!k) return;
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===el.dataset.datum);
+  if (!st) return;
+  R.datum = st.datum; R.abschluss = null;
+  stundeAbschliessenDialog(k, st);
+});
+
+/* ---------- Block 2: das Notenbuch ---------- */
+
+/** Die Spalten des Notenbuchs: jede Arbeit, dann TÜ und Mitarbeit. */
+function notenbuchSpalten(k){
+  const hj = notenHalbjahr();
+  const spalten = S.arbeiten
+    .filter(a=>a.kursId===k.id && (!a.datum || imHalbjahr(a.datum, hj)))
+    .sort((a,b)=>String(a.datum).localeCompare(String(b.datum)))
+    .map(a=>({art:"arbeit", id:a.id, kurz:spaltenKopf(a), titel:a.titel+" · "+esc(a.art)+" · "+fmtDatum(a.datum),
+      bereich:bereichNorm(a.bereich||artBereich(a.art)), arbeit:a}));
+  spalten.push({art:"tue", kurz:"TÜ", titel:"TÜ-Note aus den besten drei Übungen", bereich:"sonstige"});
+  spalten.push({art:"mitarbeit", kurz:"Mit.", titel:"Mitarbeit aus den Stundennoten", bereich:"muendlich"});
+  return spalten;
+}
+/* Der Spaltenkopf muss schmal sein und trotzdem unterscheiden. Die Art sagt,
+   worum es geht, das Datum welche - der volle Titel steht im Tooltip. */
+const ART_KURZ = {"Klassenarbeit":"KA", "Klausur":"Kl", "LEK":"LEK", "Test":"Test",
+  "Referat":"Ref", "Protokoll":"Prot", "Hefter":"Heft"};
+function spaltenKopf(a){
+  const art = ART_KURZ[a.art] || String(a.art||"").slice(0, 4);
+  return art + (a.datum ? " " + fmtDatumKurz(a.datum) : "");
+}
+
+function notenBuch(k){
+  const schueler = kursSchueler(k.id);
+  const sys = notensystem(k);
+  if (!schueler.length) return leer("Dieser Kurs hat noch keine Schüler.", "Schüler hinzufügen", "tab", "kurscfg");
+  const spalten = notenbuchSpalten(k);
+
+  let html = '<div class="nrollen"><table class="nbuch"><tr><th class="name links">Schüler</th>';
+  for (const sp of spalten)
+    html += '<th title="'+esc(sp.titel)+'">'+esc(sp.kurz)+'</th>';
+  html += '<th>Stand</th></tr>';
+
+  for (const s of schueler){
+    const st = notenstand(s.id, k.id);
+    html += '<tr><td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>';
+    for (const sp of spalten){
+      if (sp.art === "arbeit"){
+        const w = sp.arbeit.ergebnisse[s.id];
+        html += '<td'+(w===undefined||w===null||w===""?' class="leer"':'')+
+          ' data-a="arbeitEingabe" data-id="'+sp.arbeit.id+'" style="cursor:pointer">'+
+          (w===undefined||w===null||w==="" ? '–' : w)+'</td>';
+      } else if (sp.art === "tue"){
+        const t = tueStand(k, notenHalbjahr(), s.id);
+        html += '<td'+(t.wert==null?' class="leer"':'')+'>'+
+          (t.wert==null ? '–' : t.wert + (t.vollstaendig ? '' : '<span class="hinweis" title="noch nicht alle drei geschrieben">*</span>'))+'</td>';
+      } else {
+        const m = mitarbeitHalbjahr(s.id, k.id, notenHalbjahr());
+        html += '<td'+(m.wert==null?' class="leer"':'')+'>'+(m.wert==null ? '–' : m.wert)+'</td>';
+      }
+    }
+    html += '<td class="stand">'+(st.gesamt==null ? '<span class="leer">–</span>' : fmtZahl(st.gesamt, 1))+'</td></tr>';
+  }
+  html += '</table></div>';
+
+  const anteil = 100 - gewSonstige(k);
+  html += '<p class="hinweis" style="margin-top:10px">Stand = '+anteil+' Prozent Klassenarbeiten, '+
+    gewSonstige(k)+' Prozent sonstige Leistungen'+(sys.typ==="punkte"?' (Punkte 0–15)':' (Noten 1–6)')+
+    '. Eine Zelle antippen öffnet die Eingabe der Arbeit. Ein Stern heißt: noch nicht alle drei TÜ geschrieben, die Note zählt erst danach mit.</p>';
+  return html;
+}
+
+/* ---------- Block 3: die TÜ-Punkte ---------- */
+
+function notenTue(k){
+  const hj = notenHalbjahr();
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return leer("Dieser Kurs hat noch keine Schüler.", "Schüler hinzufügen", "tab", "kurscfg");
+
+  let html = '<p class="hinweis" style="margin:0 0 10px">Fünf Übungen zu je zehn Punkten, die besten drei zählen - '+
+    'höchstens '+MerkrTue.MAX_GESAMT+' Punkte. TÜ 4 und 5 zählen nur mit Rückkaufrecht: eins streicht die schlechteste, '+
+    'zwei streichen die zwei schlechtesten. Das Feld in der Spalte "Rück" durchläuft 0, 1, 2.</p>';
+
+  html += '<div class="nrollen"><table class="nbuch"><tr><th class="name links">Schüler</th>';
+  for (let i = 1; i <= MerkrTue.ANZAHL; i++) html += '<th>TÜ '+i+'</th>';
+  html += '<th>Rück</th><th>Punkte</th><th>Note</th></tr>';
+
+  for (const s of schueler){
+    const punkte = tuePunkteVon(k, hj, s.id);
+    const stand = tueStand(k, hj, s.id);
+    const rechte = tueRechteVon(k, hj, s.id);
+    html += '<tr><td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>';
+    for (let i = 1; i <= MerkrTue.ANZAHL; i++){
+      const w = punkte[i-1];
+      const aus = stand.gestrichen.indexOf(i) >= 0 || stand.unzulaessig.indexOf(i) >= 0;
+      html += '<td'+(aus?' class="gestrichen"':'')+
+        ' title="'+(stand.unzulaessig.indexOf(i)>=0 ? 'ohne Rückkaufrecht geschrieben - zählt nicht'
+          : stand.gestrichen.indexOf(i)>=0 ? 'gestrichen' : '')+'">'+
+        '<input class="tp" type="number" min="0" max="'+MerkrTue.MAX_JE+'" step="1" '+
+        'value="'+(w==null?"":w)+'" data-a-change="tuePunkt" data-id="'+s.id+'" data-nr="'+i+'"></td>';
+    }
+    html += '<td><button class="klein" data-a="tueRecht" data-id="'+s.id+'"'+
+      (rechte ? ' style="background:var(--akzent);color:#fff"' : '')+'>'+rechte+'</button></td>'+
+      '<td>'+(stand.zaehlend.length ? stand.summe+' / '+stand.max : '<span class="leer">–</span>')+'</td>'+
+      '<td class="stand">'+(stand.wert==null ? '<span class="leer">–</span>'
+        : stand.wert + (stand.vollstaendig ? '' : '*'))+'</td></tr>';
+  }
+  html += '</table></div>'+
+    '<p class="hinweis" style="margin-top:10px">Durchgestrichen ist, was nicht zählt. '+
+    'Ein Stern heißt Zwischenstand: es sind noch keine drei Übungen geschrieben, '+
+    'die Note misst sich solange an dem, was möglich war, und zählt noch nicht in den Stand.</p>';
+  return html;
+}
+
+/* ---------- Block 4: Was wäre wenn ---------- */
+
+/* Die Frage kommt jedes Halbjahr, von Schülern wie von Eltern: was passiert mit
+   der Note, wenn die letzte Arbeit so oder so ausgeht? Sie lässt sich rechnen,
+   also soll merkr sie rechnen - und zwar für alle auf einmal, nicht in
+   fünfundzwanzig Einzelgesprächen. */
+
+function wennBereich(){ return R.wennBereich || "arbeit"; }
+function wennGewicht(){ return R.wennGewicht == null ? 1 : R.wennGewicht; }
+
+document.addEventListener("click", ev=>{
+  const b = ev.target.closest('[data-a="wennBereich"]');
+  if (b){ R.wennBereich = b.dataset.id; zeichne(); return; }
+  const g = ev.target.closest('[data-a="wennGewicht"]');
+  if (g){ R.wennGewicht = Number(g.dataset.wert); zeichne(); }
+});
+
+function notenWennRechner(k){
+  const schueler = kursSchueler(k.id);
+  const sys = notensystem(k);
+  if (!schueler.length) return leer("Dieser Kurs hat noch keine Schüler.", "Schüler hinzufügen", "tab", "kurscfg");
+
+  const bereich = wennBereich();
+  const gewicht = wennGewicht();
+  /* Bei Punkten wären sechzehn Spalten zu viel - dort die üblichen Stufen. */
+  const kandidaten = sys.typ === "punkte" ? [15, 13, 11, 8, 5, 2, 0] : [1, 2, 3, 4, 5, 6];
+
+  let html = '<div class="zeile" style="margin-bottom:10px">'+
+    '<span class="hinweis">Angenommen, es kommt noch dazu:</span>'+
+    '<div class="wertknoepfe">'+
+    ['arbeit','sonstige','muendlich'].map(b=>
+      '<button data-a="wennBereich" data-id="'+b+'"'+
+      (bereich===b?' style="background:var(--akzent);color:#fff;border-color:var(--akzent)"':'')+
+      '>'+esc(BEREICHE[b].kurz)+'</button>').join('')+
+    '</div><span class="hinweis">Gewicht</span><div class="wertknoepfe">'+
+    [1,2,3].map(g=>'<button data-a="wennGewicht" data-wert="'+g+'"'+
+      (gewicht===g?' style="background:var(--akzent);color:#fff;border-color:var(--akzent)"':'')+
+      '>'+g+'</button>').join('')+
+    '</div></div>';
+
+  html += '<div class="nrollen"><table class="nbuch">'+
+    '<tr><th class="name links"></th><th></th>'+
+    '<th colspan="'+kandidaten.length+'" style="border-bottom:none;padding-bottom:0">'+
+    (sys.typ==="punkte" ? "angenommene Punkte" : "angenommene Note")+'</th></tr>'+
+    '<tr><th class="name links">Schüler</th><th>jetzt</th>';
+  for (const w of kandidaten) html += '<th>'+w+'</th>';
+  html += '</tr>';
+
+  for (const s of schueler){
+    const alle = schuelerNoten(s.id, k.id);
+    const jetzt = notenstandAus(alle, k).gesamt;
+    html += '<tr><td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>'+
+      '<td class="stand">'+(jetzt==null ? '<span class="leer">–</span>' : fmtZahl(jetzt,1))+'</td>';
+    for (const w of kandidaten){
+      const neu = notenstandAus(alle.concat([{wert:w, bereich:bereich, gewicht:gewicht, label:"angenommen"}]), k).gesamt;
+      const rund = neu==null ? null : MerkrMitarbeit.runden(neu, sys.typ);
+      const schlechter = jetzt!=null && neu!=null &&
+        (sys.typ==="punkte" ? neu < jetzt - 0.001 : neu > jetzt + 0.001);
+      html += '<td'+(neu==null?' class="leer"':'')+' title="'+(neu==null?'':fmtZahl(neu,2))+'">'+
+        (neu==null ? '–' : '<b'+(schlechter?' style="color:var(--sm1)"':'')+'>'+rund+'</b>'+
+          '<div class="hinweis" style="font-size:11px">'+fmtZahl(neu,1)+'</div>')+'</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</table></div>'+
+    '<p class="hinweis" style="margin-top:10px">Fett die Note, die dabei herauskäme, darunter der genaue Stand. '+
+    'Gerundet wird zugunsten des Schülers. Die Zeile "jetzt" ist der Stand ohne die angenommene Leistung.</p>';
+  return html;
+}
+
+/* ---------- Der Reiter selbst ---------- */
+
+viewArbeiten = function(k){
+  const hj = notenHalbjahr();
+  const sys = notensystem(k);
+  const schueler = kursSchueler(k.id);
+
+  let html = '<div class="zeile raum" style="margin-bottom:14px">'+
+    '<div><h2 style="margin:0">Noten '+esc(k.name)+'</h2>'+
+    '<div class="hinweis">'+schueler.length+' Schüler · '+(sys.typ==="punkte"?"0 bis 15 Punkte":"Noten 1 bis 6")+'</div></div>'+
+    '<div class="wertknoepfe">'+
+    [1,2].map(nr=>'<button data-a="notenHj" data-hj="'+nr+'"'+
+      (hj===nr?' style="background:var(--akzent);color:#fff;border-color:var(--akzent)"':'')+
+      '>'+nr+'. Halbjahr</button>').join('')+
+    '</div></div>';
+
+  const mitStunden = schueler.filter(s=>mitarbeitHalbjahr(s.id, k.id, hj).anzahl > 0).length;
+  const tueGeschrieben = schueler.filter(s=>tuePunkteVon(k, hj, s.id).some(x=>x!=null)).length;
+  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id && (!a.datum || imHalbjahr(a.datum, hj)));
+
+  html += notenBlock("mitarbeit", "Mitarbeit", 
+    mitStunden ? mitStunden+" von "+schueler.length+" mit Stundennoten" : "noch keine abgeschlossene Stunde",
+    ()=>notenMitarbeit(k));
+
+  html += notenBlock("buch", "Notenbuch",
+    arbeiten.length+(arbeiten.length===1?" Leistung":" Leistungen")+" in diesem Halbjahr",
+    ()=>notenBuch(k));
+
+  html += notenBlock("tue", "TÜ-Punkte",
+    tueGeschrieben ? tueGeschrieben+" von "+schueler.length+" haben Punkte" : "noch nichts eingetragen",
+    ()=>notenTue(k));
+
+  html += notenBlock("wenn", "Was wäre, wenn",
+    "der Stand nach einer angenommenen Leistung",
+    ()=>notenWennRechner(k));
+
+  html += notenBlock("arbeiten", "Arbeiten und Tests",
+    "anlegen, Punkte eintragen, Verteilung ansehen",
+    ()=>arbeitenOhneNotenbuch(k));
+
+  return html;
 };
 
 zeichne();

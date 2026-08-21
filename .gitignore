@@ -7,3 +7,6 @@ node_modules/
 !package.json
 Kursbuch*
 merkr-sicherung*
+
+# Probefassung mit erfundenen Daten, entsteht beim Pruefen im Browser.
+dist/probe.html

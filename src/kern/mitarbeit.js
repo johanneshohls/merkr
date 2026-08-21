@@ -54,6 +54,12 @@ const MerkrMitarbeit = (function () {
     /** Schriftliches wiegt halb. Es ergänzt die mündliche Note, ersetzt sie nicht. */
     schriftlich: 0.625,
     schriftlichAb: 0.875,
+    /** Die Note einer einzelnen Stunde ohne jede Notiz.
+        Drei, nicht 3,5: die Stunde lief "den Anforderungen im Allgemeinen
+        entsprechend", und das ist die MV-Formulierung für befriedigend. Die
+        3,5 oben gilt fürs gemittelte Modell, wo sie die Kante zwischen 3 und 4
+        markiert - hier wird eine einzelne Stunde benotet, keine Bilanz. */
+    stundenBasis: 3,
     /** Wertspanne einer einzelnen Stunde. Nach oben Luft für mehrere Beiträge,
         nach unten so weit, dass eine verweigerte Stunde durchschlägt. */
     stundeMax: 4,
@@ -248,8 +254,77 @@ const MerkrMitarbeit = (function () {
     });
   }
 
+  /**
+   * Die Note dieser einen Stunde, aus dem, was in ihr notiert wurde.
+   *
+   * Derselbe Rechenweg wie `vorschlag`, nur ohne Mittelung: der Stundenwert ist
+   * hier die Stunde selbst. Wer sich einmal gut beteiligt, steht in dieser
+   * Stunde bei einer Eins - über zwanzig Stunden gemittelt ergibt das wieder
+   * das Bild, das `vorschlag` zeichnet. Zwei Wege, dieselbe Aussage.
+   *
+   * Ohne Notiz kommt `stundenBasis` heraus. Das ist der Regelfall und keine
+   * Verlegenheit: die meisten Kinder sind in den meisten Stunden da und
+   * unauffällig, und genau dafür steht die Drei.
+   *
+   * @param notizen [{typ, stufe}] - nur die dieser Stunde und dieses Schülers
+   * @param opt     {typ, ...VORGABE}
+   */
+  function stundennote(notizen, opt) {
+    const o = Object.assign({}, VORGABE, opt || {});
+    let m = 0, s = 0, n = 0;
+
+    for (const e of notizen || []) {
+      if (!e) continue;
+      const istM = MUENDLICH.indexOf(e.typ) >= 0 || VERWEIGERT.indexOf(e.typ) >= 0;
+      const istS = SCHRIFTLICH.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0;
+      if (!istM && !istS) continue;
+      if (istM) m += beitragswert(e); else s += beitragswert(e);
+      n++;
+    }
+
+    m = begrenzen(m, o.stundeMin, o.stundeMax);
+    s = begrenzen(s, o.stundeMin, o.stundeMax);
+    const teilM = (m < 0 ? o.muendlichAb : o.muendlich) * m;
+    const teilS = (s < 0 ? o.schriftlichAb : o.schriftlich) * s;
+    const roh = o.stundenBasis - teilM - teilS;
+    const note = begrenzen(roh, 1, 6);
+    const genau = o.typ === "punkte" ? alsPunkte(note) : note;
+
+    return {
+      wert: runden(genau, o.typ),
+      note: Math.round(note * 10) / 10,
+      notizen: n,
+      muendlich: m,
+      schriftlich: s,
+      ohneNotiz: n === 0
+    };
+  }
+
+  /**
+   * Die Halbjahresnote aus den bestätigten Stundennoten.
+   *
+   * Ein schlichtes Mittel, mit Absicht: diese Zahl muss im Elterngespräch in
+   * einem Satz erklärbar sein ("die achtzehn Stundennoten, geteilt durch
+   * achtzehn"). Die Zeitgewichtung aus `vorschlag` wäre hier fehl am Platz -
+   * eine bestätigte Note ist eine Entscheidung, kein Messwert, der altert.
+   *
+   * @param werte [Zahl] - die bestätigten Stundennoten des Halbjahres
+   */
+  function halbjahresnote(werte, typ) {
+    const zahlen = (werte || []).map(Number).filter(function (x) { return isFinite(x); });
+    if (!zahlen.length) return { wert: null, mittel: null, anzahl: 0 };
+    const mittel = zahlen.reduce(function (a, b) { return a + b; }, 0) / zahlen.length;
+    return {
+      wert: runden(mittel, typ),
+      mittel: Math.round(mittel * 100) / 100,
+      anzahl: zahlen.length
+    };
+  }
+
   return {
     VORGABE: VORGABE,
+    stundennote: stundennote,
+    halbjahresnote: halbjahresnote,
     verlauf: verlauf,
     MUENDLICH: MUENDLICH,
     SCHRIFTLICH: SCHRIFTLICH,

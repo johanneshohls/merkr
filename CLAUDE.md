@@ -60,6 +60,9 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Rückmeldung an planr, was gewackelt hat | gebaut, Weg gegen planr geprüft, auf dem Gerät ungetestet |
 | Umbenennung auf merkr, auch auf dem Bildschirm | fertig |
 | Die drei Hebel aus dem Wendwerk-Review | umgesetzt, im Browser gemessen |
+| Terminreihe in Sitzplan und Anwesenheit | fertig, im Browser geprüft |
+| Stundennote am Stundenende bestätigen | fertig, 10 Tests |
+| Noten-Reiter mit Notenbuch, TÜ und Was-wäre-wenn | fertig, 11 Tests für die TÜ-Rechnung |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -101,6 +104,37 @@ Der Hinweis in der Datensicherung stimmte seit der iCloud-Umstellung nicht mehr 
 auf dem iPad"). Jetzt steht dort, wo sie wirklich liegen, samt Tagesrhythmus und 60 Tagen Vorhalt.
 
 Für die nächste Runde an der Oberfläche liegt ein Prompt in `docs/design-prompt.md`.
+
+## Noten: Stundennoten statt hundert Felder (seit 2026-08-22)
+
+Vier Mitarbeitskategorien mal fünfundzwanzig Kinder sind hundert Felder je Stunde. Das füllt niemand.
+Seit dem 22.08. läuft es umgekehrt: **merkr schlägt am Stundenende je Schüler eine Note vor**, aus den
+Notizen dieser Stunde - wer keine hat, bekommt eine Drei. Eine Runde drüber, korrigieren, bestätigen.
+Die Notizen sind damit die Begründung für die Ausschläge, nicht die Pflichtübung für den Normalfall.
+
+Gerechnet wird in `MerkrMitarbeit.stundennote` mit demselben Modell wie der alte Halbjahresvorschlag,
+nur ohne Mittelung: ein "+" macht die Stunde zur Eins, eine Störung zur Fünf, nichts zur Drei. Die
+Halbjahresnote ist das schlichte Mittel der bestätigten Stunden (`halbjahresnote`) - sie muss im
+Elterngespräch in einem Satz erklärbar sein, deshalb keine Zeitgewichtung. Gespeichert wird an der
+Stunde (`st.mitarbeit`, `st.mitarbeitBestaetigt`), nicht am Schüler.
+
+**Der Reiter Noten** trägt jetzt fünf zusammenklappbare Blöcke und einen Umschalter für das Halbjahr:
+Mitarbeit (Mittel je Schüler, Zeile antippen zeigt jede Stunde), Notenbuch (Namen in Zeilen,
+Leistungen in Spalten, Zelle antippen öffnet die Eingabe), TÜ-Punkte, "Was wäre, wenn" und die alte
+Arbeitenliste als letzter Block.
+
+**TÜ-Punkte** (`src/kern/tue.js`): fünf Übungen zu je zehn Punkten, die besten drei zählen, höchstens
+30. TÜ 4 und 5 zählen nur mit Rückkaufrecht - eins streicht die schlechteste, zwei die zwei
+schlechtesten. Daraus folgt eine Regel, die kürzer ist als ihre Erklärung: mit r Rechten kommen die
+Übungen 1 bis 3+r in den Topf, daraus zählen die besten drei. Die Rechte hakt die Lehrkraft von Hand
+ab (Knopf in der Spalte "Rück", 0/1/2). Die Note macht der MV-Schlüssel aus `MerkrErgebnisse`, sie
+zählt als sonstige Leistung mit Gewicht 1 - aber erst, wenn drei Übungen geschrieben sind.
+
+Mitarbeit und TÜ hängen als Note in der gewohnten Rechnung (`schuelerNoten`), statt daneben zu stehen.
+Dieselbe Stelle filtert seither **alle** Leistungen nach dem gewählten Halbjahr: vorher zählten
+Arbeiten aus dem ersten Halbjahr im zweiten weiter, während die Mitarbeit dort neu ansetzte.
+
+Noch offen: die Auswertung führt einen eigenen Notenspiegel, der sich mit dem Notenbuch überschneidet.
 
 ## Die Stunden als Reihe (seit 2026-08-21)
 

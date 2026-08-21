@@ -206,3 +206,65 @@ test("der Verlauf rechnet mit demselben Weg wie der Vorschlag", () => {
   const direkt = M.vorschlag(sts, evs, { jetzt: new Date(letzte + "T12:00:00Z"), bis: letzte });
   assert.equal(v[v.length - 1].note, direkt.note);
 });
+
+/* ---------- Die Note einer einzelnen Stunde ---------- */
+
+test("eine Stunde ohne Notiz ist eine Drei", () => {
+  const r = M.stundennote([]);
+  assert.equal(r.wert, 3);
+  assert.equal(r.ohneNotiz, true);
+});
+
+test("ein guter Beitrag hebt die Stunde deutlich", () => {
+  const r = M.stundennote([{ typ: "qual_m", stufe: 1 }]);
+  assert.ok(r.note < 3, "Note " + r.note + " sollte besser als 3 sein");
+  assert.equal(r.ohneNotiz, false);
+});
+
+test("eine Störung zieht die Stunde nach unten", () => {
+  const r = M.stundennote([{ typ: "stoerung", stufe: null }]);
+  assert.ok(r.note > 3, "Note " + r.note + " sollte schlechter als 3 sein");
+});
+
+test("mehrere Beiträge in einer Stunde zählen mehrfach", () => {
+  const eins = M.stundennote([{ typ: "quant_m", stufe: 0 }]);
+  const zwei = M.stundennote([{ typ: "quant_m", stufe: 0 }, { typ: "quant_m", stufe: 0 }]);
+  assert.ok(zwei.note < eins.note, "zwei Beiträge sollten besser stehen als einer");
+});
+
+test("Schriftliches wiegt weniger als Mündliches", () => {
+  const m = M.stundennote([{ typ: "qual_m", stufe: 1 }]);
+  const s = M.stundennote([{ typ: "qual_s", stufe: 1 }]);
+  assert.ok(s.note > m.note, "schriftlich " + s.note + " sollte über mündlich " + m.note + " liegen");
+});
+
+test("die Stundennote bleibt zwischen 1 und 6", () => {
+  const gut = M.stundennote(Array.from({ length: 9 }, () => ({ typ: "qual_m", stufe: 2 })));
+  const schlecht = M.stundennote(Array.from({ length: 9 }, () => ({ typ: "stoerung", stufe: null })));
+  assert.equal(gut.wert, 1);
+  assert.equal(schlecht.wert <= 6, true);
+  assert.equal(schlecht.wert >= 5, true);
+});
+
+test("in der Oberstufe kommen Punkte statt Noten heraus", () => {
+  const r = M.stundennote([], { typ: "punkte" });
+  assert.equal(r.wert, 8);
+});
+
+test("die Halbjahresnote mittelt die bestätigten Stunden", () => {
+  const h = M.halbjahresnote([2, 3, 3, 4]);
+  assert.equal(h.mittel, 3);
+  assert.equal(h.wert, 3);
+  assert.equal(h.anzahl, 4);
+});
+
+test("die Halbjahresnote rundet zugunsten des Schülers", () => {
+  assert.equal(M.halbjahresnote([3, 4]).wert, 3);
+  assert.equal(M.halbjahresnote([2, 3]).wert, 2);
+});
+
+test("ohne bestätigte Stunde gibt es keine Halbjahresnote", () => {
+  const h = M.halbjahresnote([]);
+  assert.equal(h.wert, null);
+  assert.equal(h.anzahl, 0);
+});
