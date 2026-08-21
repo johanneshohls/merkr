@@ -3087,6 +3087,35 @@ function planImportieren(text){
           jahrFarbe(kurs, st.reihe);
           mitReihe++;
         } else if (st.reihe==null) st.reihe = "";
+
+        /* Woraus die TÜ gebaut ist - Grundlage der Rückmeldung, was gewackelt
+           hat. Fehlt das Feld, bleibt die alte Liste stehen: ein Abruf ohne
+           TÜ-Angabe soll die Auswahl nach der Stunde nicht löschen.
+
+           Diese Übernahme war beim Umbau des Importers verlorengegangen. Der
+           Rückweg stand seither vollständig da und bekam nie etwas zu zeigen -
+           ein Fehler, den man nicht sieht, weil der leere Block einfach fehlt. */
+        if (Array.isArray(th.tuThemen)){
+          const neuTu = th.tuThemen.map(x=>String(x));
+          if (String(st.tuThemen||"") !== String(neuTu)){ st.tuThemen = neuTu; geaendert++; }
+        }
+
+        /* Stundenziel und Verlauf. Sie stehen hier nicht zum Planen - geplant
+           wird drüben -, sondern zum Abhaken: am Stundenende sieht man, was
+           liegen blieb, und meldet es zurück. */
+        if (th.ziel != null){
+          const neuZiel = String(th.ziel).trim();
+          if (st.ziel !== neuZiel){ st.ziel = neuZiel; geaendert++; }
+        }
+        if (Array.isArray(th.phasen)){
+          const neuPh = th.phasen.filter(x=>x).map((x,i)=>({
+            schluessel: String(x.schluessel || x.seq || (i+1)),
+            name: String(x.phase || x.name || "").trim(),
+            inhalt: String(x.inhalt || "").trim(),
+            dauer: Number(x.dauerMin || x.dauer) || null
+          })).filter(x=>x.name || x.inhalt);
+          if (JSON.stringify(st.phasen||[]) !== JSON.stringify(neuPh)){ st.phasen = neuPh; geaendert++; }
+        }
         themen++;
       }
     }
@@ -5843,6 +5872,8 @@ const arbeitenOhneNotenbuch = viewArbeiten;
     ".nbuch .name{position:sticky; left:0; background:var(--karte); text-align:left; font-weight:700;"+
       "min-width:150px;}"+
     ".nbuch th.name{font-weight:700;}"+
+    ".nbuch tr.ngruppe th{font-size:10px; letter-spacing:.08em; text-transform:uppercase;"+
+      "color:var(--text2); padding-bottom:2px; border-bottom:none;}"+
     ".nbuch .stand{font-weight:900;}"+
     ".nbuch .leer{color:var(--linie);}"+
     ".nbuch input.tp{width:44px; text-align:center; padding:5px 2px; font-size:14px;}"+
@@ -5969,42 +6000,90 @@ schuelerNoten = function(schuelerId, kursId){
   return liste;
 };
 
-/* ---------- Block 1: Mitarbeit ---------- */
+/* ---------- Das Notenbuch: eine Tabelle ----------
+   Erst standen hier drei Tabellen übereinander - Mitarbeit, Noten, TÜ - mit
+   denselben Namen in denselben Zeilen. Wer wissen wollte, wie ein Kind steht,
+   las dreimal dieselbe Spalte Namen und setzte die Zahlen im Kopf zusammen.
 
-function notenMitarbeit(k){
+   Jetzt ein Raster: Namen links, alles andere als Spalten daneben. Die
+   Namensspalte klebt beim Querschieben am Rand, damit die Zeile nicht verrutscht.
+   Die Tiefe steckt hinter den Zellen - eine Note antippen öffnet die Eingabe der
+   Arbeit, die Mitarbeit ihren Verlauf, die TÜ-Felder nehmen die Punkte direkt. */
+
+function notenTabelle(k){
   const hj = notenHalbjahr();
-  const schueler = kursSchueler(k.id);
   const sys = notensystem(k);
+  const schueler = kursSchueler(k.id);
   if (!schueler.length) return leer("Dieser Kurs hat noch keine Schüler.", "Schüler hinzufügen", "tab", "kurscfg");
 
-  const offen = S.stunden.filter(st=>st.kursId===k.id && !st.ausfall && imHalbjahr(st.datum, hj) &&
-    st.datum <= todayISO() && !st.mitarbeitBestaetigt);
+  const arbeiten = S.arbeiten
+    .filter(a=>a.kursId===k.id && (!a.datum || imHalbjahr(a.datum, hj)))
+    .sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
 
-  let html = "";
-  if (offen.length)
-    html += '<p class="hinweis" style="margin:0 0 10px">'+offen.length+
-      (offen.length===1 ? ' gehaltene Stunde ist noch nicht abgeschlossen' : ' gehaltene Stunden sind noch nicht abgeschlossen')+
-      ' - zuletzt '+fmtDatum(offen[offen.length-1].datum)+'. '+
-      '<button class="klein" data-a="stundenTag" data-datum="'+offen[offen.length-1].datum+'">Dorthin</button></p>';
+  let html = '<div class="nrollen"><table class="nbuch">';
 
-  html += '<div class="nrollen"><table class="nbuch"><tr>'+
-    '<th class="name links">Schüler</th><th>Stunden</th><th>Mittel</th><th>Note</th><th class="links">Verlauf</th></tr>';
+  /* Erste Kopfzeile: die Gruppen. Ohne sie stünden dreizehn Kürzel nebeneinander
+     und niemand wüsste, wo die Arbeiten aufhören und die TÜ anfangen. */
+  html += '<tr class="ngruppe"><th class="name links"></th>'+
+    (arbeiten.length ? '<th colspan="'+arbeiten.length+'">Arbeiten und Tests</th>' : '')+
+    '<th colspan="'+(MerkrTue.ANZAHL+2)+'">TÜ</th>'+
+    '<th></th><th></th></tr>';
+
+  html += '<tr><th class="name links">Schüler</th>';
+  for (const a of arbeiten)
+    html += '<th title="'+esc(a.titel+" · "+a.art+" · "+fmtDatum(a.datum))+'">'+esc(spaltenKopf(a))+'</th>';
+  for (let i = 1; i <= MerkrTue.ANZAHL; i++)
+    html += '<th title="TÜ '+i+', bis '+MerkrTue.MAX_JE+' Punkte">TÜ'+i+'</th>';
+  html += '<th title="Rückkaufrechte: streichen die schlechtesten Übungen">Rück</th>'+
+    '<th title="Note aus den besten drei Übungen">Note</th>'+
+    '<th title="Mitarbeit: Mittel der abgeschlossenen Stunden">Mit.</th>'+
+    '<th>Stand</th></tr>';
+
   for (const s of schueler){
+    const punkte = tuePunkteVon(k, hj, s.id);
+    const tue = tueStand(k, hj, s.id);
+    const rechte = tueRechteVon(k, hj, s.id);
     const m = mitarbeitHalbjahr(s.id, k.id, hj);
-    const letzte = m.liste.slice(0, 12).reverse();
-    html += '<tr data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer">'+
-      '<td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>'+
-      '<td>'+(m.anzahl || '<span class="leer">–</span>')+'</td>'+
-      '<td>'+(m.mittel==null ? '<span class="leer">–</span>' : fmtZahl(m.mittel, 2))+'</td>'+
-      '<td class="stand">'+(m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>'+
-      '<td class="links">'+(letzte.length
-        ? letzte.map(x=>'<span class="nstunde" title="'+esc(fmtDatum(x.datum)+(x.thema?" · "+x.thema:""))+'">'+x.wert+'</span>').join(" ")
-        : '<span class="hinweis">noch keine abgeschlossene Stunde</span>')+'</td></tr>';
+    const stand = notenstand(s.id, k.id);
+
+    html += '<tr><td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>';
+
+    for (const a of arbeiten){
+      const w = a.ergebnisse[s.id];
+      const leerZelle = w===undefined || w===null || w==="";
+      html += '<td'+(leerZelle?' class="leer"':'')+' data-a="arbeitEingabe" data-id="'+a.id+'" '+
+        'style="cursor:pointer" title="'+esc(a.titel)+'">'+(leerZelle ? '–' : w)+'</td>';
+    }
+
+    for (let i = 1; i <= MerkrTue.ANZAHL; i++){
+      const w = punkte[i-1];
+      const raus = tue.gestrichen.indexOf(i) >= 0 || tue.unzulaessig.indexOf(i) >= 0;
+      html += '<td'+(raus?' class="gestrichen"':'')+' title="'+
+        (tue.unzulaessig.indexOf(i)>=0 ? 'ohne Rückkaufrecht geschrieben - zählt nicht'
+          : tue.gestrichen.indexOf(i)>=0 ? 'gestrichen' : 'TÜ '+i)+'">'+
+        '<input class="tp" type="number" min="0" max="'+MerkrTue.MAX_JE+'" step="1" '+
+        'value="'+(w==null?"":w)+'" data-a-change="tuePunkt" data-id="'+s.id+'" data-nr="'+i+'"></td>';
+    }
+    html += '<td><button class="klein" data-a="tueRecht" data-id="'+s.id+'"'+
+      (rechte ? ' style="background:var(--akzent);color:#fff"' : '')+
+      ' title="Antippen zählt weiter: 0, 1, 2">'+rechte+'</button></td>'+
+      '<td title="'+(tue.zaehlend.length ? tue.summe+' von '+tue.max+' Punkten' : 'noch nichts geschrieben')+'">'+
+      (tue.wert==null ? '<span class="leer">–</span>' : tue.wert + (tue.vollstaendig ? '' : '*'))+'</td>';
+
+    html += '<td data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
+      (m.anzahl ? m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2) : 'noch keine abgeschlossene Stunde')+'">'+
+      (m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>';
+
+    html += '<td class="stand">'+(stand.gesamt==null ? '<span class="leer">–</span>' : fmtZahl(stand.gesamt,1))+
+      '</td></tr>';
   }
-  html += '</table></div>'+
-    '<p class="hinweis" style="margin-top:10px">Das Mittel aller abgeschlossenen Stunden dieses Halbjahres'+
-    (sys.typ==="punkte" ? ' (Punkte 0–15)' : ' (Noten 1–6)')+
-    '. Eine Zeile antippen zeigt jede einzelne Stunde.</p>';
+  html += '</table></div>';
+
+  const anteil = 100 - gewSonstige(k);
+  html += '<p class="hinweis" style="margin-top:10px">Stand = '+anteil+' Prozent Klassenarbeiten, '+
+    gewSonstige(k)+' Prozent sonstige Leistungen'+(sys.typ==="punkte"?' (Punkte 0–15)':' (Noten 1–6)')+
+    ', nur aus diesem Halbjahr. Note einer Arbeit antippen öffnet ihre Eingabe, die Mitarbeit ihren Verlauf. '+
+    'Durchgestrichene TÜ zählen nicht, ein Stern heißt: noch keine drei geschrieben, die Note zählt erst danach mit.</p>';
   return html;
 }
 
@@ -6223,7 +6302,7 @@ viewArbeiten = function(k){
   const sys = notensystem(k);
   const schueler = kursSchueler(k.id);
 
-  let html = '<div class="zeile raum" style="margin-bottom:14px">'+
+  let html = '<div class="zeile raum" style="margin-bottom:12px">'+
     '<div><h2 style="margin:0">Noten '+esc(k.name)+'</h2>'+
     '<div class="hinweis">'+schueler.length+' Schüler · '+(sys.typ==="punkte"?"0 bis 15 Punkte":"Noten 1 bis 6")+'</div></div>'+
     '<div class="wertknoepfe">'+
@@ -6232,21 +6311,17 @@ viewArbeiten = function(k){
       '>'+nr+'. Halbjahr</button>').join('')+
     '</div></div>';
 
-  const mitStunden = schueler.filter(s=>mitarbeitHalbjahr(s.id, k.id, hj).anzahl > 0).length;
-  const tueGeschrieben = schueler.filter(s=>tuePunkteVon(k, hj, s.id).some(x=>x!=null)).length;
-  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id && (!a.datum || imHalbjahr(a.datum, hj)));
+  /* Was noch aussteht, gehört über die Tabelle: eine nicht abgeschlossene
+     Stunde fehlt in jeder Zahl darunter. */
+  const offen = S.stunden.filter(st=>st.kursId===k.id && !st.ausfall && imHalbjahr(st.datum, hj) &&
+    st.datum <= todayISO() && !st.mitarbeitBestaetigt);
+  if (offen.length)
+    html += '<p class="hinweis" style="margin:-4px 0 10px">'+offen.length+
+      (offen.length===1 ? ' gehaltene Stunde ist noch nicht abgeschlossen' : ' gehaltene Stunden sind noch nicht abgeschlossen')+
+      ' - zuletzt '+fmtDatum(offen[offen.length-1].datum)+'. '+
+      '<button class="klein" data-a="stundenTag" data-datum="'+offen[offen.length-1].datum+'">Dorthin</button></p>';
 
-  html += notenBlock("mitarbeit", "Mitarbeit", 
-    mitStunden ? mitStunden+" von "+schueler.length+" mit Stundennoten" : "noch keine abgeschlossene Stunde",
-    ()=>notenMitarbeit(k));
-
-  html += notenBlock("buch", "Notenbuch",
-    arbeiten.length+(arbeiten.length===1?" Leistung":" Leistungen")+" in diesem Halbjahr",
-    ()=>notenBuch(k));
-
-  html += notenBlock("tue", "TÜ-Punkte",
-    tueGeschrieben ? tueGeschrieben+" von "+schueler.length+" haben Punkte" : "noch nichts eingetragen",
-    ()=>notenTue(k));
+  html += '<div class="karte" style="padding:14px 16px">'+notenTabelle(k)+'</div>';
 
   html += notenBlock("wenn", "Was wäre, wenn",
     "der Stand nach einer angenommenen Leistung",
@@ -6257,6 +6332,130 @@ viewArbeiten = function(k){
     ()=>arbeitenOhneNotenbuch(k));
 
   return html;
+};
+zeichne();
+
+/* ================= Was von der Stunde übrig blieb =================
+   planr plant den Verlauf, merkr hält fest was war - deshalb standen Ziel und
+   Phasen bisher nur drüben. Am Stundenende fehlt aber genau das: welche der
+   vorgesehenen Schritte man geschafft hat. Die Antwort darauf ist keine zweite
+   Planung, sondern eine Beobachtung, und sie gehört dorthin, wo man nach der
+   Stunde ohnehin steht.
+
+   Abgehakt wird im selben Dialog wie die Mitarbeit. Was offen bleibt, geht mit
+   dem Zielstand an planr: alles erledigt heißt "ja", nichts "nein", dazwischen
+   "teilweise", und die offenen Schritte stehen im Klartext in der Reflexion.
+   Ein eigenes Feld je Phase hat planr nicht - dafür wäre drüben ein Schema zu
+   ändern, und ein Satz Reflexion beantwortet die Frage beim Planen genauso. */
+
+function stundenPhasen(st){
+  return Array.isArray(st && st.phasen) ? st.phasen.filter(x=>x && x.schluessel) : [];
+}
+function erledigteVon(st){
+  return Array.isArray(st && st.erledigt) ? st.erledigt : [];
+}
+
+function phasenBlockHtml(st){
+  const phasen = stundenPhasen(st);
+  const ziel = String(st.ziel||"").trim();
+  if (!phasen.length && !ziel) return "";
+
+  const fertig = erledigteVon(st);
+  let h = '<div class="phasenblock" data-stunde="'+st.id+'" '+
+    'style="border:1px solid var(--linie);border-radius:12px;padding:10px 12px;margin:10px 0">';
+
+  if (ziel)
+    h += '<div style="margin-bottom:'+(phasen.length?'8px':'0')+'">'+
+      '<div class="hinweis" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em">Stundenziel</div>'+
+      esc(ziel)+'</div>';
+
+  if (phasen.length){
+    h += '<div class="hinweis" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">'+
+      'Geschafft?</div>';
+    for (const p of phasen){
+      const an = fertig.indexOf(p.schluessel) >= 0;
+      h += '<label style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-weight:400">'+
+        '<input type="checkbox" class="phaseBox" value="'+esc(p.schluessel)+'" '+(an?'checked':'')+
+        ' style="width:auto;margin-top:3px">'+
+        '<span><b style="font-weight:700">'+esc(p.name||"Phase")+'</b>'+
+        (p.dauer ? ' <span class="hinweis">'+p.dauer+' min</span>' : '')+
+        (p.inhalt ? '<div class="hinweis" style="font-size:12px">'+esc(p.inhalt)+'</div>' : '')+
+        '</span></label>';
+    }
+    const z = MerkrRueckmeldung.zielstand(phasen, fertig);
+    h += '<div class="hinweis" style="font-size:12px;margin-top:4px" id="phasenStand">'+
+      (st.zielGemeldet
+        ? 'zuletzt gemeldet: '+esc(st.zielGemeldet)
+        : (z.zielErreicht==="ja" ? 'alles geschafft'
+          : z.offen.length ? 'offen: '+esc(z.offen.join(", "))
+          : 'noch nichts abgehakt'))+
+      '</div>';
+  }
+  return h + '</div>';
+}
+
+/* Jeder Haken wird sofort behalten. Das ist wichtiger als es aussieht: der
+   Dialog baut sich bei jedem Tipp auf eine Note neu auf, und ein Haken, der
+   dabei verschwindet, wird kein zweites Mal gesetzt. */
+document.addEventListener("change", ev=>{
+  const box = ev.target.closest(".phaseBox");
+  if (!box) return;
+  const block = box.closest(".phasenblock");
+  const st = block ? stundeVon(block.dataset.stunde) : null;
+  if (!st) return;
+  st.erledigt = Array.from(block.querySelectorAll(".phaseBox"))
+    .filter(b=>b.checked).map(b=>b.value);
+  speichern();
+  const stand = block.querySelector("#phasenStand");
+  if (stand){
+    const z = MerkrRueckmeldung.zielstand(stundenPhasen(st), st.erledigt);
+    stand.textContent = z.zielErreicht==="ja" ? "alles geschafft"
+      : z.offen.length ? "offen: "+z.offen.join(", ") : "noch nichts abgehakt";
+  }
+});
+
+const abschlussOhnePhasen = stundeAbschliessenDialog;
+stundeAbschliessenDialog = function(k, st){
+  abschlussOhnePhasen(k, st);
+  const block = phasenBlockHtml(st);
+  if (!block) return;
+  /* Der Block gehört zwischen die Einleitung und die Namen: erst die Stunde,
+     dann die Kinder. */
+  const modal = document.getElementById("modal");
+  const kopf = modal.firstElementChild;
+  if (!kopf) return;
+  kopf.insertAdjacentHTML("afterend", block);
+};
+
+/* Beim Bestätigen geht der Zielstand mit an planr. */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="abschlussSpeichern"]');
+  if (!el) return;
+  const st = stundeVon(el.dataset.id);
+  const k = st ? kursVon(st.kursId) : null;
+  if (!st || !k) return;
+
+  const phasen = stundenPhasen(st);
+  if (!phasen.length) return;
+  const z = MerkrRueckmeldung.zielstand(phasen, erledigteVon(st));
+  if (!z.zielErreicht) return;
+
+  /* Erst merken, dann senden - wie bei den gewackelten Themen: der Haken soll
+     auch stehen, wenn das iPad gerade kein Netz hat. */
+  st.zielGemeldet = z.zielErreicht + (z.offen.length ? " ("+z.offen.join(", ")+")" : "");
+  speichern();
+
+  if (!planrGekoppelt()) return;
+  const brief = MerkrRueckmeldung.brief(k, st, Array.isArray(st.gewackelt) ? st.gewackelt : [],
+    {zielErreicht: z.zielErreicht, notiz: z.notiz});
+  if (brief) sendeAnBridge({typ:"planrRueckmeldung", url: planrBasis(), brief: brief});
+});
+
+/* Im Stundendialog steht der Verlauf ebenfalls - dort wird nachgetragen, wenn
+   man am Stundenende nicht dazu kam. */
+const wackelBlockOhnePhasen = wackelBlockHtml;
+wackelBlockHtml = function(st){
+  return phasenBlockHtml(st) + wackelBlockOhnePhasen(st);
 };
 
 zeichne();

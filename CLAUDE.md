@@ -62,7 +62,8 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Die drei Hebel aus dem Wendwerk-Review | umgesetzt, im Browser gemessen |
 | Terminreihe in Sitzplan und Anwesenheit | fertig, im Browser geprüft |
 | Stundennote am Stundenende bestätigen | fertig, 10 Tests |
-| Noten-Reiter mit Notenbuch, TÜ und Was-wäre-wenn | fertig, 11 Tests für die TÜ-Rechnung |
+| Noten-Reiter: ein Notenbuch, TÜ und Was-wäre-wenn | fertig, 11 Tests für die TÜ-Rechnung |
+| Ziel und Verlauf aus planr zum Abhaken | merkr fertig (7 Tests); planr-Route erweitert, noch nicht ausgerollt |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -118,10 +119,13 @@ Halbjahresnote ist das schlichte Mittel der bestätigten Stunden (`halbjahresnot
 Elterngespräch in einem Satz erklärbar sein, deshalb keine Zeitgewichtung. Gespeichert wird an der
 Stunde (`st.mitarbeit`, `st.mitarbeitBestaetigt`), nicht am Schüler.
 
-**Der Reiter Noten** trägt jetzt fünf zusammenklappbare Blöcke und einen Umschalter für das Halbjahr:
-Mitarbeit (Mittel je Schüler, Zeile antippen zeigt jede Stunde), Notenbuch (Namen in Zeilen,
-Leistungen in Spalten, Zelle antippen öffnet die Eingabe), TÜ-Punkte, "Was wäre, wenn" und die alte
-Arbeitenliste als letzter Block.
+**Der Reiter Noten** trägt oben ein einziges Notenbuch und darunter zwei zusammenklappbare Blöcke,
+dazu einen Umschalter für das Halbjahr. Erst standen dort drei Tabellen übereinander - Mitarbeit,
+Noten, TÜ - mit denselben Namen in denselben Zeilen; wer wissen wollte, wie ein Kind steht, las
+dreimal dieselbe Spalte Namen. Jetzt ein Raster: Namen links (klebend beim Querschieben), Spalten für
+jede Arbeit, TÜ 1-5 mit Rückkauf, Mitarbeit und Stand. Die Tiefe steckt hinter den Zellen - Note
+antippen öffnet die Eingabe der Arbeit, die Mitarbeit ihren Verlauf, die TÜ-Felder nehmen Punkte
+direkt. Darunter "Was wäre, wenn" und die alte Arbeitenliste mit den Verteilungen.
 
 **TÜ-Punkte** (`src/kern/tue.js`): fünf Übungen zu je zehn Punkten, die besten drei zählen, höchstens
 30. TÜ 4 und 5 zählen nur mit Rückkaufrecht - eins streicht die schlechteste, zwei die zwei
@@ -147,6 +151,24 @@ Unterrichtsstunde, der nächste.
 
 Die Pfeile ‹ › in `tagKopf` entfallen, wo die Reihe steht - im Reiter Schüler bleiben sie, dort gibt
 es keine Reihe. Beides zugleich wäre zweimal derselbe Weg gewesen.
+
+## Ziel und Verlauf zum Abhaken (seit 2026-08-22)
+
+planr liefert mit der Stoffverteilung jetzt auch `ziel` (das Stundenziel) und `phasen` (Nummer,
+Phase, Inhalt, Dauer). Sie stehen in merkr nicht zum Planen - geplant wird drüben -, sondern zum
+Abhaken: im Abschluss-Dialog steht über den Namen das Ziel und darunter der Verlauf als Haken. Was
+liegen blieb, geht beim Bestätigen mit an planr: alles erledigt heißt `zielErreicht: "ja"`, nichts
+`"nein"`, dazwischen `"teilweise"`, und die offenen Schritte stehen im Klartext in der Notiz, die
+drüben zur Reflexion wird. Ein eigenes Feld je Phase hat planr nicht; dafür wäre dort ein Schema zu
+ändern, und ein Satz beantwortet die Frage beim Planen genauso.
+
+Jeder Haken wird sofort behalten (`stunde.erledigt`) - der Dialog baut sich bei jedem Tipp auf eine
+Note neu auf, und ein Haken, der dabei verschwindet, wird kein zweites Mal gesetzt.
+
+**Dabei kam ein stiller Fehler heraus:** die zweite Fassung von `planImportieren` (die mit
+`planrKlasse` und Halbjahresgrenze) übernahm `tuThemen` nicht mehr. Der Rückweg für gewackelte Themen
+stand seither vollständig da und bekam nie etwas zu zeigen - der Block blendet sich ohne Themen
+einfach aus, deshalb fiel es nicht auf. Seit dem 22.08. übernimmt der Importer die Themen wieder.
 
 ## Der Rückweg zu planr (seit 2026-08-20)
 

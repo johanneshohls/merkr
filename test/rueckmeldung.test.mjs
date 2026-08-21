@@ -60,3 +60,62 @@ test("Notiz fasst zusammen", () => {
     "2026-08-25: lösungsformel, faktorisierung");
   assert.equal(R.notiz(null), "");
 });
+
+/* ---------- Der Zielstand aus den abgehakten Phasen ---------- */
+
+const PHASEN = [
+  { schluessel: "p1", name: "TÜ + Vergleichen" },
+  { schluessel: "p2", name: "Erarbeitung" },
+  { schluessel: "p3", name: "Sicherung" },
+];
+
+test("alles abgehakt heißt: Ziel erreicht", () => {
+  const z = R.zielstand(PHASEN, ["p1", "p2", "p3"]);
+  assert.equal(z.zielErreicht, "ja");
+  assert.deepEqual(z.offen, []);
+  assert.equal(z.notiz, "");
+});
+
+test("ein Rest bleibt: teilweise, und der Rest steht in der Notiz", () => {
+  const z = R.zielstand(PHASEN, ["p1", "p2"]);
+  assert.equal(z.zielErreicht, "teilweise");
+  assert.deepEqual(z.offen, ["Sicherung"]);
+  assert.match(z.notiz, /Sicherung/);
+});
+
+test("nichts abgehakt heißt: nicht erreicht", () => {
+  assert.equal(R.zielstand(PHASEN, []).zielErreicht, "nein");
+});
+
+test("ohne Phasen gibt es keinen Zielstand", () => {
+  const z = R.zielstand([], ["p1"]);
+  assert.equal(z.zielErreicht, null);
+  assert.equal(z.notiz, "");
+});
+
+test("der Brief trägt den Zielstand auch ohne gewackelte Themen", () => {
+  const b = R.brief(
+    { planrName: "9d", planrFach: "Mathematik" },
+    { datum: "2026-09-17" },
+    [],
+    { zielErreicht: "teilweise", notiz: "Offen geblieben: Sicherung" },
+  );
+  assert.equal(b.zielErreicht, "teilweise");
+  assert.equal(b.wackelt, undefined);
+  assert.equal(b.klasse, "9d");
+});
+
+test("ein erfundener Zielstand geht nicht hinaus", () => {
+  const b = R.brief(
+    { planrName: "9d" },
+    { datum: "2026-09-17", tuThemen: ["Wurzeln"] },
+    ["Wurzeln"],
+    { zielErreicht: "vielleicht" },
+  );
+  assert.equal(b.zielErreicht, undefined);
+  assert.deepEqual(b.wackelt, ["Wurzeln"]);
+});
+
+test("ohne Inhalt entsteht kein Brief", () => {
+  assert.equal(R.brief({ planrName: "9d" }, { datum: "2026-09-17" }, [], {}), null);
+});
