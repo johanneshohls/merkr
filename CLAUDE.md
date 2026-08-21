@@ -102,6 +102,18 @@ auf dem iPad"). Jetzt steht dort, wo sie wirklich liegen, samt Tagesrhythmus und
 
 Für die nächste Runde an der Oberfläche liegt ein Prompt in `docs/design-prompt.md`.
 
+## Die Stunden als Reihe (seit 2026-08-21)
+
+Unter den Reitern steht in Sitzplan und Anwesenheit eine Reihe mit den Terminen des Kurses: welcher
+Tag offen ist, wo heute liegt, wo eine Stunde ausgefallen ist und was schon notiert wurde - dieselben
+Farben wie im Wochenplan (grün notiert, gelb gehalten, blass offen, rot Ausfall). Die Termine kommen
+aus dem Stundenraster des Kurses, nicht aus `S.stunden`: so steht auch dort ein Tag, an dem noch nie
+etwas erfasst wurde. Beim Zeichnen rückt der offene Tag in die Mitte; ist der Tag keine
+Unterrichtsstunde, der nächste.
+
+Die Pfeile ‹ › in `tagKopf` entfallen, wo die Reihe steht - im Reiter Schüler bleiben sie, dort gibt
+es keine Reihe. Beides zugleich wäre zweimal derselbe Weg gewesen.
+
 ## Der Rückweg zu planr (seit 2026-08-20)
 
 planr liefert mit der Stoffverteilung je Termin `tuThemen` - woraus die TÜ dieser Stunde gebaut ist,

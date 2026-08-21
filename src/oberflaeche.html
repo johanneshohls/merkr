@@ -5480,6 +5480,139 @@ viewAuswertung = function(k){
 
 zeichne();
 
+/* ================= Die Stunden als Reihe unter den Reitern =================
+   Mitarbeit und Anwesenheit hängen an einer Unterrichtsstunde, nicht am
+   Kalendertag - der Blätterer ‹ › sagte das zwar, zeigte aber immer nur einen
+   Tag. Wer die Notiz von vorletzter Woche nachtragen wollte, klickte sechsmal
+   und wusste bis zum Loslassen nicht, wo er landet.
+
+   Jetzt stehen die Termine des Kurses als Reihe unter den Reitern: welcher Tag
+   gerade offen ist, wo heute liegt, und was an den anderen schon steht. Die
+   Pfeile entfallen dort, wo die Reihe steht - zweimal derselbe Weg war schon
+   einmal der Befund. */
+
+(function stundenreiheStil(){
+  if (document.getElementById("stundenreiheStil")) return;
+  const s = document.createElement("style");
+  s.id = "stundenreiheStil";
+  s.textContent =
+    ".stundenreihe{position:relative; display:flex; gap:5px; align-items:stretch; flex-wrap:nowrap;"+
+      "overflow-x:auto; margin:-6px 0 14px; padding:2px 0 4px;"+
+      "scrollbar-width:none; -ms-overflow-style:none;}"+
+    ".stundenreihe::-webkit-scrollbar{display:none;}"+
+    ".stundenreihe .smonat{flex:0 0 auto; align-self:center; padding:0 6px 0 2px; font-size:10px;"+
+      "font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--text2);}"+
+    ".stag{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:1px;"+
+      "min-height:auto; padding:5px 9px 4px; border-radius:12px; background:var(--karte);"+
+      "border:1px solid var(--linie); color:var(--text2); line-height:1.1;}"+
+    ".stag .swt{font-size:10px; font-weight:700;}"+
+    ".stag .sdat{font-size:13px; font-weight:800; color:var(--text);}"+
+    ".stag i{display:block; width:5px; height:5px; border-radius:50%; margin-top:2px;}"+
+    ".stag.heute{border-color:var(--akzent);}"+
+    ".stag.aktiv{background:var(--akzent); border-color:var(--akzent); color:#fff;}"+
+    ".stag.aktiv .sdat{color:#fff;}"+
+    ".stag.ausfall .sdat{text-decoration:line-through; opacity:.6;}";
+  document.head.appendChild(s);
+})();
+
+const STUNDENREIHE_TABS = ["sitzplan", "anwesenheit"];
+const MONATSKURZ = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+
+/** Alle Unterrichtstage dieses Kurses im laufenden Schuljahr, aufsteigend. */
+function unterrichtstage(k){
+  const sj = aktivesSchuljahr();
+  if (!sj || !sj.beginn || !sj.ende) return [];
+  const tage = [];
+  const d = new Date(sj.beginn+"T12:00:00");
+  const ende = new Date(sj.ende+"T12:00:00");
+  for (let i = 0; i < 400 && d <= ende; i++){
+    const iso = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    if (hatUnterricht(k.id, iso)) tage.push(iso);
+    d.setDate(d.getDate()+1);
+  }
+  return tage;
+}
+
+/** Was an einem Termin schon steht - dieselben Zeichen wie im Wochenplan. */
+function stundenStand(k, iso){
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===iso);
+  if (st && st.ausfall) return {farbe:"var(--rot)", wort:"Ausfall", ausfall:true};
+  const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
+  if (notizen) return {farbe:"var(--s2)", wort:notizen+(notizen===1?" Notiz":" Notizen")};
+  if (st && String(st.thema||"").trim()) return {farbe:"var(--s0)", wort:"gehalten, nichts notiert"};
+  return {farbe:"var(--linie)", wort:(st && String(st.geplant||"").trim()) ? String(st.geplant) : "steht noch aus"};
+}
+
+function stundenReihe(k){
+  const tage = unterrichtstage(k);
+  if (!tage.length) return "";
+  const heute = todayISO();
+  let html = '<div class="stundenreihe" id="stundenreihe">';
+  let letzterMonat = "";
+  for (const iso of tage){
+    const monat = iso.slice(0,7);
+    if (monat !== letzterMonat){
+      letzterMonat = monat;
+      html += '<span class="smonat">'+MONATSKURZ[Number(iso.slice(5,7))-1]+'</span>';
+    }
+    const stand = stundenStand(k, iso);
+    const klassen = "stag"+(iso===R.datum?" aktiv":"")+(iso===heute?" heute":"")+(stand.ausfall?" ausfall":"");
+    html += '<button class="'+klassen+'" data-a="stundenTag" data-datum="'+iso+'" '+
+      'title="'+esc(fmtDatum(iso)+" · "+stand.wort)+'">'+
+      '<span class="swt">'+wochentagName(new Date(iso+"T12:00:00").getDay())+'</span>'+
+      '<span class="sdat">'+iso.slice(8,10)+'.'+iso.slice(5,7)+'.</span>'+
+      '<i style="background:'+stand.farbe+'"></i></button>';
+  }
+  return html + '</div>';
+}
+
+/* Unter die Reiter, aber nur dort, wo der Tag etwas bedeutet. */
+const kursLeisteOhneStunden = kursLeiste;
+kursLeiste = function(k){
+  const html = kursLeisteOhneStunden(k);
+  if (STUNDENREIHE_TABS.indexOf(R.tab) < 0) return html;
+  return html + stundenReihe(k);
+};
+
+/* Wo die Reihe steht, braucht es die Pfeile nicht mehr. */
+const tagKopfMitPfeilen = tagKopf;
+tagKopf = function(k){
+  if (STUNDENREIHE_TABS.indexOf(R.tab) < 0) return tagKopfMitPfeilen(k);
+  const wt = wochentagName(new Date(R.datum+"T12:00:00").getDay());
+  return '<div class="zeile"><b>'+wt+', '+esc(fmtDatum(R.datum))+'</b>'+
+    (R.datum !== todayISO() && hatUnterricht(k.id, todayISO())
+      ? '<button class="klein" data-a="stundenTag" data-datum="'+todayISO()+'">Heute</button>' : '')+
+    '</div>';
+};
+
+/* Der Reiter bleibt, wo er ist - nur der Tag wechselt. */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="stundenTag"]');
+  if (!el) return;
+  R.datum = el.dataset.datum;
+  zeichne();
+});
+
+/* Nach dem Zeichnen den offenen Tag in die Mitte schieben. Ohne das steht die
+   Reihe im August, während man im Februar notiert. */
+const zeichneOhneStundenreihe = zeichne;
+zeichne = function(){
+  zeichneOhneStundenreihe();
+  const reihe = document.getElementById("stundenreihe");
+  if (!reihe) return;
+  let ziel = reihe.querySelector(".stag.aktiv");
+  if (!ziel){
+    /* Der offene Tag ist keine Unterrichtsstunde: dann zum nächsten Termin. */
+    const alle = reihe.querySelectorAll(".stag");
+    for (const b of alle){ if (b.dataset.datum >= R.datum){ ziel = b; break; } }
+    if (!ziel && alle.length) ziel = alle[alle.length-1];
+  }
+  if (!ziel) return;
+  reihe.scrollLeft = ziel.offsetLeft - reihe.clientWidth/2 + ziel.offsetWidth/2;
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
