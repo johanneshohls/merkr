@@ -170,8 +170,14 @@ Die drei Teile, die etwas wert sind, stehen jetzt dort, wo ihr Inhalt steht:
 | Notenliste als PDF | Kopfzeile des Reiters Noten |
 | Stundendoku als PDF | Kopfzeile des Reiters Stunden |
 
-Fehlzeiten und der Weg ins Profil standen ohnehin schon im Reiter Schüler. `viewAuswertung` bleibt im
-Code stehen, wird aber nicht mehr gerufen - der Reiter ist aus `LEISTE_KURS` heraus.
+Fehlzeiten und der Weg ins Profil standen ohnehin schon im Reiter Schüler. Der Code dahinter ist mit
+dem Reiter gegangen: beide `viewAuswertung`-Fassungen, ihr Aufsatz und `verlaufSvg`, dazu die
+Aufrufe in den ersetzten `viewKurs`-Fassungen und die Einträge in den alten Reiterlisten - zusammen
+rund 230 Zeilen. Eine Umleitung für alte Zustände braucht es nicht: `R` lebt nur zur Laufzeit,
+gespeichert wird allein `S`.
+
+Geblieben sind `notenlistePdf`, `stundenlistePdf` und `viewMuendlich` - sie werden an ihren neuen
+Orten gerufen und erzeugen nachweislich weiter Papier.
 
 ## Vier Handgriffe an der Bedienung (22.08.2026)
 

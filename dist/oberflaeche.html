@@ -1834,7 +1834,7 @@ function ersterMontagAb(iso){
 }
 
 /* ============ Kursansicht ============ */
-const KURS_TABS = [["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["arbeiten","Arbeiten"],["auswertung","Auswertung"],["kurscfg","Kurs"]];
+const KURS_TABS = [["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["arbeiten","Arbeiten"],["kurscfg","Kurs"]];
 function viewKurs(){
   const k = kursVon(R.kursId);
   if (!k) { R.view="home"; return viewHome(); }
@@ -1847,7 +1847,6 @@ function viewKurs(){
   else if (R.tab==="liste") html += viewListe(k);
   else if (R.tab==="stunden") html += viewStunden(k);
   else if (R.tab==="arbeiten") html += viewArbeiten(k);
-  else if (R.tab==="auswertung") html += viewAuswertung(k);
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 }
@@ -2173,35 +2172,10 @@ function svgVerteilung(stat, sys){
   return s + '<text x="'+L+'" y="14" font-size="12" fill="#6b7a68">Verteilung ('+(sys.typ==="punkte"?"Punkte":"Noten")+')</text></svg>';
 }
 
-/* ============ Auswertung (Kurs) ============ */
-function viewAuswertung(k){
-  const schueler = kursSchueler(k.id);
-  if (!schueler.length) return leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
-  const sys = notensystem(k);
-  let html = '<div class="karte"><h2>Notenspiegel & Mitarbeit</h2>'+
-    '<p class="hinweis">Gewichtung: '+gewichtungsText(k)+' – änderbar im Tab „Kurs".</p>'+
-    '<table class="tab"><tr><th>Schüler</th><th>Klassenarb.</th><th>sonstige</th><th>davon mdl.</th><th>Stand</th><th>Mitarbeit</th><th>Fehlz.</th><th></th></tr>';
-  for (const s of schueler){
-    const ns = notenstand(s.id, k.id);
-    const mz = mitarbeitZusammenfassung(s.id, k.id);
-    const fz = fehlzeiten(s.id, k.id);
-    let chips = "";
-    for (const kat of MITARBEIT_KATEGORIEN){
-      const z = mz[kat.id];
-      const farbe = z.schnitt==null ? "#d7ded4" : stufeInfo(Math.round(z.schnitt)).hex;
-      chips += '<span class="stufenpunkt" title="'+esc(kat.kurz)+'" style="background:'+farbe+';margin-right:4px"></span>';
-    }
-    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
-      '<td>'+fmtZahl(ns.arb)+'</td><td>'+fmtZahl(ns.son)+'</td><td>'+fmtZahl(ns.m)+'</td>'+
-      '<td><b>'+fmtZahl(ns.gesamt)+'</b></td>'+
-      '<td>'+chips+'</td>'+
-      '<td>'+fz.fehltGesamt+(fz.offen?' <span style="color:var(--rot)">('+fz.offen+' offen)</span>':'')+'</td>'+
-      '<td><button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil</button></td></tr>';
-  }
-  html += '</table><p class="hinweis">Stand = gewichtetes Mittel'+(sys.typ==="punkte"?" (Punkte 0–15)":" (Noten 1–6)")+'; Mitarbeit-Punkte: Ø je Kategorie (Qual. mündl. · Quant. mündl. · Qual. schriftl. · Quant. schriftl.).</p></div>';
-  return html;
-}
-
+/* Der Reiter Auswertung ist am 22.08.2026 entfallen; seine drei brauchbaren
+   Teile stehen jetzt im Profil, im Notenbuch und bei den Stunden. Der
+   Notenspiegel darin doppelte das Notenbuch, die Spalte "Vorschlag mdl."
+   rechnete noch nach dem alten Notizen-Modell. */
 /* ============ Kurs-Einstellungen ============ */
 function viewKursCfg(k){
   const schueler = kursSchueler(k.id);
@@ -3915,68 +3889,6 @@ profilZusatzKarten = function(s, k, ns){
 };
 
 /* ---------- Arbeiten-Verlauf & erweiterte Auswertung (ersetzt Phase-1-Fassung) ---------- */
-function viewAuswertung(k){
-  const schueler = kursSchueler(k.id);
-  if (!schueler.length) return leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
-  const sys = notensystem(k);
-  let html = '<div class="karte"><div class="zeile raum"><h2>Notenspiegel & Mitarbeit</h2>'+
-    '<div class="zeile"><button class="klein" data-a="notenlistePdf">Notenliste als PDF</button>'+
-    '<button class="klein" data-a="stundenlistePdf">Stundendoku als PDF</button></div></div>'+
-    '<p class="hinweis">Gewichtung: '+gewichtungsText(k)+' – änderbar im Tab „Kurs".</p>'+
-    '<table class="tab"><tr><th>Schüler</th><th>Klassenarb.</th><th>sonstige</th><th>davon mdl.</th><th>Stand</th><th>Vorschlag mdl.</th><th>Mitarbeit</th><th>Fehlz.</th><th></th></tr>';
-  for (const s of schueler){
-    const ns = notenstand(s.id, k.id);
-    const vs = notenvorschlag(s.id, k.id);
-    const mz = mitarbeitZusammenfassung(s.id, k.id);
-    const fz = fehlzeiten(s.id, k.id);
-    let chips = "";
-    for (const kat of MITARBEIT_KATEGORIEN){
-      const z = mz[kat.id];
-      const farbe = z.schnitt==null ? "#555" : stufeInfo(Math.round(z.schnitt)).hex;
-      chips += '<span class="stufenpunkt" title="'+esc(kat.kurz)+'" style="background:'+farbe+';margin-right:4px"></span>';
-    }
-    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
-      '<td>'+fmtZahl(ns.arb)+'</td><td>'+fmtZahl(ns.son)+'</td><td>'+fmtZahl(ns.m)+'</td>'+
-      '<td><b>'+fmtZahl(ns.gesamt)+'</b></td>'+
-      '<td>'+(vs?vs.wert:"–")+'</td>'+
-      '<td>'+chips+'</td>'+
-      '<td>'+fz.fehltGesamt+(fz.offen?' <span style="color:var(--rot)">('+fz.offen+' offen)</span>':'')+'</td>'+
-      '<td><button class="klein" data-a="profilOeffnen" data-id="'+s.id+'">Profil</button></td></tr>';
-  }
-  html += '</table><p class="hinweis">Stand = gewichtetes Mittel'+(sys.typ==="punkte"?" (Punkte 0–15)":" (Noten 1–6)")+'; Vorschlag aus Mitarbeits-Stufen (nur Anhaltspunkt).</p></div>';
-
-  /* Verlauf der Arbeiten */
-  const arbeiten = S.arbeiten.filter(a=>a.kursId===k.id)
-    .map(a=>({a, stat: arbeitStatistik(a, k)}))
-    .filter(x=>x.stat.n>0)
-    .sort((x,y)=>x.a.datum.localeCompare(y.a.datum));
-  if (arbeiten.length>=2){
-    html += '<div class="karte"><h3>Arbeiten im Verlauf (Mittelwerte)</h3>'+verlaufSvg(arbeiten, sys)+'</div>';
-  }
-  return html;
-}
-function verlaufSvg(arbeiten, sys){
-  const sk = skala(sys), B=640, H=190, L=40, unten=150;
-  const n = arbeiten.length;
-  const x = i => L + (n===1 ? 0 : i*(B-L-30)/(n-1));
-  const yv = v => 20 + (sys.typ==="punkte" ? (sk.max-v)/(sk.max-sk.min) : (v-sk.min)/(sk.max-sk.min))*(unten-30);
-  let s = '<svg viewBox="0 0 '+B+' '+H+'" style="width:100%;max-width:640px;display:block">';
-  for (const t of sk.ticks){
-    s += '<line x1="'+L+'" y1="'+yv(t)+'" x2="'+(B-24)+'" y2="'+yv(t)+'" stroke="#39443a" stroke-width="0.5"/>'+
-         '<text x="'+(L-8)+'" y="'+(yv(t)+4)+'" font-size="11" text-anchor="end">'+t+'</text>';
-  }
-  let pfad = "";
-  arbeiten.forEach((e,i)=>{ pfad += (i?"L":"M")+x(i).toFixed(1)+" "+yv(e.stat.mittel).toFixed(1)+" "; });
-  s += '<path d="'+pfad+'" fill="none" stroke="#8fbf6f" stroke-width="2.5"/>';
-  arbeiten.forEach((e,i)=>{
-    s += '<circle cx="'+x(i)+'" cy="'+yv(e.stat.mittel)+'" r="5" fill="#8fbf6f"/>'+
-      '<text x="'+x(i)+'" y="'+(yv(e.stat.mittel)-10)+'" font-size="11" text-anchor="middle">'+fmtZahl(e.stat.mittel,1)+'</text>'+
-      '<text x="'+x(i)+'" y="'+(unten+18)+'" font-size="10" text-anchor="middle">'+esc(e.a.titel.slice(0,14))+'</text>'+
-      '<text x="'+x(i)+'" y="'+(unten+31)+'" font-size="9" text-anchor="middle">'+fmtDatumKurz(e.a.datum)+'</text>';
-  });
-  return s+'</svg><p class="hinweis">Höher im Diagramm = besser ('+(sys.typ==="punkte"?"oben 15 Punkte":"oben Note 1")+').</p>';
-}
-
 /* Die Claude-Anbindung ist am 19.08.2026 entfallen. Sie war der zweite von drei
    Wegen, die alle dasselbe Feld füllten: st.geplant. Seit merkr die Stoffverteilung
    direkt aus planr holt, ist sie überflüssig - und drei Wege zum selben Ziel helfen
@@ -4038,7 +3950,7 @@ document.addEventListener("click", ev=>{
 /* ---------- Startmarke: erst hier ist die Oberflaeche vollstaendig ---------- */
 window.__KB_startOk = true;
 (function(){ var la = document.getElementById("ladeanzeige"); if (la) la.parentNode.removeChild(la); })();
-const JAHR_PALETTE=[{bg:"#2c3a2c",tx:"#bcdcab"},{bg:"#23323e",tx:"#a2c8ea"},{bg:"#332b40",tx:"#c6b3e8"},{bg:"#3d2b26",tx:"#eaa88f"},{bg:"#1f3a38",tx:"#8fd6cd"},{bg:"#3b3524",tx:"#e2cb7e"},{bg:"#3b2733",tx:"#e8a6c4"},{bg:"#2b3138",tx:"#b6c4d0"},{bg:"#343a24",tx:"#cad88c"},{bg:"#3d3129",tx:"#dfb08a"}];const JAHR_NEUTRAL={bg:"#232b25",tx:"#9fb098"};const JAHR_FERIEN_BG="repeating-linear-gradient(45deg,#1c221d 0 7px,#232b25 7px 14px)";(function jahrStilEinfuegen(){if(document.getElementById("jahrStil"))return;const s=document.createElement("style");s.id="jahrStil";s.textContent=".jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:5px;}"+".jkachel{border-radius:7px;padding:4px 5px;min-height:44px;overflow:hidden;}"+".jkachel.klick{cursor:pointer;}"+".jdat{font-size:11px;font-weight:600;line-height:1.2;}"+".jreihe{font-size:9px;line-height:1.15;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}"+".jpunkte{margin-top:2px;font-size:10px;letter-spacing:1.5px;line-height:1.1;}"+".jlegende{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;padding-top:6px;"+"border-top:1px solid var(--linie);font-size:10px;color:var(--text2);}"+".jlegende i{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:4px;font-style:normal;}";document.head.appendChild(s)})();function jahrTagPlus(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrMontag(iso){const d=mondayOf(iso);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrReiheVon(st){if(!st)return"";const r=String(st.reihe||"").trim();if(r)return r;return String(st.geplant||st.thema||"").trim()}function jahrFarbe(kurs,reihe){if(!reihe)return JAHR_NEUTRAL;if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};if(kurs.reihenFarben[reihe]==null){const belegt=Object.keys(kurs.reihenFarben).map(x=>kurs.reihenFarben[x]);let idx=0;while(idx<JAHR_PALETTE.length&&belegt.indexOf(idx)>=0)idx++;if(idx>=JAHR_PALETTE.length)idx=belegt.length%JAHR_PALETTE.length;kurs.reihenFarben[reihe]=idx;speichern()}return JAHR_PALETTE[kurs.reihenFarben[reihe]%JAHR_PALETTE.length]}function jahrFerienName(sj,montag){const f=sj.ferien||[];let treffer=0,name="";for(let i=0;i<5;i++){const tag=jahrTagPlus(montag,i);const g=f.find(x=>x&&x.von&&x.bis&&tag>=x.von&&tag<=x.bis);if(g){treffer++;if(!name)name=g.name||"Ferien"}}return treffer>=3?name:""}function viewJahr(k){const sj=aktivesSchuljahr();if(!sj||!sj.beginn||!sj.ende)return leer("Für die Jahresübersicht braucht das Schuljahr Beginn und Ende.","Zu den Schuljahren","einstellungen");if(!S.stunden.some(x=>x.kursId===k.id))return leer("Für diesen Kurs ist noch keine Stunde erfasst. Sobald die Stoffverteilung aus planr da ist, färbt sich hier das Schuljahr.","Stoffverteilung holen","planrJetzt");const arbeitTage={};for(const a of S.arbeiten)if(a.kursId===k.id&&a.datum)arbeitTage[a.datum]=true;const proWoche={};for(const st of S.stunden){if(st.kursId!==k.id)continue;if(st.datum<sj.beginn||st.datum>sj.ende)continue;const m=jahrMontag(st.datum);(proWoche[m]=proWoche[m]||[]).push(st)}for(const m in proWoche)proWoche[m].sort((a,b)=>a.datum.localeCompare(b.datum));const wochen=[];let m=jahrMontag(sj.beginn),schutz=0;while(m<=sj.ende&&schutz++<70){wochen.push(m);m=jahrTagPlus(m,7)}const benutzteReihen=[];let wochenMitUnterricht=0,stundenDoku=0,stundenGeplant=0;let html='<div class="zeile raum" style="margin-bottom:8px">'+'<h2 style="font-size:16px;margin:0">Jahresübersicht</h2>'+'<span class="hinweis" style="font-size:11px">'+esc(sj.name||"")+'</span></div><div class="jgrid">';let letzteReihe="";for(let i=0;i<wochen.length;i++){const mo=wochen[i];const stunden=proWoche[mo]||[];const ferien=stunden.length?"":jahrFerienName(sj,mo);if(ferien){let spanne=1;while(i+spanne<wochen.length&&!(proWoche[wochen[i+spanne]]||[]).length&&jahrFerienName(sj,wochen[i+spanne])===ferien)spanne++;const bis=wochen[i+spanne-1];html+='<div class="jkachel" style="background:'+JAHR_FERIEN_BG+";color:var(--text2);grid-column:span "+Math.min(spanne,2)+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+'<div class="jreihe">'+esc(ferien)+"</div></div>";i+=spanne-1;letzteReihe="";continue}if(!stunden.length){html+='<div class="jkachel" style="background:#1e241f;color:var(--text2)">'+'<div class="jdat" style="opacity:.55">'+fmtDatumKurz(mo)+"</div></div>";letzteReihe="";continue}wochenMitUnterricht++;const reihen=[];for(const st of stunden){const r=jahrReiheVon(st);if(r&&reihen.indexOf(r)<0)reihen.push(r);if(r&&benutzteReihen.indexOf(r)<0)benutzteReihen.push(r)}const f1=jahrFarbe(k,reihen[0]||"");const f2=reihen.length>1?jahrFarbe(k,reihen[1]):null;const hg=f2?"linear-gradient(160deg,"+f1.bg+" 0 52%,"+f2.bg+" 52% 100%)":f1.bg;const textFarbe=f2?f2.tx:f1.tx;const beschriftung=f2?"→ "+reihen[1]:reihen[0]||"ohne Thema";let punkte="";for(const st of stunden){if(st.ausfall)punkte+="✕";else if(String(st.thema||"").trim()){punkte+="●";stundenDoku++}else if(String(st.geplant||"").trim()){punkte+="○";stundenGeplant++}else punkte+="·";if(arbeitTage[st.datum])punkte+="◆"}const zeigeReihe=(reihen[0]||"")!==letzteReihe||f2;letzteReihe=reihen[reihen.length-1]||"";html+='<div class="jkachel klick" data-a="jahrWoche" data-id="'+mo+'" title="KW '+jahrKW(mo)+" · "+esc(beschriftung)+'" style="background:'+hg+";color:"+textFarbe+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+(zeigeReihe?'<div class="jreihe">'+esc(beschriftung)+"</div>":"")+'<div class="jpunkte">'+punkte+"</div></div>"}html+="</div>";html+='<div class="jlegende">';for(const r of benutzteReihen){const f=jahrFarbe(k,r);html+='<span><i style="background:'+f.bg+'"></i>'+esc(r)+"</span>"}html+="<span>● dokumentiert</span><span>○ nur geplant</span><span>✕ Ausfall</span><span>◆ Arbeit</span></div>";html+='<p class="hinweis" style="margin-top:6px;font-size:10px">'+wochenMitUnterricht+" Unterrichtswochen · "+stundenDoku+" dokumentiert · "+stundenGeplant+" offen</p>";return html}function jahrKW(iso){const d=new Date(iso+"T12:00:00");const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const tag=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-tag+3);const ersterDo=new Date(Date.UTC(t.getUTCFullYear(),0,4));const tag2=(ersterDo.getUTCDay()+6)%7;ersterDo.setUTCDate(ersterDo.getUTCDate()-tag2+3);return 1+Math.round((t-ersterDo)/(7*24*3600*1e3))}function jahrWocheDialog(montag){const k=kursVon(R.kursId);if(!k)return;const liste=S.stunden.filter(x=>x.kursId===k.id&&jahrMontag(x.datum)===montag).sort((a,b)=>a.datum.localeCompare(b.datum));let h="<h2>Woche ab "+fmtDatum(montag)+"</h2>";if(!liste.length)h+='<p class="hinweis">In dieser Woche ist keine Stunde angelegt.</p>';for(const st of liste){const wt=wochentagName(new Date(st.datum+"T12:00:00").getDay());h+='<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+"<div><b>"+wt+", "+fmtDatum(st.datum)+"</b>"+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':"")+'<div class="hinweis">'+(st.reihe?esc(st.reihe)+" · ":"")+esc(st.thema||st.geplant||"–")+"</div></div>"+'<button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></div>'}h+='<div class="zeile" style="margin-top:12px"><button data-a="modalZu">Schließen</button></div>';zeigeModal(h)}const KURS_TABS_MIT_JAHR=[["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["jahr","Jahr"],["arbeiten","Arbeiten"],["auswertung","Auswertung"],["kurscfg","Kurs"]];function viewKurs(){const k=kursVon(R.kursId);if(!k){R.view="home";return viewHome()}let html='<div class="tabs">';for(const[id,name]of KURS_TABS_MIT_JAHR)html+='<button class="'+(R.tab===id?"aktiv":"")+'" data-a="tab" data-id="'+id+'">'+name+"</button>";html+="</div>";if(R.tab==="sitzplan"||R.tab==="liste")html+=kursKopfzeile(k);if(R.tab==="sitzplan")html+=viewSitzplan(k);else if(R.tab==="liste")html+=viewListe(k);else if(R.tab==="stunden")html+=viewStunden(k);else if(R.tab==="jahr")html+=viewJahr(k);else if(R.tab==="arbeiten")html+=viewArbeiten(k);else if(R.tab==="auswertung")html+=viewAuswertung(k);else if(R.tab==="kurscfg")html+=viewKursCfg(k);return html}function planImportieren(text){let plan;try{plan=JSON.parse(text)}catch(e){return{fehler:"Datei ist kein gültiges JSON."}}const fv=plan&&plan.formatVersion;if(fv!=="kursbuch-plan-1"&&fv!=="kursbuch-plan-2")return{fehler:'Format nicht erkannt – erwartet wird formatVersion "kursbuch-plan-1" oder "kursbuch-plan-2".'};const sj=aktivesSchuljahr();if(!sj)return{fehler:"Kein aktives Schuljahr."};let ferienNeu=0,themen=0,mitReihe=0;const unbekannt=[];if(Array.isArray(plan.ferien)){sj.ferien=sj.ferien||[];for(const f of plan.ferien){if(f&&f.von&&f.bis&&!sj.ferien.some(x=>x.von===f.von&&x.bis===f.bis)){sj.ferien.push({name:String(f.name||"Ferien"),von:f.von,bis:f.bis});ferienNeu++}}}if(Array.isArray(plan.plaene)){for(const p of plan.plaene){const kurs=S.kurse.find(k=>k.schuljahrId===sj.id&&k.name.trim().toLowerCase()===String(p.kurs||"").trim().toLowerCase());if(!kurs){unbekannt.push(String(p.kurs||"?"));continue}if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};/* Wie der Kurs drueben heisst - die Rueckmeldung braucht planrs Namen, nicht merkrs. */if(p.name)kurs.planrName=String(p.name);if(p.fach)kurs.planrFach=String(p.fach);for(const t of p.themen||[]){if(!t||!t.datum||!/^\d{4}-\d{2}-\d{2}$/.test(t.datum))continue;const st=ensureStunde(kurs.id,t.datum);st.geplant=String(t.thema||"");/* Woraus die TUE gebaut ist. Faellt das Feld weg, bleibt die alte Liste stehen: ein Abruf ohne TUE-Angabe soll die Auswahl nach der Stunde nicht loeschen. */if(Array.isArray(t.tuThemen))st.tuThemen=t.tuThemen.map(x=>String(x));if(t.reihe!=null&&String(t.reihe).trim()){st.reihe=String(t.reihe).trim();jahrFarbe(kurs,st.reihe);mitReihe++}else if(st.reihe==null)st.reihe="";themen++}}}speichern();return{ferienNeu:ferienNeu,themen:themen,unbekannt:unbekannt,mitReihe:mitReihe}}document.addEventListener("click",ev=>{const el=ev.target.closest("[data-a]");if(!el)return;if(el.dataset.a==="jahrWoche")jahrWocheDialog(el.dataset.id)});
+const JAHR_PALETTE=[{bg:"#2c3a2c",tx:"#bcdcab"},{bg:"#23323e",tx:"#a2c8ea"},{bg:"#332b40",tx:"#c6b3e8"},{bg:"#3d2b26",tx:"#eaa88f"},{bg:"#1f3a38",tx:"#8fd6cd"},{bg:"#3b3524",tx:"#e2cb7e"},{bg:"#3b2733",tx:"#e8a6c4"},{bg:"#2b3138",tx:"#b6c4d0"},{bg:"#343a24",tx:"#cad88c"},{bg:"#3d3129",tx:"#dfb08a"}];const JAHR_NEUTRAL={bg:"#232b25",tx:"#9fb098"};const JAHR_FERIEN_BG="repeating-linear-gradient(45deg,#1c221d 0 7px,#232b25 7px 14px)";(function jahrStilEinfuegen(){if(document.getElementById("jahrStil"))return;const s=document.createElement("style");s.id="jahrStil";s.textContent=".jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:5px;}"+".jkachel{border-radius:7px;padding:4px 5px;min-height:44px;overflow:hidden;}"+".jkachel.klick{cursor:pointer;}"+".jdat{font-size:11px;font-weight:600;line-height:1.2;}"+".jreihe{font-size:9px;line-height:1.15;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}"+".jpunkte{margin-top:2px;font-size:10px;letter-spacing:1.5px;line-height:1.1;}"+".jlegende{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;padding-top:6px;"+"border-top:1px solid var(--linie);font-size:10px;color:var(--text2);}"+".jlegende i{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:4px;font-style:normal;}";document.head.appendChild(s)})();function jahrTagPlus(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrMontag(iso){const d=mondayOf(iso);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}function jahrReiheVon(st){if(!st)return"";const r=String(st.reihe||"").trim();if(r)return r;return String(st.geplant||st.thema||"").trim()}function jahrFarbe(kurs,reihe){if(!reihe)return JAHR_NEUTRAL;if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};if(kurs.reihenFarben[reihe]==null){const belegt=Object.keys(kurs.reihenFarben).map(x=>kurs.reihenFarben[x]);let idx=0;while(idx<JAHR_PALETTE.length&&belegt.indexOf(idx)>=0)idx++;if(idx>=JAHR_PALETTE.length)idx=belegt.length%JAHR_PALETTE.length;kurs.reihenFarben[reihe]=idx;speichern()}return JAHR_PALETTE[kurs.reihenFarben[reihe]%JAHR_PALETTE.length]}function jahrFerienName(sj,montag){const f=sj.ferien||[];let treffer=0,name="";for(let i=0;i<5;i++){const tag=jahrTagPlus(montag,i);const g=f.find(x=>x&&x.von&&x.bis&&tag>=x.von&&tag<=x.bis);if(g){treffer++;if(!name)name=g.name||"Ferien"}}return treffer>=3?name:""}function viewJahr(k){const sj=aktivesSchuljahr();if(!sj||!sj.beginn||!sj.ende)return leer("Für die Jahresübersicht braucht das Schuljahr Beginn und Ende.","Zu den Schuljahren","einstellungen");if(!S.stunden.some(x=>x.kursId===k.id))return leer("Für diesen Kurs ist noch keine Stunde erfasst. Sobald die Stoffverteilung aus planr da ist, färbt sich hier das Schuljahr.","Stoffverteilung holen","planrJetzt");const arbeitTage={};for(const a of S.arbeiten)if(a.kursId===k.id&&a.datum)arbeitTage[a.datum]=true;const proWoche={};for(const st of S.stunden){if(st.kursId!==k.id)continue;if(st.datum<sj.beginn||st.datum>sj.ende)continue;const m=jahrMontag(st.datum);(proWoche[m]=proWoche[m]||[]).push(st)}for(const m in proWoche)proWoche[m].sort((a,b)=>a.datum.localeCompare(b.datum));const wochen=[];let m=jahrMontag(sj.beginn),schutz=0;while(m<=sj.ende&&schutz++<70){wochen.push(m);m=jahrTagPlus(m,7)}const benutzteReihen=[];let wochenMitUnterricht=0,stundenDoku=0,stundenGeplant=0;let html='<div class="zeile raum" style="margin-bottom:8px">'+'<h2 style="font-size:16px;margin:0">Jahresübersicht</h2>'+'<span class="hinweis" style="font-size:11px">'+esc(sj.name||"")+'</span></div><div class="jgrid">';let letzteReihe="";for(let i=0;i<wochen.length;i++){const mo=wochen[i];const stunden=proWoche[mo]||[];const ferien=stunden.length?"":jahrFerienName(sj,mo);if(ferien){let spanne=1;while(i+spanne<wochen.length&&!(proWoche[wochen[i+spanne]]||[]).length&&jahrFerienName(sj,wochen[i+spanne])===ferien)spanne++;const bis=wochen[i+spanne-1];html+='<div class="jkachel" style="background:'+JAHR_FERIEN_BG+";color:var(--text2);grid-column:span "+Math.min(spanne,2)+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+'<div class="jreihe">'+esc(ferien)+"</div></div>";i+=spanne-1;letzteReihe="";continue}if(!stunden.length){html+='<div class="jkachel" style="background:#1e241f;color:var(--text2)">'+'<div class="jdat" style="opacity:.55">'+fmtDatumKurz(mo)+"</div></div>";letzteReihe="";continue}wochenMitUnterricht++;const reihen=[];for(const st of stunden){const r=jahrReiheVon(st);if(r&&reihen.indexOf(r)<0)reihen.push(r);if(r&&benutzteReihen.indexOf(r)<0)benutzteReihen.push(r)}const f1=jahrFarbe(k,reihen[0]||"");const f2=reihen.length>1?jahrFarbe(k,reihen[1]):null;const hg=f2?"linear-gradient(160deg,"+f1.bg+" 0 52%,"+f2.bg+" 52% 100%)":f1.bg;const textFarbe=f2?f2.tx:f1.tx;const beschriftung=f2?"→ "+reihen[1]:reihen[0]||"ohne Thema";let punkte="";for(const st of stunden){if(st.ausfall)punkte+="✕";else if(String(st.thema||"").trim()){punkte+="●";stundenDoku++}else if(String(st.geplant||"").trim()){punkte+="○";stundenGeplant++}else punkte+="·";if(arbeitTage[st.datum])punkte+="◆"}const zeigeReihe=(reihen[0]||"")!==letzteReihe||f2;letzteReihe=reihen[reihen.length-1]||"";html+='<div class="jkachel klick" data-a="jahrWoche" data-id="'+mo+'" title="KW '+jahrKW(mo)+" · "+esc(beschriftung)+'" style="background:'+hg+";color:"+textFarbe+'">'+'<div class="jdat">'+fmtDatumKurz(mo)+"</div>"+(zeigeReihe?'<div class="jreihe">'+esc(beschriftung)+"</div>":"")+'<div class="jpunkte">'+punkte+"</div></div>"}html+="</div>";html+='<div class="jlegende">';for(const r of benutzteReihen){const f=jahrFarbe(k,r);html+='<span><i style="background:'+f.bg+'"></i>'+esc(r)+"</span>"}html+="<span>● dokumentiert</span><span>○ nur geplant</span><span>✕ Ausfall</span><span>◆ Arbeit</span></div>";html+='<p class="hinweis" style="margin-top:6px;font-size:10px">'+wochenMitUnterricht+" Unterrichtswochen · "+stundenDoku+" dokumentiert · "+stundenGeplant+" offen</p>";return html}function jahrKW(iso){const d=new Date(iso+"T12:00:00");const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const tag=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-tag+3);const ersterDo=new Date(Date.UTC(t.getUTCFullYear(),0,4));const tag2=(ersterDo.getUTCDay()+6)%7;ersterDo.setUTCDate(ersterDo.getUTCDate()-tag2+3);return 1+Math.round((t-ersterDo)/(7*24*3600*1e3))}function jahrWocheDialog(montag){const k=kursVon(R.kursId);if(!k)return;const liste=S.stunden.filter(x=>x.kursId===k.id&&jahrMontag(x.datum)===montag).sort((a,b)=>a.datum.localeCompare(b.datum));let h="<h2>Woche ab "+fmtDatum(montag)+"</h2>";if(!liste.length)h+='<p class="hinweis">In dieser Woche ist keine Stunde angelegt.</p>';for(const st of liste){const wt=wochentagName(new Date(st.datum+"T12:00:00").getDay());h+='<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+"<div><b>"+wt+", "+fmtDatum(st.datum)+"</b>"+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':"")+'<div class="hinweis">'+(st.reihe?esc(st.reihe)+" · ":"")+esc(st.thema||st.geplant||"–")+"</div></div>"+'<button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></div>'}h+='<div class="zeile" style="margin-top:12px"><button data-a="modalZu">Schließen</button></div>';zeigeModal(h)}const KURS_TABS_MIT_JAHR=[["sitzplan","Sitzplan"],["liste","Liste"],["stunden","Stunden"],["jahr","Jahr"],["arbeiten","Arbeiten"],["kurscfg","Kurs"]];function viewKurs(){const k=kursVon(R.kursId);if(!k){R.view="home";return viewHome()}let html='<div class="tabs">';for(const[id,name]of KURS_TABS_MIT_JAHR)html+='<button class="'+(R.tab===id?"aktiv":"")+'" data-a="tab" data-id="'+id+'">'+name+"</button>";html+="</div>";if(R.tab==="sitzplan"||R.tab==="liste")html+=kursKopfzeile(k);if(R.tab==="sitzplan")html+=viewSitzplan(k);else if(R.tab==="liste")html+=viewListe(k);else if(R.tab==="stunden")html+=viewStunden(k);else if(R.tab==="jahr")html+=viewJahr(k);else if(R.tab==="arbeiten")html+=viewArbeiten(k);else if(R.tab==="kurscfg")html+=viewKursCfg(k);return html}function planImportieren(text){let plan;try{plan=JSON.parse(text)}catch(e){return{fehler:"Datei ist kein gültiges JSON."}}const fv=plan&&plan.formatVersion;if(fv!=="kursbuch-plan-1"&&fv!=="kursbuch-plan-2")return{fehler:'Format nicht erkannt – erwartet wird formatVersion "kursbuch-plan-1" oder "kursbuch-plan-2".'};const sj=aktivesSchuljahr();if(!sj)return{fehler:"Kein aktives Schuljahr."};let ferienNeu=0,themen=0,mitReihe=0;const unbekannt=[];if(Array.isArray(plan.ferien)){sj.ferien=sj.ferien||[];for(const f of plan.ferien){if(f&&f.von&&f.bis&&!sj.ferien.some(x=>x.von===f.von&&x.bis===f.bis)){sj.ferien.push({name:String(f.name||"Ferien"),von:f.von,bis:f.bis});ferienNeu++}}}if(Array.isArray(plan.plaene)){for(const p of plan.plaene){const kurs=S.kurse.find(k=>k.schuljahrId===sj.id&&k.name.trim().toLowerCase()===String(p.kurs||"").trim().toLowerCase());if(!kurs){unbekannt.push(String(p.kurs||"?"));continue}if(!kurs.reihenFarben||typeof kurs.reihenFarben!=="object")kurs.reihenFarben={};/* Wie der Kurs drueben heisst - die Rueckmeldung braucht planrs Namen, nicht merkrs. */if(p.name)kurs.planrName=String(p.name);if(p.fach)kurs.planrFach=String(p.fach);for(const t of p.themen||[]){if(!t||!t.datum||!/^\d{4}-\d{2}-\d{2}$/.test(t.datum))continue;const st=ensureStunde(kurs.id,t.datum);st.geplant=String(t.thema||"");/* Woraus die TUE gebaut ist. Faellt das Feld weg, bleibt die alte Liste stehen: ein Abruf ohne TUE-Angabe soll die Auswahl nach der Stunde nicht loeschen. */if(Array.isArray(t.tuThemen))st.tuThemen=t.tuThemen.map(x=>String(x));if(t.reihe!=null&&String(t.reihe).trim()){st.reihe=String(t.reihe).trim();jahrFarbe(kurs,st.reihe);mitReihe++}else if(st.reihe==null)st.reihe="";themen++}}}speichern();return{ferienNeu:ferienNeu,themen:themen,unbekannt:unbekannt,mitReihe:mitReihe}}document.addEventListener("click",ev=>{const el=ev.target.closest("[data-a]");if(!el)return;if(el.dataset.a==="jahrWoche")jahrWocheDialog(el.dataset.id)});
 
 /* ================= Kürzel für checkr =================
    merkr hält die Namen, checkr bekommt nur Codes. Alles hier drin geht in eine
@@ -5029,7 +4941,7 @@ zeichne = function(){
    Anwesend, Schüler und Arbeiten stehen links - zweimal derselbe Weg macht die
    Oberfläche nicht bedienbarer, sondern unentschlossen. */
 const KURS_TABS_MIT_ANWESENHEIT = [["stunden","Stunden"],["jahr","Jahr"],
-  ["auswertung","Auswertung"],["kurscfg","Kurs"]];
+  ["kurscfg","Kurs"]];
 
 viewKurs = function(){
   const k = kursVon(R.kursId);
@@ -5045,7 +4957,6 @@ viewKurs = function(){
   else if (R.tab==="stunden") html += viewStunden(k);
   else if (R.tab==="jahr") html += viewJahr(k);
   else if (R.tab==="arbeiten") html += viewArbeiten(k);
-  else if (R.tab==="auswertung") html += viewAuswertung(k);
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 };
@@ -5591,7 +5502,6 @@ const LEISTE_KURS = [
   {id:"noten",     label:"Noten",      tab:"arbeiten",    icon:LEISTE[5].icon},
   {id:"stunden",   label:"Stunden",    tab:"stunden",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>'},
   {id:"jahr",      label:"Jahr",       tab:"jahr",        icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>'},
-  {id:"auswertung",label:"Auswertung", tab:"auswertung",  icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16"/><path d="M6 15l4-5 3 3 5-7"/></svg>'},
   {id:"kurscfg",   label:"Kurs",       tab:"kurscfg",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>'},
 ];
 
@@ -5651,7 +5561,6 @@ viewKurs = function(){
   else if (R.tab==="stunden") html += viewStunden(k);
   else if (R.tab==="jahr") html += viewJahr(k);
   else if (R.tab==="arbeiten") html += viewArbeiten(k);
-  else if (R.tab==="auswertung") html += viewAuswertung(k);
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 };
@@ -5801,7 +5710,6 @@ viewKurs = function(){
   else if (R.tab==="stunden") html += viewStunden(k);
   else if (R.tab==="jahr") html += viewJahr(k);
   else if (R.tab==="arbeiten") html += viewArbeiten(k);
-  else if (R.tab==="auswertung") html += viewAuswertung(k);
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 };
@@ -6633,10 +6541,6 @@ function viewMuendlich(k){
   return html;
 }
 
-const auswertungOhneMuendlich = viewAuswertung;
-viewAuswertung = function(k){
-  return viewMuendlich(k) + auswertungOhneMuendlich(k);
-};
 
 zeichne();
 
@@ -7900,20 +7804,10 @@ viewStunden = function(k){
   return html.includes(marke) ? html.replace(marke, knopf + marke) : html;
 };
 
-/* ---------- 4. Der Reiter verschwindet ---------- */
-
-(function auswertungRaus(){
-  const i = LEISTE_KURS.findIndex(e=>e.id==="auswertung");
-  if (i >= 0) LEISTE_KURS.splice(i, 1);
-  if (R.tab === "auswertung") R.tab = "arbeiten";
-})();
-
-/* Ein gespeicherter Zustand könnte noch darauf zeigen. */
-const kursOhneAuswertung = viewKurs;
-viewKurs = function(){
-  if (R.tab === "auswertung") R.tab = "arbeiten";
-  return kursOhneAuswertung();
-};
+/* ---------- 4. Der Reiter selbst ----------
+   Er steht nicht mehr in LEISTE_KURS; die Funktionen dahinter sind mit ihm
+   gegangen. Eine Umleitung braucht es nicht: R lebt nur zur Laufzeit, gespeichert
+   wird allein S - ein alter Reiterzustand kann also nicht zurückkommen. */
 
 zeichne();
 
