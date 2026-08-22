@@ -152,6 +152,34 @@ Unterrichtsstunde, der nächste.
 Die Pfeile ‹ › in `tagKopf` entfallen, wo die Reihe steht - im Reiter Schüler bleiben sie, dort gibt
 es keine Reihe. Beides zugleich wäre zweimal derselbe Weg gewesen.
 
+## Die überschriebenen Fassungen sind weg (22.08.2026)
+
+Jede Runde legte bisher eine Schicht über die vorige: `const alt = viewX; viewX = function(){ ... alt()
+... }`. Wo die neue Fassung die alte **nicht** ruft, blieb die alte als toter Text stehen - 730 Zeilen
+kamen so zusammen.
+
+Entfernt sind sie jetzt, mit einer Ausnahme: die **erste** Deklaration eines Namens bleibt als
+einzeiliger Platzhalter stehen. Die Datei läuft im strict mode, und die späteren Fassungen sind
+Zuweisungen - ohne eine `function`-Deklaration gäbe es den Namen nicht.
+
+Zwei Fallen, beide beim ersten Versuch zugeschnappt:
+
+1. **Einzeilige Fassungen.** `viewEinstellungen = function(){ return a() + b(); };` - wer das Ende
+   einer Funktion an der Klammer in Spalte 0 sucht, überliest sie und löscht fremden Code mit. Die
+   Klammern müssen gezählt werden, und zwar ohne die in Strings, Kommentaren und Regex-Literalen.
+2. **Verdeckte Fassungen in minifizierten Zeilen.** Die Jahresübersicht kam als eine Zeile mit 10.000
+   Zeichen herein und definiert darin `viewKurs` und `planImportieren` gleich mit. Beide Namen sind
+   deshalb vom Aufräumen ausgenommen - wer die sichtbaren Fassungen entfernt, legt die verdeckte frei.
+
+Nicht gemacht: die **Kaskade**. Nach dem Löschen verwaisen weitere Fassungen (die Aliase, die sie
+retteten, ruft niemand mehr). Die Runde darauf hätte 168 weitere Zeilen entfernt - und dabei die
+Einstellungen um ein Drittel gekürzt. Rückgängig gemacht.
+
+**Das Sicherheitsnetz:** vor und nach dem Umbau werden 23 Ansichten und Dialoge gerendert und
+byteweise verglichen - jeder Reiter, beide Halbjahre, alle Blockzustände, die drei PDFs. Erst wenn
+alle 23 Prüfsummen gleich sind, gilt der Umbau als verlustfrei. Dasselbe Prinzip wie `bau.mjs
+--pruefe`, nur für die Oberfläche statt für die Datei.
+
 ## Die Auswertung ist aufgelöst (22.08.2026)
 
 Der Reiter führte vier Dinge, von denen zwei nur noch doppelten: eine zweite Notentabelle neben dem

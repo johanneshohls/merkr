@@ -1773,49 +1773,10 @@ function zeichneWennFrei(){
   }, 2000);
 }
 
-function zeichneTopbar(){
-  const sj = aktivesSchuljahr();
-  let titel = "merkr", zurueck = "", rechts = "";
-  const wb = sj ? wochenBuchstabe(sj, R.datum) : null;
-  if (R.view==="home"){
-    titel = "merkr" + (sj? " · "+esc(sj.name):"");
-    rechts = '<button class="klein" data-a="go" data-view="einstellungen">Einstellungen</button>';
-  } else if (R.view==="kurs"){
-    const k = kursVon(R.kursId);
-    titel = k? esc(k.name) : "Kurs";
-    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Kurse</button>';
-    rechts = (wb? '<span class="wochenbadge">'+wb+'-Woche</span>' : "");
-  } else if (R.view==="einstellungen"){
-    titel = "Einstellungen";
-    zurueck = '<button class="klein" data-a="go" data-view="home">‹ Kurse</button>';
-  } else if (R.view==="profil"){
-    const s = schuelerVon(R.schuelerId);
-    titel = s? esc(s.vorname+" "+s.name) : "Schülerprofil";
-    zurueck = '<button class="klein" data-a="go" data-view="kurs">‹ Zurück</button>';
-  }
-  document.getElementById("topbar").innerHTML =
-    zurueck + '<h1 class="titel">'+titel+'</h1>' + rechts;
-}
+function zeichneTopbar(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Startseite ============ */
-function viewHome(){
-  const sj = aktivesSchuljahr();
-  if (!sj) return viewSchuljahrAnlegen();
-  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
-  let html = "";
-  if (!kurse.length) html += leer("Noch kein Kurs angelegt.", "Kurs anlegen", "kursNeuDialog");
-  for (const k of kurse){
-    const anz = kursSchueler(k.id).length;
-    const sys = notensystem(k);
-    html += '<div class="kurskachel" data-a="kursOeffnen" data-id="'+k.id+'">'+
-      '<div class="kursfarbe" style="background:'+esc(k.farbe)+'"></div>'+
-      '<div class="info"><div><b>'+esc(k.name)+'</b></div>'+
-      '<div class="sub">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+' Schüler · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div>'+
-      '<div>›</div></div>';
-  }
-  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">+ Kurs anlegen</button>';
-  return html;
-}
+function viewHome(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 function viewSchuljahrAnlegen(){
   const j = new Date().getFullYear();
   return '<div class="karte"><h2>Willkommen bei merkr</h2>'+
@@ -1850,22 +1811,7 @@ function viewKurs(){
   else if (R.tab==="kurscfg") html += viewKursCfg(k);
   return html;
 }
-function kursKopfzeile(k){
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
-  /* Was heute dran ist: das gehaltene Thema, sonst das geplante aus planr,
-     sonst der Hinweis. Vorher stand hier "kein Thema eingetragen", auch wenn
-     die Stoffverteilung längst da war. */
-  const thema = st && st.thema ? esc(st.thema)
-    : (st && st.geplant ? esc(st.geplant)+' <span class="hinweis">· geplant</span>'
-    : '<span class="hinweis">kein Thema eingetragen</span>');
-  return '<div class="karte"><div class="zeile raum">'+
-    '<div class="zeile"><input type="date" id="kursDatum" value="'+R.datum+'" data-a-change="datumWechsel">'+
-    '<span class="hinweis">'+wochentagName(new Date(R.datum+"T12:00:00").getDay())+'</span></div>'+
-    '<div class="zeile">'+
-    '<button class="klein" data-a="stundeDialog">Stunde: '+thema+'</button>'+
-    '<button class="klein" data-a="anwesenheitDialog">Anwesenheit</button>'+
-    '</div></div></div>';
-}
+function kursKopfzeile(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* Sitzplan */
 function viewSitzplan(k){
@@ -1928,40 +1874,7 @@ function viewListe(k){
 }
 
 /* ============ Drag & Drop im Sitzplan ============ */
-function initSitzplanDrag(){
-  const flaeche = document.getElementById("sitzflaeche");
-  if (!flaeche) return;
-  let aktiv=null, startX=0, startY=0, ox=0, oy=0, bewegt=false;
-  flaeche.addEventListener("pointerdown", ev=>{
-    const kachel = ev.target.closest(".stile"); if(!kachel) return;
-    aktiv = kachel; bewegt = false;
-    startX = ev.clientX; startY = ev.clientY;
-    ox = kachel.offsetLeft; oy = kachel.offsetTop;
-    try { kachel.setPointerCapture(ev.pointerId); } catch(e) { /* synthetische Ereignisse */ }
-  });
-  flaeche.addEventListener("pointermove", ev=>{
-    if (!aktiv) return;
-    const dx = ev.clientX-startX, dy = ev.clientY-startY;
-    if (!bewegt && Math.hypot(dx,dy) < 8) return;
-    bewegt = true;
-    const RAS = 28;
-    let nx = Math.round((ox+dx)/RAS)*RAS, ny = Math.round((oy+dy)/RAS)*RAS;
-    nx = Math.max(0, Math.min(nx, flaeche.clientWidth - aktiv.offsetWidth));
-    ny = Math.max(0, Math.min(ny, flaeche.clientHeight - aktiv.offsetHeight));
-    aktiv.style.left = nx+"px"; aktiv.style.top = ny+"px";
-  });
-  flaeche.addEventListener("pointerup", ev=>{
-    if (!aktiv) return;
-    const kachel = aktiv; aktiv = null;
-    if (bewegt){
-      const s = schuelerVon(kachel.dataset.sid);
-      if (s){ if(!s.sitz) s.sitz={}; s.sitz[R.kursId] = {x:kachel.offsetLeft, y:kachel.offsetTop}; speichern(); }
-    } else {
-      oeffnePopupSchueler(kachel.dataset.sid, kachel.getBoundingClientRect());
-    }
-  });
-  flaeche.addEventListener("pointercancel", ()=>{ aktiv=null; });
-}
+function initSitzplanDrag(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Schüler-Popup (Schnellerfassung) ============ */
 function oeffnePopupSchueler(schuelerId, ankerRect){
@@ -2043,50 +1956,11 @@ function toast(text, undoFn){
   toastTimer = setTimeout(()=>t.classList.remove("offen"), 4500);
 }
 /* ============ Stunden ============ */
-function viewStunden(k){
-  const stunden = S.stunden.filter(x=>x.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
-  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Stundendokumentation</h2>'+
-    '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button></div>';
-  if (!stunden.length) return html + leer("Noch keine Stunde erfasst.", "Stunde anlegen", "stundeNeuDialog");
-  html += '<div class="karte"><table class="tab"><tr><th>Datum</th><th>Thema</th><th>Hausaufgabe</th><th>Fehlend</th><th></th></tr>';
-  for (const st of stunden){
-    const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
-    html += '<tr><td style="white-space:nowrap">'+fmtDatum(st.datum)+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':'')+'</td>'+
-      '<td>'+esc(st.thema||"–")+'</td><td>'+esc(st.hausaufgabe||"–")+'</td>'+
-      '<td>'+(fehl||"–")+'</td>'+
-      '<td><button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></td></tr>';
-  }
-  return html + '</table></div>';
-}
-function stundeDialogHtml(st){
-  return '<h2>Stunde am '+fmtDatum(st.datum)+'</h2>'+
-    '<div class="feld"><label>Thema / Inhalt der Stunde</label><input id="stThema" value="'+esc(st.thema)+'"></div>'+
-    '<div class="feld"><label>Hausaufgabe</label><input id="stHa" value="'+esc(st.hausaufgabe)+'"></div>'+
-    '<div class="feld"><label><input type="checkbox" id="stAusfall" '+(st.ausfall?"checked":"")+' style="width:auto"> Ausfall / Vertretung</label></div>'+
-    '<div class="zeile"><button class="primar" data-a="stundeSpeichern" data-id="'+st.id+'">Speichern</button>'+
-    '<button data-a="modalZu">Abbrechen</button></div>';
-}
+function viewStunden(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
+function stundeDialogHtml(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Anwesenheit ============ */
-function anwesenheitDialogHtml(k){
-  const st = ensureStunde(k.id, R.datum);
-  const schueler = kursSchueler(k.id);
-  let html = '<h2>Anwesenheit · '+fmtDatum(R.datum)+'</h2><p class="hinweis">Standard: alle anwesend. Nur Abweichungen antippen.</p><table class="tab">';
-  for (const s of schueler){
-    const a = anwesenheitVon(s.id, st.id);
-    const stat = a? a.status : "anwesend";
-    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td><td class="fehlstatus" style="white-space:nowrap">';
-    for (const [wert, label] of [["fehlt","Fehlt"],["verspaetet","Verspätet"],["beurlaubt","Beurlaubt"]]){
-      const an = stat===wert;
-      html += '<button class="klein" style="'+(an?'background:var(--rot);color:#fff':'')+'" data-a="anwSetzen" data-id="'+s.id+'" data-stunde="'+st.id+'" data-status="'+(an?"anwesend":wert)+'">'+label+
-        (an && wert==="verspaetet" ? " ("+(a.minuten||5)+"′)" : "")+'</button>';
-    }
-    if (a && a.status==="verspaetet")
-      html += '<button class="klein" data-a="anwMinuten" data-id="'+s.id+'" data-stunde="'+st.id+'">+5′</button>';
-    html += '</td></tr>';
-  }
-  return html + '</table><div class="abstand"></div><button class="primar" data-a="modalZu">Fertig</button>';
-}
+function anwesenheitDialogHtml(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Arbeiten ============ */
 function viewArbeiten(k){
@@ -2177,173 +2051,13 @@ function svgVerteilung(stat, sys){
    Notenspiegel darin doppelte das Notenbuch, die Spalte "Vorschlag mdl."
    rechnete noch nach dem alten Notizen-Modell. */
 /* ============ Kurs-Einstellungen ============ */
-function viewKursCfg(k){
-  const schueler = kursSchueler(k.id);
-  const ws = gewSonstige(k), wmA = gewMdlAnteil(k);
-  let html = '<div class="karte"><h2>Kursdaten</h2>'+
-    '<div class="zeile">'+
-    '<div class="feld"><label>Name</label><input id="kName" value="'+esc(k.name)+'"></div>'+
-    '<div class="feld"><label>Fach</label><input id="kFach" value="'+esc(k.fach||"")+'"></div>'+
-    '<div class="feld"><label>Jahrgang</label><select id="kJahrgang">'+
-      [5,6,7,8,9,10,11,12].map(j=>'<option value="'+j+'" '+(k.jahrgang===j?"selected":"")+'>'+j+'</option>').join("")+
-    '</select></div>'+
-    '<div class="feld"><label>Farbe</label><select id="kFarbe">'+
-      KURSFARBEN.map(f=>'<option value="'+f+'" '+(k.farbe===f?"selected":"")+' style="background:'+f+'">'+f+'</option>').join("")+
-    '</select></div></div>'+
-    '<div class="feld"><label>Klassenarbeiten : sonstige Leistungen — <b id="gewAnzeige">'+(100-ws)+' % : '+ws+' %</b></label>'+
-    '<div class="gewslider"><span class="hinweis">Klassenarbeiten</span>'+
-    '<input type="range" min="0" max="100" step="5" value="'+(100-ws)+'" id="kGewicht" data-a-input="gewichtVorschau">'+
-    '<span class="hinweis">sonstige</span></div></div>'+
-    '<div class="feld"><label>Rolle der mündlichen Note innerhalb der sonstigen Leistungen</label>'+
-    '<select id="kMdlModus" data-a-change="mdlModusWechsel">'+
-    '<option value="gewicht" '+(mdlModus(k)==="gewicht"?"selected":"")+'>zählt als eine sonstige Leistung (über ihr Gewicht)</option>'+
-    '<option value="anteil" '+(mdlModus(k)==="anteil"?"selected":"")+'>fester Anteil an den sonstigen Leistungen</option>'+
-    '</select></div>'+
-    '<div id="mdlAnteilBlock" style="display:'+(mdlModus(k)==="anteil"?"block":"none")+'">'+
-    '<div class="feld"><label>Fester Anteil — mündliche Note : übrige — <b id="gewAnzeige2">'+wmA+' % : '+(100-wmA)+' %</b></label>'+
-    '<div class="gewslider"><span class="hinweis">mündliche Note</span>'+
-    '<input type="range" min="0" max="100" step="5" value="'+wmA+'" id="kGewicht2" data-a-input="gewichtVorschau2">'+
-    '<span class="hinweis">übrige</span></div></div></div>'+
-    '<p class="hinweis">Sonstige Leistungen sind die mündliche Note sowie LEKs, Tests, Referate und Protokolle. '+
-    'Bei drei sonstigen Leistungen im Halbjahr, von denen die mündliche Note eine ist, bleibt es bei der ersten Einstellung: '+
-    'alle drei mit Gewicht 1, jede zählt ein Drittel. Ist einer der Teile leer, zählt der andere allein. '+
-    'Änderungen wirken sofort auf alle Notenstände dieses Kurses.</p></div>'+
-    '<button class="primar" data-a="kursSpeichern" data-id="'+k.id+'">Kurs speichern</button> '+
-    '<button class="gefahr" data-a="kursLoeschen" data-id="'+k.id+'">Kurs löschen</button></div>';
-
-  html += '<div class="karte"><h2>Schüler ('+schueler.length+')</h2>';
-  if (schueler.length){
-    html += '<table class="tab">';
-    for (const s of schueler)
-      html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
-        '<td style="text-align:right"><button class="klein" data-a="schuelerUmbenennen" data-id="'+s.id+'">Umbenennen</button> '+
-        '<button class="klein gefahr" data-a="schuelerEntfernen" data-id="'+s.id+'">Entfernen</button></td></tr>';
-    html += '</table><div class="abstand"></div>';
-  }
-  html += '<div class="feld"><label>Schüler hinzufügen — eine Zeile pro Schüler: <b>Nachname, Vorname</b> (oder „Vorname Nachname")</label>'+
-    '<textarea id="schuelerImport" placeholder="Müller, Anna&#10;Schmidt, Ben&#10;…"></textarea></div>'+
-    '<button class="primar" data-a="schuelerHinzufuegen" data-id="'+k.id+'">Hinzufügen</button></div>';
-  return html;
-}
+function viewKursCfg(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Schülerprofil ============ */
-function viewProfil(){
-  const s = schuelerVon(R.schuelerId); if(!s){ R.view="home"; return viewHome(); }
-  const k = kursVon(R.kursId); if(!k){ R.view="home"; return viewHome(); }
-  const ns = notenstand(s.id, k.id);
-  const noten = schuelerNoten(s.id, k.id).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
-  const mz = mitarbeitZusammenfassung(s.id, k.id);
-  const fz = fehlzeiten(s.id, k.id);
-  const evs = S.ereignisse.filter(e=>e.schuelerId===s.id && e.kursId===k.id)
-    .sort((a,b)=>b.ts.localeCompare(a.ts));
-
-  let html = '<div class="karte"><div class="zeile raum"><h2>'+esc(k.name)+'</h2>'+
-    '<div class="statzeile" style="margin:0">'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.gesamt)+'</div><div class="klein2">Stand gesamt</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.arb)+'</div><div class="klein2">Klassenarbeiten</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.son)+'</div><div class="klein2">sonstige Leistungen</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
-    '</div></div></div>';
-
-  html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
-  for (const kat of MITARBEIT_KATEGORIEN){
-    const z = mz[kat.id];
-    let balken = "";
-    for (const stu of STUFEN){
-      const n = z.counts[stu.v]||0;
-      balken += '<span style="display:inline-flex;align-items:center;margin-right:8px">'+
-        '<span class="stufenpunkt" style="background:'+stu.hex+'"></span>&nbsp;'+n+'</span>';
-    }
-    const dfarbe = z.schnitt==null? "#d7ded4" : stufeInfo(Math.round(z.schnitt)).hex;
-    html += '<tr><td style="min-width:140px">'+esc(kat.kurz)+'</td><td>'+balken+'</td>'+
-      '<td style="text-align:right"><span class="stufenpunkt" style="background:'+dfarbe+'"></span> '+
-      (z.schnitt==null?"–":("Ø "+fmtZahl(z.schnitt,1)))+'</td></tr>';
-  }
-  html += '</table></div>';
-
-  html += '<div class="karte"><h3>Noten & Arbeiten</h3>';
-  if (!noten.length) html += '<p class="hinweis">Noch keine Noten.</p>';
-  else {
-    html += '<table class="tab"><tr><th>Datum</th><th>Art</th><th>Bereich</th><th>Wert</th><th>Gewicht</th><th></th></tr>';
-    for (const n of noten)
-      html += '<tr><td>'+fmtDatum(n.datum)+'</td><td>'+esc(n.label||(n.ausArbeit?"Arbeit":"Note"))+'</td>'+
-        '<td>'+bereichKurz(n.bereich)+'</td><td><b>'+n.wert+'</b></td><td>'+gewText(n.gewicht)+'</td>'+
-        '<td>'+(n.id?'<button class="klein gefahr" data-a="noteLoeschen" data-id="'+n.id+'">×</button>':'<span class="hinweis">aus Arbeit</span>')+'</td></tr>';
-    html += '</table>';
-  }
-  html += '</div>';
-
-  html += '<div class="karte"><h3>Fehlzeiten</h3>'+
-    '<p>'+fz.fehltGesamt+'× gefehlt ('+fz.unentschuldigt+' unentschuldigt, '+fz.offen+' offen) · '+
-    fz.verspaetungen+'× verspätet ('+fz.minuten+' Min.)</p>';
-  if (fz.liste.length){
-    html += '<table class="tab"><tr><th>Datum</th><th>Status</th><th>Entschuldigt?</th></tr>';
-    for (const x of fz.liste.slice(0,25)){
-      html += '<tr><td>'+fmtDatum(x.st.datum)+'</td><td>'+
-        (x.a.status==="fehlt"?"gefehlt":x.a.status==="verspaetet"?("verspätet "+(x.a.minuten||0)+"′"):"beurlaubt")+'</td><td>';
-      if (x.a.status==="fehlt")
-        html += '<button class="klein" style="'+(x.a.entschuldigt===true?'background:var(--akzent);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="true">entsch.</button> '+
-          '<button class="klein" style="'+(x.a.entschuldigt===false?'background:var(--rot);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="false">unentsch.</button>';
-      else html += "–";
-      html += '</td></tr>';
-    }
-    html += '</table>';
-  }
-  html += '</div>';
-
-  html += '<div class="karte"><h3>Ereignisse (mit Datum und Stundenthema)</h3>';
-  if (!evs.length) html += '<p class="hinweis">Noch keine Ereignisse.</p>';
-  else {
-    html += '<table class="tab"><tr><th>Datum</th><th>Thema der Stunde</th><th>Ereignis</th><th>Stufe</th></tr>';
-    for (const e of evs.slice(0,60)){
-      const st = stundeVon(e.stundeId);
-      const stufe = e.stufe==null ? "–" :
-        '<span class="stufenpunkt" style="background:'+stufeInfo(e.stufe).hex+'"></span> '+stufeInfo(e.stufe).label;
-      html += '<tr><td style="white-space:nowrap">'+(st?fmtDatum(st.datum):"–")+'</td>'+
-        '<td>'+esc(st && st.thema ? st.thema : "–")+'</td>'+
-        '<td>'+esc(ereignisName(e))+(e.text?': <i>'+esc(e.text)+'</i>':'')+'</td>'+
-        '<td style="white-space:nowrap">'+stufe+'</td></tr>';
-    }
-    if (evs.length>60) html += '<tr><td colspan="4" class="hinweis">'+(evs.length-60)+' weitere …</td></tr>';
-    html += '</table>';
-  }
-  html += '</div>';
-  if (s.notizen) html += '<div class="karte"><h3>Notizen zum Schüler</h3><p>'+esc(s.notizen)+'</p></div>';
-  return html;
-}
+function viewProfil(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Globale Einstellungen ============ */
-function viewEinstellungen(){
-  const sj = aktivesSchuljahr();
-  let html = '<div class="karte"><h2>Schuljahre</h2>';
-  for (const j of S.schuljahre){
-    const aktiv = sj && j.id===sj.id;
-    html += '<div class="zeile raum" style="padding:8px 0;border-bottom:1px solid var(--linie)">'+
-      '<div><b>'+esc(j.name)+'</b> <span class="hinweis">'+fmtDatum(j.beginn)+' – '+fmtDatum(j.ende)+' · A-Woche ab '+fmtDatum(j.aWocheAnker)+(j.halbjahrGrenze?' · 2. Halbjahr ab '+fmtDatum(j.halbjahrGrenze):'')+'</span></div>'+
-      '<div>'+(aktiv?'<span class="wochenbadge">aktiv</span>':'<button class="klein" data-a="schuljahrAktivieren" data-id="'+j.id+'">aktivieren</button>')+'</div></div>';
-  }
-  html += '<div class="abstand"></div><button data-a="schuljahrNeuDialog">+ Schuljahr</button></div>';
-
-  html += '<div class="karte"><h2>Eigene Ereignisse</h2><p class="hinweis">Erscheinen zusätzlich in der Schnellerfassung.</p>';
-  for (const e of S.einstellungen.eigeneEreignisse)
-    html += '<div class="zeile raum" style="padding:6px 0"><div>'+esc(e.name)+' <span class="hinweis">'+(e.mitStufen?"mit Farbstufen":"Ein-Tipp")+'</span></div>'+
-      '<button class="klein gefahr" data-a="eigenesEreignisLoeschen" data-id="'+e.id+'">Löschen</button></div>';
-  html += '<div class="zeile"><input id="eeName" placeholder="z. B. Experimentierverhalten" style="flex:1">'+
-    '<label class="hinweis"><input type="checkbox" id="eeStufen" style="width:auto"> mit Farbstufen</label>'+
-    '<button data-a="eigenesEreignisNeu">Hinzufügen</button></div></div>';
-
-  html += '<div class="karte"><h2>Datensicherung</h2>'+
-    '<p class="hinweis">'+(KB_MODE==="scriptable" ?
-      "Daten liegen in iCloud Drive (Dateien-App → iCloud Drive → Scriptable → MerkrDaten), gesichert einmal je Tag. Letzte Sicherung: "+(S.einstellungen.letztesBackup?fmtDatum(S.einstellungen.letztesBackup.slice(0,10)):"noch nie") :
-      "Testmodus: Ohne Scriptable werden Daten nicht dauerhaft gespeichert.")+'</p>'+
-    '<div class="zeile"><button class="primar" data-a="exportieren">Sicherung exportieren</button>'+
-    '<button data-a="importieren">Sicherung importieren</button></div>'+
-    '<input type="file" id="importDatei" accept=".json,application/json" style="display:none"></div>';
-
-  html += '<div class="karte"><h2>Gefahrenzone</h2>'+
-    '<button class="gefahr" data-a="allesLoeschenDialog">Alle Daten löschen</button></div>';
-  return html;
-}
+function viewEinstellungen(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 /* ============ Dialoge ============ */
 function kursNeuDialog(){
   const sj = aktivesSchuljahr();
@@ -2830,52 +2544,6 @@ function backupAlterTage(){
   return Math.floor((Date.now() - new Date(S.einstellungen.letztesBackup).getTime())/(24*3600*1000));
 }
 /* Ersetzt die Phase-1-Fassung */
-function viewHome(){
-  const sj = aktivesSchuljahr();
-  if (!sj) return viewSchuljahrAnlegen();
-  const heute = todayISO();
-  const wb = wochenBuchstabe(sj, heute);
-  let html = "";
-
-  /* Heute */
-  const hk = heutigeKurse();
-  html += '<div class="karte"><div class="zeile raum"><h2>Heute · '+wochentagName(new Date(heute+"T12:00:00").getDay())+', '+fmtDatum(heute)+'</h2>'+
-    (wb?'<span class="wochenbadge">'+wb+'-Woche</span>':'')+'</div>';
-  if (!hk.length) html += '<p class="hinweis">Kein Unterricht laut Stundenplan eingetragen (Stundenplan-Slots im Tab „Kurs" jedes Kurses pflegen).</p>';
-  else {
-    for (const e of hk){
-      const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===heute);
-      const geplant = st && st.geplant ? st.geplant : (st && st.thema ? st.thema : "");
-      html += '<div class="kurskachel" style="margin-bottom:8px" data-a="kursOeffnen" data-id="'+e.kurs.id+'">'+
-        '<div class="kursfarbe" style="background:'+esc(e.kurs.farbe)+'"></div>'+
-        '<div class="info"><div><b>'+e.stunde+'. Stunde · '+esc(e.kurs.name)+'</b></div>'+
-        '<div class="sub">'+(geplant?("Geplant: "+esc(geplant)):"kein Thema geplant")+'</div></div><div>›</div></div>';
-    }
-  }
-  /* Offene Punkte */
-  const of = offeneFehlzeiten(), bt = backupAlterTage();
-  const punkte = [];
-  if (of) punkte.push(of+' Fehlzeit'+(of>1?'en':'')+' noch nicht als entschuldigt/unentschuldigt markiert');
-  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
-  if (gibtEsDaten && bt===null) punkte.push('Noch keine Sicherung exportiert – die Daten liegen bisher nur in iCloud');
-  else if (bt!==null && bt>7) punkte.push('Letzte Sicherung ist '+bt+' Tage alt – bitte exportieren');
-  if (punkte.length) html += '<div style="margin-top:6px">'+punkte.map(p=>'<p class="hinweis">⚠ '+p+'</p>').join("")+'</div>';
-  html += '</div>';
-
-  /* Kursliste */
-  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
-  html += '<h2 style="margin:6px 0 10px">Kurse · '+esc(sj.name)+'</h2>';
-  if (!kurse.length) html += leer("Noch kein Kurs angelegt.", "Kurs anlegen", "kursNeuDialog");
-  for (const k of kurse){
-    const anz = kursSchueler(k.id).length, sys = notensystem(k);
-    html += '<div class="kurskachel" data-a="kursOeffnen" data-id="'+k.id+'">'+
-      '<div class="kursfarbe" style="background:'+esc(k.farbe)+'"></div>'+
-      '<div class="info"><div><b>'+esc(k.name)+'</b></div>'+
-      '<div class="sub">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+' Schüler · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div><div>›</div></div>';
-  }
-  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">+ Kurs anlegen</button>';
-  return html;
-}
 
 /* ---------- Notenvorschlag aus Mitarbeit ---------- */
 /* Vorschlag für die Mitarbeitsnote. Rechnet in MerkrMitarbeit
@@ -3315,22 +2983,6 @@ function profilPdfErzeugen(schuelerId, kursId){
 /* ================= PHASE 2: Oberfläche (ersetzt einzelne Phase-1-Ansichten) ================= */
 
 /* Stundendokumentation mit Soll/Ist (ersetzt Phase-1-Fassung) */
-function viewStunden(k){
-  const stunden = S.stunden.filter(x=>x.kursId===k.id).sort((a,b)=>b.datum.localeCompare(a.datum));
-  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Stundendokumentation & Planung</h2>'+
-    '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button></div>';
-  if (!stunden.length) return html + leer("Noch keine Stunde erfasst. Die geplanten Themen holt merkr aus planr, sobald dort eine Verbindung steht.", "Stoffverteilung holen", "planrJetzt");
-  html += '<div class="karte"><table class="tab"><tr><th>Datum</th><th>Geplant (Soll)</th><th>Thema (Ist)</th><th>Hausaufgabe</th><th>Fehlend</th><th></th></tr>';
-  for (const st of stunden){
-    const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
-    html += '<tr><td style="white-space:nowrap">'+fmtDatum(st.datum)+(st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':'')+'</td>'+
-      '<td class="hinweis">'+esc(st.geplant||"–")+'</td>'+
-      '<td>'+esc(st.thema||"–")+'</td><td>'+esc(st.hausaufgabe||"–")+'</td>'+
-      '<td>'+(fehl||"–")+'</td>'+
-      '<td><button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></td></tr>';
-  }
-  return html + '</table></div>';
-}
 
 /* Stunden-Dialog mit Planungs-Übernahme (ersetzt Phase-1-Fassung) */
 function stundeDialogHtml(st){
@@ -3491,101 +3143,6 @@ function viewKursCfg(k){
 }
 
 /* Schülerprofil mit Vorschlag und PDF-Export (ersetzt Phase-1-Fassung) */
-function viewProfil(){
-  const s = schuelerVon(R.schuelerId); if(!s){ R.view="home"; return viewHome(); }
-  const k = kursVon(R.kursId); if(!k){ R.view="home"; return viewHome(); }
-  const ns = notenstand(s.id, k.id);
-  const vs = notenvorschlag(s.id, k.id);
-  const noten = schuelerNoten(s.id, k.id).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
-  const mz = mitarbeitZusammenfassung(s.id, k.id);
-  const fz = fehlzeiten(s.id, k.id);
-  const evs = S.ereignisse.filter(e=>e.schuelerId===s.id && e.kursId===k.id).sort((a,b)=>b.ts.localeCompare(a.ts));
-
-  let html = '<div class="karte"><div class="zeile raum"><div><h2>'+esc(k.name)+'</h2>'+
-    '<button class="klein" data-a="profilPdf" data-id="'+s.id+'">Als PDF exportieren (1 Seite A4)</button></div>'+
-    '<div class="statzeile" style="margin:0">'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.gesamt)+'</div><div class="klein2">Stand gesamt</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.arb)+'</div><div class="klein2">Klassenarbeiten</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.son)+'</div><div class="klein2">sonstige Leistungen</div></div>'+
-    '<div class="statwert"><div class="gross">'+fmtZahl(ns.m)+'</div><div class="klein2">davon mündlich</div></div>'+
-    (vs?'<div class="statwert"><div class="gross">'+vs.wert+'</div><div class="klein2">Vorschlag mdl. (aus '+vs.anzahl+(vs.anzahl===1?' Eintrag':' Einträgen')+')</div></div>':'')+
-    '</div></div>'+
-    (vs?'<p class="hinweis">'+esc(vorschlagHerkunft(vs))+'</p>':'')+
-    '</div>';
-
-  html += '<div class="karte"><h3>Mitarbeit nach Kategorien</h3><table class="tab">';
-  for (const kat of MITARBEIT_KATEGORIEN){
-    const z = mz[kat.id];
-    let balken = "";
-    for (const stu of STUFEN){
-      const n = z.counts[stu.v]||0;
-      balken += '<span style="display:inline-flex;align-items:center;margin-right:8px">'+
-        '<span class="stufenpunkt" style="background:'+stu.hex+'"></span>&nbsp;'+n+'</span>';
-    }
-    const dfarbe = z.schnitt==null? "#555" : stufeInfo(Math.round(z.schnitt)).hex;
-    html += '<tr><td style="min-width:140px">'+esc(kat.kurz)+'</td><td>'+balken+'</td>'+
-      '<td style="text-align:right"><span class="stufenpunkt" style="background:'+dfarbe+'"></span> '+
-      (z.schnitt==null?"–":("Ø "+fmtZahl(z.schnitt,1)))+'</td></tr>';
-  }
-  html += '</table></div>';
-
-  html += '<div class="karte"><h3>Noten & Arbeiten</h3>';
-  if (!noten.length) html += '<p class="hinweis">Noch keine Noten.</p>';
-  else {
-    html += '<table class="tab"><tr><th>Datum</th><th>Art</th><th>Bereich</th><th>Wert</th><th>Gewicht</th><th></th></tr>';
-    for (const n of noten)
-      html += '<tr'+(gew(n.gewicht)===0?' style="opacity:.65"':'')+'><td>'+fmtDatum(n.datum)+'</td><td>'+esc(n.label||(n.ausArbeit?"Arbeit":"Note"))+'</td>'+
-        '<td>'+bereichKurz(n.bereich)+'</td><td><b>'+n.wert+'</b></td><td>'+gewText(n.gewicht)+'</td>'+
-        '<td>'+(n.id?'<button class="klein gefahr" data-a="noteLoeschen" data-id="'+n.id+'">×</button>':'<span class="hinweis">aus Arbeit</span>')+'</td></tr>';
-    html += '</table>';
-    const zws = noten.filter(n=>gew(n.gewicht)===0 && bereichNorm(n.bereich)==="muendlich")
-      .sort((a,b)=>(a.datum||"").localeCompare(b.datum||""));
-    if (zws.length)
-      html += '<p class="hinweis">Mündliche Zwischenstände: '+
-        zws.map(n=>fmtDatumKurz(n.datum)+" → <b>"+n.wert+"</b>").join(" · ")+
-        ' (Ø '+fmtZahl(zws.reduce((x,n)=>x+n.wert,0)/zws.length,1)+', zählt nicht)</p>';
-  }
-  html += '</div>';
-  html += profilZusatzKarten(s, k, ns);
-
-  html += '<div class="karte"><h3>Fehlzeiten</h3>'+
-    '<p>'+fz.fehltGesamt+'× gefehlt ('+fz.unentschuldigt+' unentschuldigt, '+fz.offen+' offen) · '+
-    fz.verspaetungen+'× verspätet ('+fz.minuten+' Min.)</p>';
-  if (fz.liste.length){
-    html += '<table class="tab"><tr><th>Datum</th><th>Status</th><th>Entschuldigt?</th></tr>';
-    for (const x of fz.liste.slice(0,25)){
-      html += '<tr><td>'+fmtDatum(x.st.datum)+'</td><td>'+
-        (x.a.status==="fehlt"?"gefehlt":x.a.status==="verspaetet"?("verspätet "+(x.a.minuten||0)+"′"):"beurlaubt")+'</td><td>';
-      if (x.a.status==="fehlt")
-        html += '<button class="klein" style="'+(x.a.entschuldigt===true?'background:var(--akzent);color:#14210f':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="true">entsch.</button> '+
-          '<button class="klein" style="'+(x.a.entschuldigt===false?'background:var(--rot);color:#fff':'')+'" data-a="entschuldigen" data-id="'+x.a.id+'" data-wert="false">unentsch.</button>';
-      else html += "–";
-      html += '</td></tr>';
-    }
-    html += '</table>';
-  }
-  html += '</div>';
-
-  html += '<div class="karte"><h3>Ereignisse (mit Datum und Stundenthema)</h3>';
-  if (!evs.length) html += '<p class="hinweis">Noch keine Ereignisse.</p>';
-  else {
-    html += '<table class="tab"><tr><th>Datum</th><th>Thema der Stunde</th><th>Ereignis</th><th>Stufe</th></tr>';
-    for (const e of evs.slice(0,60)){
-      const st = stundeVon(e.stundeId);
-      const stufe = e.stufe==null ? "–" :
-        '<span class="stufenpunkt" style="background:'+stufeInfo(e.stufe).hex+'"></span> '+stufeInfo(e.stufe).label;
-      html += '<tr><td style="white-space:nowrap">'+(st?fmtDatum(st.datum):"–")+'</td>'+
-        '<td>'+esc(st && st.thema ? st.thema : "–")+'</td>'+
-        '<td>'+esc(ereignisName(e))+(e.text?': <i>'+esc(e.text)+'</i>':'')+'</td>'+
-        '<td style="white-space:nowrap">'+stufe+'</td></tr>';
-    }
-    if (evs.length>60) html += '<tr><td colspan="4" class="hinweis">'+(evs.length-60)+' weitere …</td></tr>';
-    html += '</table>';
-  }
-  html += '</div>';
-  if (s.notizen) html += '<div class="karte"><h3>Notizen zum Schüler</h3><p>'+esc(s.notizen)+'</p></div>';
-  return html;
-}
 /* Erweiterungspunkt für Phase 3 (Was-wäre-wenn) */
 function profilZusatzKarten(){ return ""; }
 
@@ -4446,11 +4003,6 @@ document.addEventListener("click", ev=>{
 
 /* Knopf auf der Arbeiten-Seite. */
 const checkrArbeitenVorher = viewArbeiten;
-viewArbeiten = function(k){
-  return '<div class="zeile" style="margin-bottom:10px">'+
-    '<button data-a="checkrDialog">Ergebnisse aus checkr holen</button></div>' +
-    checkrArbeitenVorher(k);
-};
 
 /* Die Karte in den Einstellungen. */
 const checkrEinstellungenVorher = einstellungenZusatz;
@@ -4541,7 +4093,6 @@ function einrichtenKarte(){
 }
 
 const einrichtenVorher = viewEinstellungen;
-viewEinstellungen = function(){ return einrichtenKarte() + einrichtenVorher(); };
 
 /* ================= Heute, im neuen Design =================
    Nach dem Entwurf von Claude Design: das Datum groß, darunter die Einordnung,
@@ -4559,86 +4110,6 @@ function heuteMarke(text, art){
     'font-size:12px;font-weight:800;white-space:nowrap">'+esc(text)+'</span>';
 }
 
-function viewHome(){
-  const sj = aktivesSchuljahr();
-  if (!sj) return viewSchuljahrAnlegen();
-
-  const heute = todayISO();
-  const wb = wochenBuchstabe(sj, heute);
-  const wt = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][new Date(heute+"T12:00:00").getDay()];
-  const monat = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(heute.slice(5,7))-1];
-  const imHalbjahr = sj.halbjahrGrenze && heute >= sj.halbjahrGrenze ? 2 : 1;
-
-  let html = '<h1 style="font-size:30px;font-weight:900;letter-spacing:-.5px;margin:2px 0 2px">'+
-    wt+', '+Number(heute.slice(8,10))+'. '+monat+'</h1>'+
-    '<p class="hinweis" style="margin:0 0 18px">'+
-    (wb ? "Woche "+wb+" · " : "")+"Halbjahr "+imHalbjahr+" · Notenschlüssel MV</p>";
-
-  /* Der Stundenplan des Tages */
-  const hk = heutigeKurse();
-  html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Heute im Stundenplan</h2>';
-
-  if (!hk.length){
-    html += leer("Für heute steht kein Kurs im Stundenplan.", "Stundenplan eintragen", "kursNeuDialog");
-  } else {
-    for (const e of hk){
-      const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===heute);
-      const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
-      const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
-      const marke = notizen ? heuteMarke(notizen+(notizen===1?" Notiz":" Notizen"), "gut")
-        : (thema ? heuteMarke("noch nichts notiert", "offen") : heuteMarke("Thema fehlt", "fehlt"));
-
-      html += '<div class="karte" style="display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:10px">'+
-        '<div style="background:var(--akzent-hell);border-radius:12px;padding:8px 12px;text-align:center;min-width:62px">'+
-        '<div style="font-weight:900;font-size:15px">'+e.stunde+'.</div></div>'+
-        '<div style="flex:1;min-width:0">'+
-        '<div><b style="font-size:17px">'+esc(e.kurs.name)+'</b> <span class="hinweis">'+esc(e.kurs.fach||"")+'</span></div>'+
-        '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
-        (thema ? esc(thema) : "Kein Thema geplant")+'</div></div>'+
-        marke+
-        '<button class="primar" data-a="kursOeffnen" data-id="'+e.kurs.id+'">Sitzplan</button></div>';
-    }
-  }
-
-  /* Offene Punkte - nur, wenn es welche gibt */
-  const of = offeneFehlzeiten(), bt = backupAlterTage();
-  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
-  const punkte = [];
-  if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
-    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
-  if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
-    "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
-  else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",
-    "letzte Sicherung vor "+bt+" Tagen", "Jetzt sichern", "backupDialog", null]);
-
-  if (punkte.length){
-    html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">Offene Punkte</h2>';
-    for (const [art, titel, unter, knopf, aktion, id] of punkte){
-      html += '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px">'+
-        '<span style="width:9px;height:9px;border-radius:50%;background:'+(art==="rot"?"var(--rot)":"var(--s0)")+'"></span>'+
-        '<div style="flex:1"><b>'+esc(titel)+'</b><div class="hinweis">'+esc(unter)+'</div></div>'+
-        '<button data-a="'+aktion+'"'+(id?' data-id="'+id+'"':'')+'>'+knopf+'</button></div>';
-    }
-  }
-
-  /* Die Kurse */
-  const kurse = S.kurse.filter(k=>k.schuljahrId===sj.id);
-  html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">'+
-    'Kurse · '+esc(sj.name)+'</h2>';
-  if (!kurse.length) html += leer("Noch kein Kurs angelegt.", "Kurs anlegen", "kursNeuDialog");
-  for (const k of kurse){
-    const anz = kursSchueler(k.id).length, sys = notensystem(k);
-    html += '<div class="karte" style="display:flex;align-items:center;gap:14px;padding:13px 16px;margin-bottom:8px;cursor:pointer" '+
-      'data-a="kursOeffnen" data-id="'+k.id+'">'+
-      '<div style="width:8px;height:34px;border-radius:99px;background:'+esc(k.farbe||"var(--akzent)")+'"></div>'+
-      '<div style="flex:1"><b style="font-size:16px">'+esc(k.name)+'</b>'+
-      '<div class="hinweis">'+esc(k.fach||"")+' · Jahrgang '+k.jahrgang+' · '+anz+
-      (anz===1?" Schüler":" Schüler")+' · '+(sys.typ==="punkte"?"0–15 Punkte":"Noten 1–6")+'</div></div>'+
-      '<div style="color:var(--text2);font-size:20px">›</div></div>';
-  }
-  html += '<div class="abstand"></div><button class="primar" data-a="kursNeuDialog">Kurs anlegen</button>';
-  return html;
-}
 
 /* ================= Anwesenheit, Profil und Arbeiten im neuen Design =================
    Nach dem Entwurf von Claude Design. Die Datenschicht bleibt unverändert, nur
@@ -4884,32 +4355,7 @@ const LEISTE = [
   {id:"einricht", label:"Einrichten", view:"einstellungen", tab:null, icon:"<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M4 7h16M4 17h16\"/><circle cx=\"9\" cy=\"7\" r=\"2.5\"/><circle cx=\"15\" cy=\"17\" r=\"2.5\"/></svg>"}
 ];
 
-function zeichneSeitenleiste(){
-  let el = document.getElementById("seitenleiste");
-  if (!el){
-    el = document.createElement("nav");
-    el.id = "seitenleiste";
-    document.body.appendChild(el);
-  }
-  document.body.classList.add("mitleiste");
-
-  const sj = aktivesSchuljahr();
-  const k = kursVon(R.kursId);
-  const imZweiten = sj && sj.halbjahrGrenze && todayISO() >= sj.halbjahrGrenze;
-
-  let html = '<div class="marke"><b>merkr</b><span>'+
-    (sj ? "HJ "+(imZweiten?2:1)+" · "+esc(String(sj.name||"").replace("20","").replace("/", "/")) : "kein Schuljahr")+'</span></div>';
-
-  for (const e of LEISTE){
-    const brauchtKurs = e.view==="kurs";
-    const aus = brauchtKurs && !k;
-    const aktiv = (R.view===e.view && (!e.tab || R.tab===e.tab)) ||
-      (e.id==="schueler" && R.view==="profil");
-    html += '<button class="'+(aktiv?"aktiv":"")+(aus?" aus":"")+'" data-a="leiste" data-id="'+e.id+'">'+
-      e.icon + '<span>'+e.label+'</span></button>';
-  }
-  el.innerHTML = html;
-}
+function zeichneSeitenleiste(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="leiste"]');
@@ -5122,76 +4568,6 @@ function stundenKarte(e, iso, istHeute){
     '</div></div>';
 }
 
-viewHome = function(){
-  const sj = aktivesSchuljahr();
-  if (!sj) return viewSchuljahrAnlegen();
-
-  const heute = todayISO();
-  const anker = R.wochenAnker || heute;
-  const tage = wochenTage(anker);
-  const wb = wochenBuchstabe(sj, tage[0]);
-  const imZweiten = sj.halbjahrGrenze && heute >= sj.halbjahrGrenze;
-  const dieseWoche = wochenTage(heute)[0] === tage[0];
-
-  const monat = (iso) => ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(iso.slice(5,7))-1];
-
-  let html = '<div class="zeile raum" style="align-items:flex-end;margin-bottom:18px">'+
-    '<div><h1 style="font-size:30px;font-weight:900;letter-spacing:-.5px;margin:0">'+
-    (dieseWoche ? "Diese Woche" : "Woche ab "+Number(tage[0].slice(8,10))+". "+monat(tage[0]))+'</h1>'+
-    '<p class="hinweis" style="margin:4px 0 0">'+
-    (wb ? "Woche "+wb+" · " : "")+"Halbjahr "+(imZweiten?2:1)+" · Notenschlüssel MV"+'</p></div>'+
-    '<div class="zeile"><button data-a="wocheZurueck">‹</button>'+
-    (dieseWoche ? '' : '<button data-a="wocheHeute">Diese Woche</button>')+
-    '<button data-a="wocheVor">›</button></div></div>';
-
-  let stundenGesamt = 0;
-  for (const iso of tage){
-    const liste = kurseAmTag(iso);
-    stundenGesamt += liste.length;
-    const istHeute = iso === heute;
-    const wt = ["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(iso+"T12:00:00").getDay()];
-
-    html += '<div style="margin-bottom:14px">'+
-      '<div class="zeile" style="gap:9px;margin-bottom:6px">'+
-      '<b style="font-size:13px;'+(istHeute?'color:var(--akzent)':'color:var(--text2)')+'">'+
-      wt+', '+Number(iso.slice(8,10))+'. '+monat(iso)+'</b>'+
-      (istHeute ? '<span style="background:var(--akzent);color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800">heute</span>' : '')+
-      '</div>';
-
-    if (!liste.length){
-      html += '<p class="hinweis" style="margin:0 0 2px">kein Unterricht</p>';
-    } else {
-      html += '<div style="display:flex;flex-wrap:wrap;gap:9px">';
-      for (const e of liste) html += stundenKarte(e, iso, istHeute);
-      html += '</div>';
-    }
-    html += '</div>';
-  }
-
-  if (!stundenGesamt)
-    html += leer("In dieser Woche steht kein Unterricht im Stundenplan.", "Kurse ansehen", "go", "kurse");
-
-  /* Offene Punkte bleiben, sie gehören zum Tagesgeschäft. */
-  const of = offeneFehlzeiten(), bt = backupAlterTage();
-  const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
-  const punkte = [];
-  if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
-    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
-  if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
-    "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
-  else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",
-    "letzte Sicherung vor "+bt+" Tagen", "Jetzt sichern", "backupDialog", null]);
-
-  if (punkte.length){
-    html += '<h2 style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);margin:22px 0 8px">Offene Punkte</h2>';
-    for (const [art, titel, unter, knopf, aktion, id] of punkte)
-      html += '<div class="karte" style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px">'+
-        '<span style="width:9px;height:9px;border-radius:50%;background:'+(art==="rot"?"var(--rot)":"var(--s0)")+'"></span>'+
-        '<div style="flex:1"><b>'+esc(titel)+'</b><div class="hinweis">'+esc(unter)+'</div></div>'+
-        '<button data-a="'+aktion+'"'+(id?' data-id="'+id+'"':'')+'>'+knopf+'</button></div>';
-  }
-  return html;
-};
 
 /* --- Die Kurse, jetzt an eigener Stelle --- */
 function viewKurse(){
@@ -5505,34 +4881,6 @@ const LEISTE_KURS = [
   {id:"kurscfg",   label:"Kurs",       tab:"kurscfg",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>'},
 ];
 
-zeichneSeitenleiste = function(){
-  let el = document.getElementById("seitenleiste");
-  if (!el){
-    el = document.createElement("nav");
-    el.id = "seitenleiste";
-    document.body.appendChild(el);
-  }
-  document.body.classList.add("mitleiste");
-
-  const k = kursVon(R.kursId);
-  let html = "";
-
-  for (const e of LEISTE_GLOBAL){
-    const aktiv = R.view === e.view;
-    html += '<button class="'+(aktiv?"aktiv":"")+'" data-a="leisteGlobal" data-id="'+e.id+'">'+
-      e.icon+'<span>'+e.label+'</span></button>';
-  }
-
-  if (k){
-    html += '<div class="leistetrenner"><span>'+esc(k.name)+'</span></div>';
-    for (const e of LEISTE_KURS){
-      const aktiv = (R.view==="kurs" && R.tab===e.tab) || (e.id==="schueler" && R.view==="profil");
-      html += '<button class="'+(aktiv?"aktiv":"")+'" data-a="leisteKurs" data-id="'+e.id+'">'+
-        e.icon+'<span>'+e.label+'</span></button>';
-    }
-  }
-  el.innerHTML = html;
-};
 
 document.addEventListener("click", ev=>{
   const g = ev.target.closest('[data-a="leisteGlobal"]');
@@ -5685,19 +5033,7 @@ zeichneSeitenleiste = function(){
   el.innerHTML = html;
 };
 
-function kursLeiste(k){
-  const sj = aktivesSchuljahr();
-  const kurse = sj ? S.kurse.filter(x=>x.schuljahrId===sj.id) : [];
-
-  let html = '<div class="kursleiste">'+
-    '<select id="kursWahl" data-a-change="kursWechsel" class="kurswahl">';
-  for (const x of kurse)
-    html += '<option value="'+x.id+'"'+(x.id===k.id?" selected":"")+'>'+esc(x.name)+'</option>';
-  html += '</select><div class="kurstabs">';
-  for (const e of LEISTE_KURS)
-    html += '<button class="'+(R.tab===e.tab?"aktiv":"")+'" data-a="tab" data-id="'+e.tab+'">'+e.label+'</button>';
-  return html + '</div></div>';
-}
+function kursLeiste(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 viewKurs = function(){
   const k = kursVon(R.kursId);
@@ -5806,40 +5142,6 @@ function naechsterUnterrichtstag(kursId, iso, schritt){
 }
 
 const anwesenheitOhnePlan = anwesenheitDialogHtml;
-anwesenheitDialogHtml = function(k, alsTab){
-  const grund = unterrichtsfrei(R.datum);
-  const passt = hatUnterricht(k.id, R.datum);
-
-  if (!passt){
-    const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
-    const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
-    const wt = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"][new Date(R.datum+"T12:00:00").getDay()];
-
-    let html = '<h2>Anwesenheit</h2><div class="karte" style="text-align:center;padding:30px 18px">'+
-      '<div style="font-size:17px;font-weight:900">'+esc(fmtDatum(R.datum))+' · '+wt+'</div>'+
-      '<p class="hinweis" style="margin:6px 0 14px">'+
-      (grund ? esc(grund)+" - kein Unterricht." : esc(k.name)+" hat an diesem Tag laut Stundenplan keinen Unterricht.")+
-      '<br>Anwesenheit wird an der Stunde festgehalten, nicht am Kalendertag.</p><div class="zeile" style="justify-content:center">';
-    if (zurueck) html += '<button data-a="anwTag" data-datum="'+zurueck+'">‹ '+fmtDatum(zurueck)+'</button>';
-    if (vor) html += '<button class="primar" data-a="anwTag" data-datum="'+vor+'">'+fmtDatum(vor)+' ›</button>';
-    if (!zurueck && !vor) html += '<span class="hinweis">Für diesen Kurs steht kein Stundenplan.</span>';
-    return html + '</div></div>';
-  }
-
-  /* Blättern zwischen den Unterrichtstagen, statt im Kalender zu suchen. */
-  const zurueck = naechsterUnterrichtstag(k.id, R.datum, -1);
-  const vor = naechsterUnterrichtstag(k.id, R.datum, +1);
-  const kopf = '<div class="zeile raum" style="margin-bottom:10px">'+
-    '<div class="zeile">'+
-    (zurueck ? '<button class="klein" data-a="anwTag" data-datum="'+zurueck+'">‹</button>' : '')+
-    '<b>'+esc(fmtDatum(R.datum))+'</b>'+
-    (vor ? '<button class="klein" data-a="anwTag" data-datum="'+vor+'">›</button>' : '')+
-    '</div>'+
-    (R.datum !== todayISO() ? '<button class="klein" data-a="anwTag" data-datum="'+todayISO()+'">Heute</button>' : '')+
-    '</div>';
-
-  return kopf + anwesenheitOhnePlan(k, alsTab);
-};
 
 document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="anwTag"]');
@@ -6080,17 +5382,7 @@ function platzPosition(nr){
   };
 }
 
-function raumHintergrund(){
-  let html = '<div class="tafel" style="left:'+RAUM.randLinks+'px;top:14px;width:'+
-    (RAUM.spalten * RAUM.tischBreite + (RAUM.spalten-1) * RAUM.luecke)+'px;height:30px">TAFEL</div>';
-  for (let r = 0; r < RAUM.reihen; r++)
-    for (let s = 0; s < RAUM.spalten; s++)
-      html += '<div class="tisch" style="left:'+
-        (RAUM.randLinks + s * (RAUM.tischBreite + RAUM.luecke))+'px;top:'+
-        (RAUM.randOben + r * (RAUM.tischHoehe + RAUM.reihenLuecke))+'px;width:'+
-        RAUM.tischBreite+'px;height:'+RAUM.tischHoehe+'px"></div>';
-  return html;
-}
+function raumHintergrund(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 const sitzplanOhneRaum = viewSitzplan;
 viewSitzplan = function(k){
@@ -6185,15 +5477,7 @@ function aufrufDialog(k, gezogenId, neueRunde){
   return html;
 }
 
-function aufrufZiehen(k){
-  const kandidaten = aufrufbare(k).map(s=>s.id);
-  const e = MerkrAufrufen.ziehen(kandidaten, aufrufTopf(k), k.aufrufZuletzt || null);
-  if (!e){ zeigeModal(aufrufDialog(k, null)); return; }
-  k.aufrufTopf = e.topf;
-  k.aufrufZuletzt = e.gezogen;
-  speichern();
-  zeigeModal(aufrufDialog(k, e.gezogen, e.neueRunde));
-}
+function aufrufZiehen(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-a]");
