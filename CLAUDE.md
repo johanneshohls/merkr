@@ -152,6 +152,19 @@ Unterrichtsstunde, der nächste.
 Die Pfeile ‹ › in `tagKopf` entfallen, wo die Reihe steht - im Reiter Schüler bleiben sie, dort gibt
 es keine Reihe. Beides zugleich wäre zweimal derselbe Weg gewesen.
 
+## Vier Handgriffe an der Bedienung (22.08.2026)
+
+**Die Stundenliste beginnt bei dem, was ansteht.** Vorher stand der Juni oben und man scrollte durchs
+Schuljahr. Jetzt zwei Gruppen: offen (heute und später, aufsteigend) sichtbar, gehalten
+zusammengeklappt darunter. "Gehalten" heißt vorbei **und** dokumentiert - eine vergangene Stunde ohne
+Thema ist nicht erledigt, sondern nachzutragen, und bleibt oben stehen, wo man sie sieht.
+
+**Der Reiter Schüler steht drei Plätze weiter rechts** und hat die Tageszeile verloren: in der Liste
+hängt nichts vom Datum ab, Namen und Notenstand sind an jedem Dienstag dieselben.
+
+**Die TÜ-Spalten lassen sich zuklappen.** Ein Tipp auf den Gruppenkopf, und aus sieben Spalten wird
+eine mit der Punktzahl; die Note steht im Tooltip, alles Weitere einen Klick entfernt.
+
 ## Ziel und Verlauf zum Abhaken (seit 2026-08-22)
 
 planr liefert mit der Stoffverteilung jetzt auch `ziel` (das Stundenziel) und `phasen` (Nummer,

@@ -6460,6 +6460,185 @@ wackelBlockHtml = function(st){
 
 zeichne();
 
+/* ================= Vier Handgriffe an der Bedienung =================
+   1. Die Stundenliste beginnt bei dem, was ansteht - nicht beim Juni.
+   2. Der Reiter Schüler wandert nach hinten: er wird selten gebraucht.
+   3. Und er verliert die Tageszeile, denn ein Schüler gehört keinem Datum.
+   4. Die TÜ-Spalten lassen sich zuklappen, es bleibt die Punktzahl. */
+
+/* ---------- 1. Stunden: was ansteht, steht oben ---------- */
+
+/* "Gehalten" heißt: vorbei und dokumentiert - ein Thema steht drin oder sie ist
+   als Ausfall vermerkt. Eine vergangene Stunde ohne Thema ist nicht erledigt,
+   sondern nachzutragen; sie bleibt deshalb oben stehen, wo man sie sieht. */
+function stundeGehalten(st){
+  if (!st) return false;
+  if (st.datum >= todayISO()) return false;
+  return !!st.ausfall || !!String(st.thema||"").trim();
+}
+
+function stundenZeileHtml(st){
+  const fehl = S.anwesenheit.filter(a=>a.stundeId===st.id && a.status==="fehlt").length;
+  const wt = wochentagName(new Date(st.datum+"T12:00:00").getDay());
+  const heute = st.datum === todayISO();
+  return '<tr'+(heute?' style="background:var(--akzent-hell)"':'')+'>'+
+    '<td style="white-space:nowrap">'+(heute?'<b>':'')+wt+', '+fmtDatum(st.datum)+(heute?'</b>':'')+
+    (st.ausfall?' <span style="color:var(--rot)">(Ausfall)</span>':'')+'</td>'+
+    '<td class="hinweis">'+esc(st.geplant||"–")+'</td>'+
+    '<td>'+esc(st.thema||"–")+'</td><td>'+esc(st.hausaufgabe||"–")+'</td>'+
+    '<td>'+(fehl||"–")+'</td>'+
+    '<td><button class="klein" data-a="stundeBearbeiten" data-id="'+st.id+'">Bearbeiten</button></td></tr>';
+}
+function stundenTabelleHtml(liste){
+  /* Sechs Spalten passen auf dem Handy nicht nebeneinander - schiebbar statt
+     abgeschnitten, wie im Notenbuch. */
+  let html = '<div class="nrollen"><table class="tab" style="min-width:560px">'+
+    '<tr><th>Datum</th><th>Geplant (Soll)</th><th>Thema (Ist)</th>'+
+    '<th>Hausaufgabe</th><th>Fehlend</th><th></th></tr>';
+  for (const st of liste) html += stundenZeileHtml(st);
+  return html + '</table></div>';
+}
+
+viewStunden = function(k){
+  const alle = S.stunden.filter(x=>x.kursId===k.id);
+  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Stundendokumentation & Planung</h2>'+
+    '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button></div>';
+  if (!alle.length)
+    return html + leer("Noch keine Stunde erfasst. Die geplanten Themen holt merkr aus planr, sobald dort eine Verbindung steht.",
+      "Stoffverteilung holen", "planrJetzt");
+
+  const gehalten = alle.filter(stundeGehalten).sort((a,b)=>b.datum.localeCompare(a.datum));
+  const offen = alle.filter(x=>!stundeGehalten(x)).sort((a,b)=>a.datum.localeCompare(b.datum));
+  const nachzutragen = offen.filter(x=>x.datum < todayISO()).length;
+
+  if (offen.length){
+    html += '<div class="karte">'+stundenTabelleHtml(offen)+
+      (nachzutragen
+        ? '<p class="hinweis" style="margin:10px 0 0">'+nachzutragen+
+          (nachzutragen===1 ? ' Stunde liegt zurück und hat noch kein Thema' : ' Stunden liegen zurück und haben noch kein Thema')+
+          ' - sie bleiben hier stehen, bis etwas drinsteht.</p>'
+        : '')+
+      '</div>';
+  }
+
+  if (gehalten.length){
+    const auf = !!R.stundenAuf;
+    html += '<div class="nblock"><div class="nkopf" data-a="stundenKlappen">'+
+      '<span class="npfeil">'+(auf?'▾':'▸')+'</span>'+
+      '<h2>Gehalten</h2>'+
+      '<span class="nsub">'+gehalten.length+(gehalten.length===1?' Stunde':' Stunden')+
+      ', zuletzt '+fmtDatum(gehalten[0].datum)+'</span></div>'+
+      (auf ? '<div class="ninhalt">'+stundenTabelleHtml(gehalten)+'</div>' : '')+'</div>';
+  }
+  return html;
+};
+
+document.addEventListener("click", ev=>{
+  if (!ev.target.closest('[data-a="stundenKlappen"]')) return;
+  R.stundenAuf = !R.stundenAuf;
+  zeichne();
+});
+
+/* ---------- 2. Der Reiter Schüler wandert nach hinten ---------- */
+
+(function schuelerNachHinten(){
+  const i = LEISTE_KURS.findIndex(e=>e.id==="schueler");
+  if (i < 0) return;
+  const [eintrag] = LEISTE_KURS.splice(i, 1);
+  LEISTE_KURS.splice(Math.min(i + 3, LEISTE_KURS.length), 0, eintrag);
+})();
+
+/* ---------- 3. Der Reiter Schüler kennt kein Datum ---------- */
+
+/* Die Tageszeile stand dort mit Blätterer und Stundenknöpfen, obwohl in der
+   Liste nichts vom Tag abhängt: Namen, Kürzel und Notenstand sind dieselben,
+   egal welcher Dienstag eingestellt ist. */
+const kursOhneListenkopf = viewKurs;
+viewKurs = function(){
+  const k = kursVon(R.kursId);
+  if (!k || R.tab !== "liste") return kursOhneListenkopf();
+  const kopfAus = kursKopfzeile;
+  kursKopfzeile = function(){ return ""; };
+  try { return kursOhneListenkopf(); }
+  finally { kursKopfzeile = kopfAus; }
+};
+
+/* ---------- 4. Die TÜ-Spalten lassen sich zuklappen ---------- */
+
+function tueZu(){ return R.tueZu === true; }
+document.addEventListener("click", ev=>{
+  if (!ev.target.closest('[data-a="tueKlappen"]')) return;
+  R.tueZu = !tueZu();
+  zeichne();
+});
+
+const tabelleOhneTueKlappen = notenTabelle;
+notenTabelle = function(k){
+  /* Aufgeklappt: dieselbe Tabelle wie bisher, nur trägt der Gruppenkopf jetzt
+     den Griff zum Zuklappen. */
+  if (!tueZu())
+    return tabelleOhneTueKlappen(k).replace(
+      '<th colspan="'+(MerkrTue.ANZAHL+2)+'">TÜ</th>',
+      '<th colspan="'+(MerkrTue.ANZAHL+2)+'" data-a="tueKlappen" style="cursor:pointer" '+
+      'title="TÜ-Spalten zuklappen">▾ TÜ</th>');
+
+  /* Zugeklappt bleibt eine Spalte: wie viele Punkte stehen, von wie vielen
+     möglichen. Alles Weitere - welche Übung gestrichen ist, welche Note daraus
+     wird - steht einen Klick entfernt. */
+  const hj = notenHalbjahr();
+  const sys = notensystem(k);
+  const schueler = kursSchueler(k.id);
+  if (!schueler.length) return tabelleOhneTueKlappen(k);
+
+  const arbeiten = S.arbeiten
+    .filter(a=>a.kursId===k.id && (!a.datum || imHalbjahr(a.datum, hj)))
+    .sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
+
+  let html = '<div class="nrollen"><table class="nbuch">';
+  html += '<tr class="ngruppe"><th class="name links"></th>'+
+    (arbeiten.length ? '<th colspan="'+arbeiten.length+'">Arbeiten und Tests</th>' : '')+
+    '<th data-a="tueKlappen" style="cursor:pointer" title="TÜ-Spalten aufklappen">▸ TÜ</th>'+
+    '<th></th><th></th></tr>';
+
+  html += '<tr><th class="name links">Schüler</th>';
+  for (const a of arbeiten)
+    html += '<th title="'+esc(a.titel+" · "+a.art+" · "+fmtDatum(a.datum))+'">'+esc(spaltenKopf(a))+'</th>';
+  html += '<th data-a="tueKlappen" style="cursor:pointer" title="Punkte aus den besten drei Übungen">Punkte</th>'+
+    '<th title="Mitarbeit: Mittel der abgeschlossenen Stunden">Mit.</th><th>Stand</th></tr>';
+
+  for (const s of schueler){
+    const tue = tueStand(k, hj, s.id);
+    const m = mitarbeitHalbjahr(s.id, k.id, hj);
+    const stand = notenstand(s.id, k.id);
+
+    html += '<tr><td class="name">'+esc(s.name)+', '+esc(s.vorname)+'</td>';
+    for (const a of arbeiten){
+      const w = a.ergebnisse[s.id];
+      const leerZelle = w===undefined || w===null || w==="";
+      html += '<td'+(leerZelle?' class="leer"':'')+' data-a="arbeitEingabe" data-id="'+a.id+'" '+
+        'style="cursor:pointer" title="'+esc(a.titel)+'">'+(leerZelle ? '–' : w)+'</td>';
+    }
+    html += '<td data-a="tueKlappen" style="cursor:pointer" title="'+
+      (tue.wert==null ? 'noch nichts geschrieben' : 'Note '+tue.wert+(tue.vollstaendig?'':' (Zwischenstand)'))+'">'+
+      (tue.zaehlend.length ? tue.summe+' / '+MerkrTue.MAX_GESAMT : '<span class="leer">–</span>')+'</td>';
+    html += '<td data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
+      (m.anzahl ? m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2) : 'noch keine abgeschlossene Stunde')+'">'+
+      (m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>';
+    html += '<td class="stand">'+(stand.gesamt==null ? '<span class="leer">–</span>' : fmtZahl(stand.gesamt,1))+
+      '</td></tr>';
+  }
+  html += '</table></div>';
+
+  const anteil = 100 - gewSonstige(k);
+  html += '<p class="hinweis" style="margin-top:10px">Stand = '+anteil+' Prozent Klassenarbeiten, '+
+    gewSonstige(k)+' Prozent sonstige Leistungen'+(sys.typ==="punkte"?' (Punkte 0–15)':' (Noten 1–6)')+
+    ', nur aus diesem Halbjahr. Die TÜ stehen zugeklappt als Punktzahl - '+
+    '<button class="klein" data-a="tueKlappen">wieder aufklappen</button></p>';
+  return html;
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
