@@ -152,6 +152,27 @@ Unterrichtsstunde, der nächste.
 Die Pfeile ‹ › in `tagKopf` entfallen, wo die Reihe steht - im Reiter Schüler bleiben sie, dort gibt
 es keine Reihe. Beides zugleich wäre zweimal derselbe Weg gewesen.
 
+## Die Auswertung ist aufgelöst (22.08.2026)
+
+Der Reiter führte vier Dinge, von denen zwei nur noch doppelten: eine zweite Notentabelle neben dem
+Notenbuch, und darin eine Spalte "Vorschlag mdl.", die noch nach dem alten Modell aus den Notizen
+rechnete - während daneben die Mitarbeit aus den bestätigten Stundennoten stand. Zwei mündliche
+Zahlen aus zwei Modellen nebeneinander, ohne dass die Tabelle sagte, welche gilt. Dazu rechnete sie
+seit dem Halbjahresfilter stillschweigend im Zeitraum, den der Noten-Reiter eingestellt hatte, ohne
+ihn zu zeigen.
+
+Die drei Teile, die etwas wert sind, stehen jetzt dort, wo ihr Inhalt steht:
+
+| Teil | neuer Ort |
+|---|---|
+| Verlauf der Arbeiten | Schülerprofil, mit dem Klassenmittel als gestrichelter Vergleichslinie |
+| "Wer war lange nicht dran" | Block im Reiter Noten, neben der Mitarbeitsnote |
+| Notenliste als PDF | Kopfzeile des Reiters Noten |
+| Stundendoku als PDF | Kopfzeile des Reiters Stunden |
+
+Fehlzeiten und der Weg ins Profil standen ohnehin schon im Reiter Schüler. `viewAuswertung` bleibt im
+Code stehen, wird aber nicht mehr gerufen - der Reiter ist aus `LEISTE_KURS` heraus.
+
 ## Vier Handgriffe an der Bedienung (22.08.2026)
 
 **Die Stundenliste beginnt bei dem, was ansteht.** Vorher stand der Juni oben und man scrollte durchs

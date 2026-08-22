@@ -6639,6 +6639,153 @@ notenTabelle = function(k){
 
 zeichne();
 
+/* ================= Die Auswertung wird aufgelöst =================
+   Sie führte vier Dinge, von denen zwei nur noch doppelten: eine zweite
+   Notentabelle neben dem Notenbuch und darin eine Spalte "Vorschlag mdl.", die
+   noch nach dem alten Modell aus den Notizen rechnete - während daneben die
+   Mitarbeit aus den bestätigten Stundennoten stand. Zwei mündliche Zahlen aus
+   zwei Modellen nebeneinander, ohne dass die Tabelle sagte, welche gilt.
+
+   Die drei Teile, die etwas wert sind, ziehen dorthin, wo ihr Inhalt steht:
+   der Verlauf der Arbeiten ins Profil (dort ist er die Antwort auf "hat er sich
+   gefangen?"), die Beteiligungslücke neben die Mitarbeitsnote, und jedes PDF an
+   den Ort, den es abbildet - die Notenliste zum Notenbuch, die Stundendoku zu
+   den Stunden. Der Reiter selbst entfällt. */
+
+/* ---------- 1. Der Verlauf der Arbeiten steht im Profil ---------- */
+
+/* Zwei Linien: die eigenen Ergebnisse und das Klassenmittel. Die eigene Linie
+   allein sagt wenig - eine Drei in einer Arbeit, in der die Klasse bei 4,2
+   stand, ist etwas anderes als eine Drei bei 2,1. */
+function schuelerVerlaufSvg(reihen, sys){
+  const sk = skala(sys), B = 640, H = 200, L = 40, unten = 150;
+  const n = reihen.length;
+  /* Innenabstand an beiden Seiten: sonst klebt der erste Punkt samt Zahl auf der
+     Achsenbeschriftung und der letzte Titel läuft aus dem Bild. */
+  const rand = 46;
+  const x = i => L + rand + (n===1 ? (B-L-2*rand)/2 : i*(B-L-2*rand-10)/(n-1));
+  const y = v => 20 + (sys.typ==="punkte" ? (sk.max-v)/(sk.max-sk.min) : (v-sk.min)/(sk.max-sk.min))*(unten-30);
+
+  let s = '<svg viewBox="0 0 '+B+' '+H+'" style="width:100%;max-width:640px;display:block">';
+  for (const t of sk.ticks)
+    s += '<line x1="'+L+'" y1="'+y(t)+'" x2="'+(B-24)+'" y2="'+y(t)+'" stroke="var(--linie)" stroke-width="0.5"/>'+
+      '<text x="'+(L-8)+'" y="'+(y(t)+4)+'" font-size="11" fill="currentColor" text-anchor="end">'+t+'</text>';
+
+  let pfadK = "", pfadS = "";
+  reihen.forEach((e,i)=>{
+    pfadK += (i?"L":"M")+x(i).toFixed(1)+" "+y(e.mittel).toFixed(1)+" ";
+    pfadS += (i?"L":"M")+x(i).toFixed(1)+" "+y(e.wert).toFixed(1)+" ";
+  });
+  s += '<path d="'+pfadK+'" fill="none" stroke="var(--linie)" stroke-width="2" stroke-dasharray="5 4"/>';
+  s += '<path d="'+pfadS+'" fill="none" stroke="var(--akzent)" stroke-width="2.5"/>';
+
+  reihen.forEach((e,i)=>{
+    s += '<circle cx="'+x(i)+'" cy="'+y(e.mittel)+'" r="3.5" fill="var(--linie)"/>'+
+      '<circle cx="'+x(i)+'" cy="'+y(e.wert)+'" r="5.5" fill="var(--akzent)"/>'+
+      '<text x="'+x(i)+'" y="'+(y(e.wert)-11)+'" font-size="12" font-weight="700" fill="currentColor" '+
+      'text-anchor="middle">'+fmtZahl(e.wert,1)+'</text>'+
+      '<text x="'+x(i)+'" y="'+(unten+18)+'" font-size="10" fill="currentColor" text-anchor="middle">'+
+      esc(String(e.titel).slice(0,16))+'</text>'+
+      '<text x="'+x(i)+'" y="'+(unten+31)+'" font-size="9" fill="currentColor" text-anchor="middle" opacity=".7">'+
+      fmtDatumKurz(e.datum)+'</text>';
+  });
+  return s + '</svg>';
+}
+
+/** Die Arbeiten dieses Kurses, an denen der Schüler teilgenommen hat. */
+function schuelerArbeitsreihe(s, k){
+  const reihen = [];
+  for (const a of S.arbeiten.filter(x=>x.kursId===k.id).sort((x,y)=>String(x.datum).localeCompare(String(y.datum)))){
+    const w = a.ergebnisse[s.id];
+    if (w===undefined || w===null || w==="") continue;
+    const stat = arbeitStatistik(a, k);
+    if (!stat.n) continue;
+    reihen.push({titel:a.titel, datum:a.datum, wert:Number(w), mittel:stat.mittel, art:a.art});
+  }
+  return reihen;
+}
+
+const profilOhneArbeitsverlauf = viewProfil;
+viewProfil = function(){
+  const html = profilOhneArbeitsverlauf();
+  const s = schuelerVon(R.schuelerId), k = kursVon(R.kursId);
+  if (!s || !k) return html;
+
+  const reihen = schuelerArbeitsreihe(s, k);
+  if (reihen.length < 2) return html;
+
+  const sys = notensystem(k);
+  const erste = reihen[0], letzte = reihen[reihen.length-1];
+  const besser = sys.typ==="punkte" ? letzte.wert - erste.wert : erste.wert - letzte.wert;
+  const abstand = reihen.reduce((sum,e)=>sum + (sys.typ==="punkte" ? e.wert-e.mittel : e.mittel-e.wert), 0) / reihen.length;
+
+  const karte = '<div class="karte"><div class="zeile raum">'+
+    '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Arbeiten im Verlauf</div>'+
+    '<div class="hinweis">'+(Math.abs(besser) < 0.15 ? "gleichbleibend"
+      : besser > 0 ? "um "+fmtZahl(Math.abs(besser),1)+" verbessert"
+                   : "um "+fmtZahl(Math.abs(besser),1)+" abgefallen")+'</div></div>'+
+    '<div style="margin:12px 0 2px;color:var(--text2)">'+schuelerVerlaufSvg(reihen, sys)+'</div>'+
+    '<p class="hinweis" style="margin:2px 0 0">Kräftig die eigenen Ergebnisse, gestrichelt das Klassenmittel. '+
+    (Math.abs(abstand) < 0.1 ? 'Liegt im Schnitt auf dem Klassenmittel.'
+      : abstand > 0 ? 'Liegt im Schnitt '+fmtZahl(Math.abs(abstand),1)+' über dem Klassenmittel.'
+                    : 'Liegt im Schnitt '+fmtZahl(Math.abs(abstand),1)+' unter dem Klassenmittel.')+'</p></div>';
+
+  /* Hinter den Verlauf der Mitarbeit, vor die Kategorien: erst die Bewegung,
+     dann die Einzelteile. */
+  const marke = '<div class="karte"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Mitarbeit nach Kategorie</div>';
+  return html.includes(marke) ? html.replace(marke, karte + marke) : html + karte;
+};
+
+/* ---------- 2. Die Beteiligungslücke steht bei den Noten ---------- */
+
+const notenOhneBeteiligung = viewArbeiten;
+viewArbeiten = function(k){
+  const html = notenOhneBeteiligung(k);
+  const block = notenBlock("beteiligung", "Wer war lange nicht dran",
+    "die Lücke, die keine Note zeigt", ()=>viewMuendlich(k));
+  /* Vor "Was wäre, wenn": beides sind Fragen an den Kurs, aber diese stellt
+     sich mitten im Halbjahr, jene am Ende. */
+  const marke = '<div class="nblock"><div class="nkopf" data-a="notenKlappen" data-id="wenn">';
+  return html.includes(marke) ? html.replace(marke, block + marke) : html + block;
+};
+
+/* ---------- 3. Jedes PDF an den Ort, den es abbildet ---------- */
+
+const notenOhnePdf = viewArbeiten;
+viewArbeiten = function(k){
+  const html = notenOhnePdf(k);
+  const marke = '</div></div>';   // Ende der Kopfzeile mit dem Halbjahres-Umschalter
+  const stelle = html.indexOf(marke);
+  if (stelle < 0) return html;
+  const knopf = '<button class="klein" data-a="notenlistePdf">Notenliste als PDF</button>';
+  return html.slice(0, stelle) + '</div>' + knopf + '</div>' + html.slice(stelle + marke.length);
+};
+
+const stundenOhnePdf = viewStunden;
+viewStunden = function(k){
+  const html = stundenOhnePdf(k);
+  const marke = '<button class="primar klein" data-a="stundeNeuDialog">+ Stunde</button>';
+  const knopf = '<button class="klein" data-a="stundenlistePdf">Doku als PDF</button>';
+  return html.includes(marke) ? html.replace(marke, knopf + marke) : html;
+};
+
+/* ---------- 4. Der Reiter verschwindet ---------- */
+
+(function auswertungRaus(){
+  const i = LEISTE_KURS.findIndex(e=>e.id==="auswertung");
+  if (i >= 0) LEISTE_KURS.splice(i, 1);
+  if (R.tab === "auswertung") R.tab = "arbeiten";
+})();
+
+/* Ein gespeicherter Zustand könnte noch darauf zeigen. */
+const kursOhneAuswertung = viewKurs;
+viewKurs = function(){
+  if (R.tab === "auswertung") R.tab = "arbeiten";
+  return kursOhneAuswertung();
+};
+
+zeichne();
+
 </script>
 </body>
 </html>
