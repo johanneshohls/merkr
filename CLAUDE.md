@@ -64,6 +64,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Stundennote am Stundenende bestätigen | fertig, 10 Tests |
 | Noten-Reiter: ein Notenbuch, TÜ und Was-wäre-wenn | fertig, 11 Tests für die TÜ-Rechnung |
 | Ziel und Verlauf aus planr zum Abhaken | merkr fertig (7 Tests); planr-Route erweitert, noch nicht ausgerollt |
+| Der Tag aus planr, mit Vertretung | fertig, 7 Tests, im Browser geprüft |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -207,6 +208,22 @@ gespeichert wird allein `S`.
 Geblieben sind `notenlistePdf`, `stundenlistePdf` und `viewMuendlich` - sie werden an ihren neuen
 Orten gerufen und erzeugen nachweislich weiter Papier.
 
+## Das Schüler-Popup bleibt offen (25.08.2026)
+
+Eine Wortmeldung hat oft mehr als ein Merkmal - gute Idee und laut dazwischen. Bisher schloss das
+Popup nach jedem Tipp, und wer zwei Kategorien vergeben wollte, musste denselben Platz zweimal
+antippen. In einer Stunde mit fünfundzwanzig Kindern ist das der Grund, warum am Ende nichts
+notiert ist.
+
+Jetzt bleibt es stehen und baut sich an Ort und Stelle neu auf - `popupAktualisieren()` setzt nur
+`innerHTML`, ohne zu positionieren; neu zu positionieren hieße, dass es unter dem Finger
+wegspringt. Zu geht es über "Fertig", über einen Klick daneben oder wenn ein anderer Name aufgeht.
+Der Notiz-Dialog schiebt sich davor und gibt danach das Popup an seinen Platz zurück
+(`popupAnkerZuletzt`), statt es in die Bildmitte zu werfen.
+
+Nebenbei zählt ein offenes Popup jetzt als "die Oberfläche ist beschäftigt": der stille planr-Abruf
+zeichnet sonst mitten im Notieren neu.
+
 ## Vier Handgriffe an der Bedienung (22.08.2026)
 
 **Die Stundenliste beginnt bei dem, was ansteht.** Vorher stand der Juni oben und man scrollte durchs
@@ -219,6 +236,34 @@ hängt nichts vom Datum ab, Namen und Notenstand sind an jedem Dienstag dieselbe
 
 **Die TÜ-Spalten lassen sich zuklappen.** Ein Tipp auf den Gruppenkopf, und aus sieben Spalten wird
 eine mit der Punktzahl; die Note steht im Tooltip, alles Weitere einen Klick entfernt.
+
+## Der Schultag kommt aus planr, samt Vertretung (seit 2026-08-25)
+
+merkr rechnete seinen Wochenplan allein aus Wochentag und A/B-Woche (`kurs.slots`). Das stimmt für
+die Regel und weiß nichts von dem Dienstag, an dem die 9d ausfällt und dafür eine Vertretung in der
+7a liegt. planr liest den Vertretungsplan der Schule ohnehin als ICS - **seit dem 25.08. geht der
+fertig gerechnete Tag mit der Stoffverteilung mit**, als Feld `tagesplan`.
+
+Der Plan reicht nur so weit wie der Vertretungsplan der Schule, drei bis vier Tage. Deshalb
+`MerkrTagesplan.gilt`: **nur für die genannten Tage** ersetzt er merkrs Raster, für alles danach
+bleibt es beim eigenen. Ein Tag, über den er nichts sagt, ist kein Tag ohne Unterricht.
+
+| Was planr meldet | Was merkr zeigt |
+|---|---|
+| Ausfall | Kachel bleibt stehen, durchgestrichen und blass; zählt nicht als Unterricht |
+| Raumänderung | Kachel mit dem neuen Raum statt dem Thema |
+| Verlegung | Kachel im neuen Block; ohne Zielblock nur der Ausfall am alten Platz |
+| Vertretung, Aufsicht | eigene Kachel, ohne Kurs und ohne Klick, wenn merkr die Lerngruppe nicht führt |
+
+Gerechnet wird in `src/kern/tagesplan.js` (7 Tests). Die Zuordnung planr-Kurs zu merkr-Kurs macht
+weiter `MerkrPlanr.kursFuer` - der Tagesplan reicht sie nur als Funktion herein, damit die beiden
+Kernteile nichts voneinander wissen müssen.
+
+Auf der planr-Seite steht die Rechnung in `lib/vplan-quelle.ts` als `tagesplanStand()`: Soll aus
+`class_slots` plus die Befunde des Vertretungsplans. Sie ruft `vplanStand({uebernehmen:false})` -
+ein Abruf aus merkr läuft still im Hintergrund und darf planrs Stundenplan nicht anfassen. Ein
+hängender Schulserver hält den Rest der Antwort nicht auf: der Tagesplan läuft nebenher und fällt
+im Fehlerfall auf leer zurück.
 
 ## Ziel und Verlauf zum Abhaken (seit 2026-08-22)
 

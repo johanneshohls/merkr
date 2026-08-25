@@ -348,7 +348,9 @@ function leererZustand(){
   return {
     version: 1,
     einstellungen: { aktivesSchuljahrId: null, eigeneEreignisse: [], letztesBackup: null },
-    schuljahre: [], kurse: [], schueler: [], stunden: [], ereignisse: [], noten: [], arbeiten: [], anwesenheit: []
+    schuljahre: [], kurse: [], schueler: [], stunden: [], ereignisse: [], noten: [], arbeiten: [], anwesenheit: [],
+    /* Der Schultag aus planr, so weit der Vertretungsplan reicht - siehe MerkrTagesplan. */
+    tagesplan: null
   };
 }
 function migriereBereiche(){
@@ -623,6 +625,10 @@ function zeichne(){
 function oberflaecheBeschaeftigt(){
   const m = document.getElementById("modal");
   if (m && m.classList.contains("offen")) return true;
+  /* Das Schüler-Popup bleibt jetzt beim Notieren offen - ein Neuzeichnen
+     mittendrin nähme dem Menschen das Fenster unter der Hand weg. */
+  const p = document.getElementById("popover");
+  if (p && p.classList.contains("offen")) return true;
   const f = document.activeElement;
   if (!f) return false;
   return f.tagName==="INPUT" || f.tagName==="TEXTAREA" || f.tagName==="SELECT" || f.isContentEditable===true;
@@ -746,8 +752,18 @@ function viewListe(k){
 function initSitzplanDrag(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
 /* ============ Schüler-Popup (Schnellerfassung) ============ */
-function oeffnePopupSchueler(schuelerId, ankerRect){
-  const s = schuelerVon(schuelerId); if (!s) return;
+/* Wer gerade im Popup steht. Das Popup bleibt beim Notieren offen: eine
+   Wortmeldung hat oft mehr als ein Merkmal - gute Idee und laut dazwischen -,
+   und jedes Merkmal ein zweites Mal Tippen auf denselben Platz war der Grund,
+   warum in der Stunde nichts notiert wurde. Zu geht es über "Fertig", über
+   einen Klick daneben oder wenn ein anderer Name aufgeht. */
+let popupOffenFuer = null;
+/* Wo es zuletzt stand. Der Notiz-Dialog schiebt sich davor; danach soll das
+   Popup an seinen Platz zurück und nicht in die Bildmitte springen. */
+let popupAnkerZuletzt = null;
+
+function popupSchuelerHtml(schuelerId){
+  const s = schuelerVon(schuelerId); if (!s) return "";
   const k = kursVon(R.kursId);
   const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
   const anw = st ? anwesenheitVon(s.id, st.id) : null;
@@ -783,8 +799,28 @@ function oeffnePopupSchueler(schuelerId, ankerRect){
   html += '</div><div class="chipreihe">'+
     '<button class="chip'+(fehlt?' aktivrot':'')+'" data-a="fehltUmschalten" data-id="'+s.id+'">'+(fehlt?"fehlt ✓ (zurücknehmen)":"Fehlt heute")+'</button>'+
     '<button class="chip" data-a="noteDialog" data-id="'+s.id+'">Note eintragen</button>'+
-    '<button class="chip" data-a="notizDialog" data-id="'+s.id+'">Notiz</button></div>';
-  zeigePopover(html, ankerRect);
+    '<button class="chip" data-a="notizDialog" data-id="'+s.id+'">Notiz</button>'+
+    '<button class="chip" data-a="popupFertig">Fertig</button></div>';
+  return html;
+}
+
+function oeffnePopupSchueler(schuelerId, ankerRect){
+  const html = popupSchuelerHtml(schuelerId);
+  if (!html) return;
+  popupOffenFuer = schuelerId;
+  if (ankerRect) popupAnkerZuletzt = ankerRect;
+  zeigePopover(html, ankerRect || popupAnkerZuletzt);
+}
+
+/* Denselben Inhalt neu bauen, ohne das Fenster zu bewegen. Neu zu positionieren
+   hiesse, dass es unter dem Finger wegspringt, sobald eine Zeile dazukommt. */
+function popupAktualisieren(){
+  if (!popupOffenFuer) return;
+  const pop = document.getElementById("popover");
+  if (!pop || !pop.classList.contains("offen")) return;
+  const html = popupSchuelerHtml(popupOffenFuer);
+  if (!html){ schliessePopover(); return; }
+  pop.innerHTML = html;
 }
 function zeigePopover(html, ankerRect){
   const pop = document.getElementById("popover");
@@ -801,6 +837,7 @@ function zeigePopover(html, ankerRect){
   pop.style.left = Math.max(10,x)+"px"; pop.style.top = Math.max(10,y)+"px";
 }
 function schliessePopover(){
+  popupOffenFuer = null;
   document.getElementById("popover").classList.remove("offen");
   document.getElementById("modal").classList.remove("offen");
   document.getElementById("overlay").classList.remove("offen");
@@ -1035,7 +1072,7 @@ document.addEventListener("click", ev=>{
   else if (a==="tab"){ R.tab=id; zeichne(); }
   else if (a==="modalZu"){ schliessePopover(); zeichne(); }
   else if (a==="modalZuArbeiten"){ schliessePopover(); R.tab="arbeiten"; zeichne(); }
-  else if (a==="undo"){ if(letzteAktion){ letzteAktion.undo(); letzteAktion=null; document.getElementById("toast").classList.remove("offen"); speichern(); zeichne(); } }
+  else if (a==="undo"){ if(letzteAktion){ letzteAktion.undo(); letzteAktion=null; document.getElementById("toast").classList.remove("offen"); speichern(); zeichne(); popupAktualisieren(); } }
 
   /* Kurse */
   else if (a==="kursNeuDialog") kursNeuDialog();
@@ -1128,22 +1165,24 @@ document.addEventListener("click", ev=>{
   else if (a==="ereignisStufe"){
     const stufe = Number(el.dataset.stufe);
     const e = addEreignis(id, R.kursId, el.dataset.kat, stufe);
-    schliessePopover(); zeichne();
+    /* Offen lassen: meist folgt gleich das nächste Merkmal desselben Kindes. */
+    zeichne(); popupAktualisieren();
     const s = schuelerVon(id);
     toast(s.vorname+" · "+ereignisName(e)+" "+stufeInfo(stufe).label, ()=>{ S.ereignisse = S.ereignisse.filter(x=>x.id!==e.id); });
   }
   else if (a==="ereignisEinfach"){
     const e = addEreignis(id, R.kursId, el.dataset.typ);
-    schliessePopover(); zeichne();
+    zeichne(); popupAktualisieren();
     const s = schuelerVon(id);
     toast(s.vorname+" · "+ereignisName(e), ()=>{ S.ereignisse = S.ereignisse.filter(x=>x.id!==e.id); });
   }
+  else if (a==="popupFertig"){ schliessePopover(); zeichne(); }
   else if (a==="fehltUmschalten"){
     const st = ensureStunde(R.kursId, R.datum);
     const anw = anwesenheitVon(id, st.id);
     const neu = (anw && anw.status==="fehlt") ? "anwesend" : "fehlt";
     setzeAnwesenheit(id, st.id, neu);
-    schliessePopover(); zeichne();
+    zeichne(); popupAktualisieren();
     const s = schuelerVon(id);
     toast(s.vorname+(neu==="fehlt"?" fehlt heute":" ist wieder anwesend"));
   }
@@ -1152,6 +1191,9 @@ document.addEventListener("click", ev=>{
     const text = document.getElementById("notizText").value.trim();
     if (text){ addEreignis(id, R.kursId, "notiz", undefined, text); toast("Notiz gespeichert"); }
     schliessePopover(); zeichne();
+    /* Zurück ins Popup, an denselben Platz: der Notiz-Dialog war ein Umweg,
+       kein Abschluss. */
+    oeffnePopupSchueler(id, null);
   }
 
   /* Noten */
@@ -2535,6 +2577,20 @@ function planImportieren(text){
     }
   }
 
+  /* Der Schultag, wie er wirklich liegt. Er ersetzt merkrs Wochenraster nur an
+     den Tagen, über die der Vertretungsplan der Schule etwas sagt - drei, vier.
+     Kommt er nicht mit (ältere planr-Fassung), bleibt der letzte Stand stehen,
+     bis seine Tage vorbei sind; er verfällt von selbst. */
+  if (plan.tagesplan && Array.isArray(plan.tagesplan.tage)){
+    const alt = S.tagesplan ? JSON.stringify(S.tagesplan.tage_stunden||{}) : "";
+    S.tagesplan = {
+      tage: plan.tagesplan.tage.map(x=>String(x)),
+      geholtAm: plan.tagesplan.geholtAm || null,
+      tage_stunden: plan.tagesplan.tage_stunden || {}
+    };
+    if (JSON.stringify(S.tagesplan.tage_stunden) !== alt) geaendert++;
+  }
+
   if (Array.isArray(plan.plaene)){
     for (const p of plan.plaene){
       const kurs = MerkrPlanr.kursFuer(S.kurse, p, sj.id);
@@ -3556,6 +3612,7 @@ function aktuelleStunde(){
   const liste = kurseAmTag(heute);
   let laeuft = null, naechste = null;
   for (const e of liste){
+    if (e.art === "ausfall") continue;
     const z = zeitVon(e.stunde);
     if (!z) continue;
     if (jetzt >= z.von && jetzt < z.bis){ if (!laeuft) laeuft = {e, z}; }
@@ -3573,7 +3630,8 @@ function aktuelleStunde(){
 function schnellzugriff(){
   const a = aktuelleStunde();
   if (!a) return "";
-  const st = S.stunden.find(x=>x.kursId===a.e.kurs.id && x.datum===todayISO());
+  const kurs = a.e.kurs;
+  const st = kurs ? S.stunden.find(x=>x.kursId===kurs.id && x.datum===todayISO()) : null;
   const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
   const kopf = a.art==="laeuft" ? "Läuft gerade"
     : a.art==="gleich" ? "Gleich, in "+a.minuten+" Minuten" : "Als Nächstes heute";
@@ -3585,10 +3643,11 @@ function schnellzugriff(){
     '<div style="font-size:11px;font-weight:700;opacity:.85">'+esc(a.z.von)+'</div></div>'+
     '<div style="flex:1;min-width:0">'+
     '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:800">'+kopf+'</div>'+
-    '<div><b style="font-size:19px">'+esc(a.e.kurs.name)+'</b></div>'+
+    '<div><b style="font-size:19px">'+esc(a.e.name || (kurs ? kurs.name : "?"))+'</b></div>'+
     '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
-    (thema ? esc(thema) : "kein Thema")+'</div></div>'+
-    '<button class="primar" data-a="stundeOeffnen" data-id="'+a.e.kurs.id+'" data-datum="'+todayISO()+'">Sitzplan</button></div>';
+    esc(a.e.hinweis || (a.e.raum ? "Raum "+a.e.raum : "") || thema || "kein Thema")+'</div></div>'+
+    (kurs ? '<button class="primar" data-a="stundeOeffnen" data-id="'+kurs.id+'" data-datum="'+todayISO()+'">Sitzplan</button>' : '')+
+    '</div>';
 }
 
 /* ================= Wochenplan als Raster =================
@@ -3650,20 +3709,37 @@ function viewWochenraster(){
       }
       html += '<td>';
       for (const e of treffer){
-        const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===t.iso);
+        const st = e.kurs ? S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===t.iso) : null;
         const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
         const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
         const gehalten = st && st.thema;
-        html += '<div data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+t.iso+'" '+
-          'style="cursor:pointer;min-height:52px;border-radius:12px;padding:7px 9px;background:var(--karte);'+
-          'border-left:5px solid '+esc(e.kurs.farbe||"var(--akzent)")+';'+
+        /* Was heute anders ist als im Plan - kommt aus planr, dort steht der
+           Vertretungsplan der Schule. Ohne diese Zeilen sähe eine ausgefallene
+           Stunde aus wie jede andere. */
+        const ausfall = e.art === "ausfall";
+        const anders = e.art && e.art !== "regulaer" ? e.art : "";
+        const klickbar = e.kurs && !ausfall;
+        const zusatz = [];
+        if (anders === "verlegt") zusatz.push("verlegt");
+        if (anders === "zusatz") zusatz.push("Vertretung");
+        if (anders === "aufsicht") zusatz.push("Aufsicht");
+        /* Der Raum steht nur da, wo er die Nachricht ist. Im Regelfall gehört
+           die Zeile dem Thema - den Raum weiß man. */
+        if (anders && e.raum) zusatz.push("Raum "+e.raum);
+        const unterzeile = ausfall ? (e.hinweis || "fällt aus")
+          : (zusatz.length ? zusatz.join(" · ") : thema);
+        html += '<div '+(klickbar ? 'data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+t.iso+'" ' : '')+
+          'style="'+(klickbar?'cursor:pointer;':'')+'min-height:52px;border-radius:12px;padding:7px 9px;background:var(--karte);'+
+          (ausfall?'opacity:.55;':'')+
+          'border-left:5px solid '+esc((e.kurs && e.kurs.farbe) || (anders ? "var(--s2)" : "var(--akzent)"))+';'+
           (istHeute?'box-shadow:0 0 0 1px var(--akzent)':'box-shadow:var(--schatten)')+'">'+
           '<div class="zeile raum" style="gap:6px;align-items:flex-start">'+
-          '<b style="font-size:13px;line-height:1.2">'+esc(e.kurs.name)+'</b>'+
-          '<span style="width:8px;height:8px;border-radius:50%;flex:0 0 8px;margin-top:3px;background:'+
-          (notizen ? "var(--s2)" : gehalten ? "var(--s0)" : "var(--linie)")+'"></span></div>'+
-          (thema ? '<div class="hinweis" style="font-size:11px;line-height:1.25;overflow:hidden;'+
-            'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(thema)+'</div>' : '')+
+          '<b style="font-size:13px;line-height:1.2'+(ausfall?';text-decoration:line-through':'')+'">'+
+          esc(e.name || (e.kurs ? e.kurs.name : "?"))+'</b>'+
+          (e.kurs ? '<span style="width:8px;height:8px;border-radius:50%;flex:0 0 8px;margin-top:3px;background:'+
+            (notizen ? "var(--s2)" : gehalten ? "var(--s0)" : "var(--linie)")+'"></span>' : '')+'</div>'+
+          (unterzeile ? '<div class="hinweis" style="font-size:11px;line-height:1.25;overflow:hidden;'+
+            'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(unterzeile)+'</div>' : '')+
           '</div>';
       }
       html += '</td>';
@@ -3849,8 +3925,21 @@ function unterrichtsfrei(iso){
   return null;
 }
 
+/* Der Tag aus planr, in die Form gebracht, die der Wochenplan erwartet. */
+function tagesplanAmTag(iso){
+  const sj = aktivesSchuljahr(); if (!sj) return [];
+  return MerkrTagesplan.amTag(S.tagesplan, iso, function(e){
+    return MerkrPlanr.kursFuer(S.kurse, e, sj.id);
+  });
+}
+
 const kurseAmTagRoh = kurseAmTag;
 kurseAmTag = function(iso){
+  /* Sagt planr über diesen Tag etwas, gilt das. merkrs eigenes Raster rechnet
+     aus Wochentag und A/B-Woche und kann von einem Ausfall oder einer
+     Vertretung nichts wissen - und der Vertretungsplan der Schule ist an dem
+     Tag, an dem er gilt, die genauere Auskunft, auch über Ferien und Beginn. */
+  if (MerkrTagesplan.gilt(S.tagesplan, iso)) return tagesplanAmTag(iso);
   if (unterrichtsfrei(iso)) return [];
   return kurseAmTagRoh(iso);
 };
@@ -3992,7 +4081,9 @@ zeichne();
    Stunde angeboten. */
 
 function hatUnterricht(kursId, iso){
-  return kurseAmTag(iso).some(e=>e.kurs.id===kursId);
+  /* Ein Ausfall bleibt in der Liste, damit der Wochenplan ihn zeigen kann - als
+     Unterricht zählt er nicht: an einer Stunde, die nicht war, hängt nichts. */
+  return kurseAmTag(iso).some(e=>e.kurs && e.kurs.id===kursId && e.art!=="ausfall");
 }
 
 /** Der nächste Unterrichtstag dieses Kurses ab iso, in Richtung schritt. */
