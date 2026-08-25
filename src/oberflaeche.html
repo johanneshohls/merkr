@@ -1080,6 +1080,18 @@ function importieren(){
   inp.click();
 }
 
+/* Nach einem Tipp auf "fehlt", "verspätet" oder "beurlaubt" die Liste neu bauen.
+
+   Im Reiter Anwesenheit steht sie schon auf der Seite - dort genügt zeichnen.
+   Ein Fenster über der Liste, die man gerade bedient, zeigte dieselben Namen
+   ein zweites Mal und musste nach jedem Tipp weggeklickt werden. Nur wenn die
+   Liste als Dialog geöffnet wurde (Knopf "Anwesenheit" in der Kopfzeile), wird
+   der Dialog neu gesetzt. */
+function anwesenheitAuffrischen(k){
+  if (R.view === "kurs" && R.tab === "anwesenheit"){ zeichne(); return; }
+  zeigeModal(anwesenheitDialogHtml(k));
+}
+
 /* ============ Aktions-Delegation ============ */
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-a]");
@@ -1268,12 +1280,12 @@ document.addEventListener("click", ev=>{
   else if (a==="anwesenheitDialog"){ zeigeModal(anwesenheitDialogHtml(k)); }
   else if (a==="anwSetzen"){
     setzeAnwesenheit(id, el.dataset.stunde, el.dataset.status, el.dataset.status==="verspaetet"?5:0);
-    zeigeModal(anwesenheitDialogHtml(k));
+    anwesenheitAuffrischen(k);
   }
   else if (a==="anwMinuten"){
     const anw = anwesenheitVon(id, el.dataset.stunde);
     if (anw){ anw.minuten = (anw.minuten||0)+5; speichern(); }
-    zeigeModal(anwesenheitDialogHtml(k));
+    anwesenheitAuffrischen(k);
   }
   else if (a==="entschuldigen"){
     const anw = S.anwesenheit.find(x=>x.id===id);

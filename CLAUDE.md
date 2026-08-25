@@ -241,6 +241,16 @@ Der Notiz-Dialog schiebt sich davor und gibt danach das Popup an seinen Platz zu
 Nebenbei zählt ein offenes Popup jetzt als "die Oberfläche ist beschäftigt": der stille planr-Abruf
 zeichnet sonst mitten im Notieren neu.
 
+## Die Anwesenheit kommt ohne zweites Fenster aus (25.08.2026)
+
+Im Reiter Anwesenheit stand die Liste auf der Seite - und jeder Tipp auf "fehlt", "verspätet" oder
+"beurlaubt" legte dieselbe Liste noch einmal als Dialog darüber, der nach jedem einzelnen Eintrag
+weggeklickt werden musste. Ursache: `anwSetzen` rief immer `zeigeModal`, egal woher der Tipp kam.
+
+Jetzt entscheidet `anwesenheitAuffrischen(k)`: im Reiter wird gezeichnet, als Dialog (Knopf
+"Anwesenheit" in der Kopfzeile) wird der Dialog neu gesetzt. Dieselben Knöpfe, derselbe Weg zum
+Zurücknehmen - ein aktiver Zustand schaltet auf "anwesend" zurück.
+
 ## Vier Handgriffe an der Bedienung (22.08.2026)
 
 **Die Stundenliste beginnt bei dem, was ansteht.** Vorher stand der Juni oben und man scrollte durchs
