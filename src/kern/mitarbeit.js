@@ -60,10 +60,44 @@ const MerkrMitarbeit = (function () {
         3,5 oben gilt fürs gemittelte Modell, wo sie die Kante zwischen 3 und 4
         markiert - hier wird eine einzelne Stunde benotet, keine Bilanz. */
     stundenBasis: 3,
-    /** Wertspanne einer einzelnen Stunde. Nach oben Luft für mehrere Beiträge,
-        nach unten so weit, dass eine verweigerte Stunde durchschlägt. */
+    /** Wieviel Beitragswert eine Stunde trägt, bevor sie über die Drei steigt.
+
+        Der Kern der Korrektur vom 25.08.2026: vorher hob **jeder** Beitrag
+        sofort, ein einziges "+" ergab die Eins. Gemessen an den 71 bestätigten
+        Stundennoten dieses Tages hat die Lehrkraft das in 15 Fällen von Hand
+        heruntergesetzt - ein guter Beitrag war ihr eine Drei, zwei eine Zwei.
+
+        Drei Punkte frei heisst: ein sehr guter Beitrag (Wert 3) oder ein
+        normaler plus ein guter ist die gewöhnliche Stunde. Erst was darüber
+        hinausgeht, hebt - und dann steil, weil "besonders häufig" in der
+        Beschlussvorlage genau der Sprung von der Zwei zur Eins ist. */
+    stundeFrei: 3,
+    stundeFreiS: 3,
+    /** Und wieviel sie trägt, bevor sie unter die Drei fällt.
+
+        Eine Frage nicht beantworten zu können ist noch keine Verweigerung: der
+        einzige negative Fall in den Daten (`keine_antwort`) stand als Fünf im
+        Vorschlag und wurde auf Drei korrigiert. Eine Störung wiegt zwei und
+        schlägt deshalb sofort durch - sie ist keine misslungene Antwort,
+        sondern eine, die gar nicht erst versucht wurde. */
+    stundeFreiAb: 1,
+    /** Notenschritte je Punkt über dem Freibetrag - für die Einzelstunde. */
+    stundeHebt: 0.9,
+    stundeHebtS: 0.45,
+    stundeZieht: 1.0,
+    stundeZiehtS: 0.5,
+    /** Wertspanne, mit der eine Stunde in die Halbjahresachse eingeht. Eine
+        einzelne Glanzstunde soll die Bilanz nicht kippen - deshalb hier die
+        engere Kappung, während die Note derselben Stunde weiter zählt
+        (stundeKappeMax). */
     stundeMax: 4,
     stundeMin: -2,
+    /** Und die Spanne für die Note der Einzelstunde selbst. Sie liegt weiter,
+        weil dort der Freibetrag die ersten drei Punkte ohnehin schluckt: mit
+        der alten Kappung bei 4 stünden über dem Freibetrag nur noch 1 Punkt,
+        und die Eins wäre unerreichbar. */
+    stundeKappeMax: 9,
+    stundeKappeMin: -4,
     halbwertszeitWochen: 8
   };
 
@@ -156,6 +190,21 @@ const MerkrMitarbeit = (function () {
   /** Note in die Punkteskala. Trifft die Spannen der Beschlussvorlage:
       1 → 14 (13-15), 2 → 11 (10-12), 3 → 8 (7-9), 4 → 5 (4-6), 5 → 2 (1-3), 6 → 0. */
   function alsPunkte(note) { return begrenzen(17 - 3 * note, 0, 15); }
+
+  /**
+   * Was ein Eintrag zur **Einzelstunde** beiträgt.
+   *
+   * Unterschied zur Halbjahresachse: eine Störung wiegt hier zwei. Sie ist
+   * keine misslungene Antwort, sondern eine, die gar nicht erst versucht wurde,
+   * und muss den Freibetrag nach unten (stundeFreiAb) allein überschreiten
+   * können - sonst bliebe die gestörte Stunde eine Drei. In der Bilanz übers
+   * Halbjahr bleibt sie eine Verweigerung unter anderen, dort mittelt sich das
+   * ohnehin.
+   */
+  function stundenbeitrag(e) {
+    if (e.typ === "stoerung") return -2;
+    return beitragswert(e);
+  }
 
   /**
    * @param stunden     [{id, datum, ausfall}] - Stunden des Kurses
@@ -278,15 +327,21 @@ const MerkrMitarbeit = (function () {
       const istM = MUENDLICH.indexOf(e.typ) >= 0 || VERWEIGERT.indexOf(e.typ) >= 0;
       const istS = SCHRIFTLICH.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0;
       if (!istM && !istS) continue;
-      if (istM) m += beitragswert(e); else s += beitragswert(e);
+      if (istM) m += stundenbeitrag(e); else s += stundenbeitrag(e);
       n++;
     }
 
-    m = begrenzen(m, o.stundeMin, o.stundeMax);
-    s = begrenzen(s, o.stundeMin, o.stundeMax);
-    const teilM = (m < 0 ? o.muendlichAb : o.muendlich) * m;
-    const teilS = (s < 0 ? o.schriftlichAb : o.schriftlich) * s;
-    const roh = o.stundenBasis - teilM - teilS;
+    m = begrenzen(m, o.stundeKappeMin, o.stundeKappeMax);
+    s = begrenzen(s, o.stundeKappeMin, o.stundeKappeMax);
+    /* Freibetrag statt gerader Linie: die ersten Punkte sind die gewöhnliche
+       Stunde und bewegen nichts, erst was darüber hinausgeht, hebt oder zieht.
+       Eine gerade Linie durch den Nullpunkt machte aus jedem einzelnen Beitrag
+       eine Eins - siehe stundeFrei. */
+    const hebt = Math.max(0, m - o.stundeFrei) * o.stundeHebt
+               + Math.max(0, s - o.stundeFreiS) * o.stundeHebtS;
+    const zieht = Math.max(0, -m - o.stundeFreiAb) * o.stundeZieht
+                + Math.max(0, -s - o.stundeFreiAb) * o.stundeZiehtS;
+    const roh = o.stundenBasis - hebt + zieht;
     const note = begrenzen(roh, 1, 6);
     const genau = o.typ === "punkte" ? alsPunkte(note) : note;
 
@@ -331,6 +386,7 @@ const MerkrMitarbeit = (function () {
     VERWEIGERT: VERWEIGERT,
     UNERLEDIGT: UNERLEDIGT,
     beitragswert: beitragswert,
+    stundenbeitrag: stundenbeitrag,
     zeitgewicht: zeitgewicht,
     achse: achse,
     runden: runden,

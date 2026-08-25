@@ -215,10 +215,30 @@ test("eine Stunde ohne Notiz ist eine Drei", () => {
   assert.equal(r.ohneNotiz, true);
 });
 
-test("ein guter Beitrag hebt die Stunde deutlich", () => {
+test("ein einzelner guter Beitrag bleibt eine Drei", () => {
+  /* Die Korrektur vom 25.08.2026. Vorher ergab genau dieser Eintrag die Eins -
+     an den 71 bestätigten Stundennoten des Tages wurde das in 15 Fällen von
+     Hand heruntergesetzt, meist auf die Drei. Einmal melden ist keine Eins. */
   const r = M.stundennote([{ typ: "qual_m", stufe: 1 }]);
-  assert.ok(r.note < 3, "Note " + r.note + " sollte besser als 3 sein");
-  assert.equal(r.ohneNotiz, false);
+  assert.equal(r.wert, 3);
+  assert.equal(r.ohneNotiz, false, "notiert wurde trotzdem etwas");
+});
+
+test("zwei gute Beiträge sind eine Zwei, drei eine Eins", () => {
+  const zwei = M.stundennote([{ typ: "qual_m", stufe: 1 }, { typ: "quant_m", stufe: 1 }]);
+  const drei = M.stundennote([{ typ: "qual_m", stufe: 1 }, { typ: "quant_m", stufe: 1 },
+                              { typ: "quant_m", stufe: 1 }]);
+  assert.equal(zwei.wert, 2);
+  assert.equal(drei.wert, 1);
+});
+
+test("eine nicht beantwortete Frage allein zieht die Stunde nicht", () => {
+  /* Der einzige negative Fall in den Daten: Vorschlag war eine Fünf, gesetzt
+     wurde eine Drei. Wer eine Frage nicht beantworten kann, hat nicht
+     verweigert. */
+  assert.equal(M.stundennote([{ typ: "keine_antwort", stufe: null }]).wert, 3);
+  assert.equal(M.stundennote([{ typ: "keine_antwort", stufe: null },
+                              { typ: "keine_antwort", stufe: null }]).wert, 4);
 });
 
 test("eine Störung zieht die Stunde nach unten", () => {
@@ -227,14 +247,16 @@ test("eine Störung zieht die Stunde nach unten", () => {
 });
 
 test("mehrere Beiträge in einer Stunde zählen mehrfach", () => {
-  const eins = M.stundennote([{ typ: "quant_m", stufe: 0 }]);
-  const zwei = M.stundennote([{ typ: "quant_m", stufe: 0 }, { typ: "quant_m", stufe: 0 }]);
-  assert.ok(zwei.note < eins.note, "zwei Beiträge sollten besser stehen als einer");
+  /* Über dem Freibetrag gemessen: darunter sind ein Beitrag und zwei
+     dieselbe gewöhnliche Stunde, und genau das ist der Sinn des Freibetrags. */
+  const drei = M.stundennote(Array.from({ length: 3 }, () => ({ typ: "quant_m", stufe: 0 })));
+  const fuenf = M.stundennote(Array.from({ length: 5 }, () => ({ typ: "quant_m", stufe: 0 })));
+  assert.ok(fuenf.note < drei.note, "fünf Beiträge sollten besser stehen als drei");
 });
 
 test("Schriftliches wiegt weniger als Mündliches", () => {
-  const m = M.stundennote([{ typ: "qual_m", stufe: 1 }]);
-  const s = M.stundennote([{ typ: "qual_s", stufe: 1 }]);
+  const mach = (typ) => M.stundennote(Array.from({ length: 3 }, () => ({ typ, stufe: 1 })));
+  const m = mach("qual_m"), s = mach("qual_s");
   assert.ok(s.note > m.note, "schriftlich " + s.note + " sollte über mündlich " + m.note + " liegen");
 });
 

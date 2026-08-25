@@ -119,3 +119,32 @@ test("ein erfundener Zielstand geht nicht hinaus", () => {
 test("ohne Inhalt entsteht kein Brief", () => {
   assert.equal(R.brief({ planrName: "9d" }, { datum: "2026-09-17" }, [], {}), null);
 });
+
+/* ---------- Der freie Nachtrag ans Klassenprofil ---------- */
+
+const kursP = { planrName: "8d", planrFach: "Mathematik" };
+const stundeP = { datum: "2026-08-25", tuThemen: ["terme"] };
+
+test("der Nachtrag trägt Datum, Klasse und Fach", () => {
+  const b = R.profilBrief(kursP, stundeP, "  Klammern auflösen sitzt noch nicht  ");
+  assert.equal(b.klasse, "8d");
+  assert.equal(b.fach, "Mathematik");
+  assert.equal(b.profil, "25.08.: Klammern auflösen sitzt noch nicht");
+  assert.equal(b.anhaengen, true, "das Profil wird ergänzt, nicht ersetzt");
+});
+
+test("ohne Text gibt es nichts zu senden", () => {
+  assert.equal(R.profilBrief(kursP, stundeP, "   "), null);
+  assert.equal(R.profilBrief(kursP, stundeP, null), null);
+});
+
+test("ein Kurs ohne planr-Herkunft meldet nichts", () => {
+  assert.equal(R.profilBrief({ name: "Mathe 8d" }, stundeP, "etwas"), null);
+});
+
+test("der Nachtrag hängt nicht an der Ankreuzliste", () => {
+  /* Genau dafür ist er da: was planr nicht als TÜ-Thema genannt hat, geht
+     trotzdem hinaus - nur eben ins Profil und nicht als Wiederholungssignal. */
+  const b = R.profilBrief(kursP, { datum: "2026-08-25" }, "Klammern auflösen");
+  assert.ok(b && b.profil.includes("Klammern"));
+});

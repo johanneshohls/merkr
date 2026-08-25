@@ -702,10 +702,44 @@ const MerkrMitarbeit = (function () {
         3,5 oben gilt fürs gemittelte Modell, wo sie die Kante zwischen 3 und 4
         markiert - hier wird eine einzelne Stunde benotet, keine Bilanz. */
     stundenBasis: 3,
-    /** Wertspanne einer einzelnen Stunde. Nach oben Luft für mehrere Beiträge,
-        nach unten so weit, dass eine verweigerte Stunde durchschlägt. */
+    /** Wieviel Beitragswert eine Stunde trägt, bevor sie über die Drei steigt.
+
+        Der Kern der Korrektur vom 25.08.2026: vorher hob **jeder** Beitrag
+        sofort, ein einziges "+" ergab die Eins. Gemessen an den 71 bestätigten
+        Stundennoten dieses Tages hat die Lehrkraft das in 15 Fällen von Hand
+        heruntergesetzt - ein guter Beitrag war ihr eine Drei, zwei eine Zwei.
+
+        Drei Punkte frei heisst: ein sehr guter Beitrag (Wert 3) oder ein
+        normaler plus ein guter ist die gewöhnliche Stunde. Erst was darüber
+        hinausgeht, hebt - und dann steil, weil "besonders häufig" in der
+        Beschlussvorlage genau der Sprung von der Zwei zur Eins ist. */
+    stundeFrei: 3,
+    stundeFreiS: 3,
+    /** Und wieviel sie trägt, bevor sie unter die Drei fällt.
+
+        Eine Frage nicht beantworten zu können ist noch keine Verweigerung: der
+        einzige negative Fall in den Daten (`keine_antwort`) stand als Fünf im
+        Vorschlag und wurde auf Drei korrigiert. Eine Störung wiegt zwei und
+        schlägt deshalb sofort durch - sie ist keine misslungene Antwort,
+        sondern eine, die gar nicht erst versucht wurde. */
+    stundeFreiAb: 1,
+    /** Notenschritte je Punkt über dem Freibetrag - für die Einzelstunde. */
+    stundeHebt: 0.9,
+    stundeHebtS: 0.45,
+    stundeZieht: 1.0,
+    stundeZiehtS: 0.5,
+    /** Wertspanne, mit der eine Stunde in die Halbjahresachse eingeht. Eine
+        einzelne Glanzstunde soll die Bilanz nicht kippen - deshalb hier die
+        engere Kappung, während die Note derselben Stunde weiter zählt
+        (stundeKappeMax). */
     stundeMax: 4,
     stundeMin: -2,
+    /** Und die Spanne für die Note der Einzelstunde selbst. Sie liegt weiter,
+        weil dort der Freibetrag die ersten drei Punkte ohnehin schluckt: mit
+        der alten Kappung bei 4 stünden über dem Freibetrag nur noch 1 Punkt,
+        und die Eins wäre unerreichbar. */
+    stundeKappeMax: 9,
+    stundeKappeMin: -4,
     halbwertszeitWochen: 8
   };
 
@@ -798,6 +832,21 @@ const MerkrMitarbeit = (function () {
   /** Note in die Punkteskala. Trifft die Spannen der Beschlussvorlage:
       1 → 14 (13-15), 2 → 11 (10-12), 3 → 8 (7-9), 4 → 5 (4-6), 5 → 2 (1-3), 6 → 0. */
   function alsPunkte(note) { return begrenzen(17 - 3 * note, 0, 15); }
+
+  /**
+   * Was ein Eintrag zur **Einzelstunde** beiträgt.
+   *
+   * Unterschied zur Halbjahresachse: eine Störung wiegt hier zwei. Sie ist
+   * keine misslungene Antwort, sondern eine, die gar nicht erst versucht wurde,
+   * und muss den Freibetrag nach unten (stundeFreiAb) allein überschreiten
+   * können - sonst bliebe die gestörte Stunde eine Drei. In der Bilanz übers
+   * Halbjahr bleibt sie eine Verweigerung unter anderen, dort mittelt sich das
+   * ohnehin.
+   */
+  function stundenbeitrag(e) {
+    if (e.typ === "stoerung") return -2;
+    return beitragswert(e);
+  }
 
   /**
    * @param stunden     [{id, datum, ausfall}] - Stunden des Kurses
@@ -920,15 +969,21 @@ const MerkrMitarbeit = (function () {
       const istM = MUENDLICH.indexOf(e.typ) >= 0 || VERWEIGERT.indexOf(e.typ) >= 0;
       const istS = SCHRIFTLICH.indexOf(e.typ) >= 0 || UNERLEDIGT.indexOf(e.typ) >= 0;
       if (!istM && !istS) continue;
-      if (istM) m += beitragswert(e); else s += beitragswert(e);
+      if (istM) m += stundenbeitrag(e); else s += stundenbeitrag(e);
       n++;
     }
 
-    m = begrenzen(m, o.stundeMin, o.stundeMax);
-    s = begrenzen(s, o.stundeMin, o.stundeMax);
-    const teilM = (m < 0 ? o.muendlichAb : o.muendlich) * m;
-    const teilS = (s < 0 ? o.schriftlichAb : o.schriftlich) * s;
-    const roh = o.stundenBasis - teilM - teilS;
+    m = begrenzen(m, o.stundeKappeMin, o.stundeKappeMax);
+    s = begrenzen(s, o.stundeKappeMin, o.stundeKappeMax);
+    /* Freibetrag statt gerader Linie: die ersten Punkte sind die gewöhnliche
+       Stunde und bewegen nichts, erst was darüber hinausgeht, hebt oder zieht.
+       Eine gerade Linie durch den Nullpunkt machte aus jedem einzelnen Beitrag
+       eine Eins - siehe stundeFrei. */
+    const hebt = Math.max(0, m - o.stundeFrei) * o.stundeHebt
+               + Math.max(0, s - o.stundeFreiS) * o.stundeHebtS;
+    const zieht = Math.max(0, -m - o.stundeFreiAb) * o.stundeZieht
+                + Math.max(0, -s - o.stundeFreiAb) * o.stundeZiehtS;
+    const roh = o.stundenBasis - hebt + zieht;
     const note = begrenzen(roh, 1, 6);
     const genau = o.typ === "punkte" ? alsPunkte(note) : note;
 
@@ -973,6 +1028,7 @@ const MerkrMitarbeit = (function () {
     VERWEIGERT: VERWEIGERT,
     UNERLEDIGT: UNERLEDIGT,
     beitragswert: beitragswert,
+    stundenbeitrag: stundenbeitrag,
     zeitgewicht: zeitgewicht,
     achse: achse,
     runden: runden,
@@ -1268,6 +1324,40 @@ const MerkrRueckmeldung = (function () {
     };
   }
 
+  /**
+   * Was nicht auf dem Blatt stand: der freie Nachtrag ans Klassenprofil.
+   *
+   * Die Ankreuzliste kann nur, was planr vor der Stunde als TÜ-Thema genannt
+   * hat. Was im Unterricht sonst auffällt - eine Kompetenz, die noch fehlt -
+   * hat dort keinen Platz, und als freies "gewackelt"-Thema stünde es drüben
+   * für immer offen, weil keine Aufgabe es trifft.
+   *
+   * Deshalb der zweite Kanal: `classes.notizen`, das Klassenprofil. Es ist
+   * Freitext und wird bei jeder Planung gelesen - genau das, was ein solcher
+   * Satz braucht. Angehängt statt ersetzt, mit dem Datum davor, damit man
+   * später sieht, wann es auffiel.
+   *
+   * @returns {klasse, fach?, profil, anhaengen} für POST /api/klassenprofil,
+   *          oder null, wenn nichts zu senden ist.
+   */
+  function profilBrief(kurs, stunde, text) {
+    if (!kurs || !stunde || !stunde.datum) return null;
+    const klasse = String((kurs.planrName || "")).trim();
+    if (!klasse) return null;
+    const satz = String(text == null ? "" : text).trim();
+    if (!satz) return null;
+
+    const b = {
+      klasse: klasse,
+      // Der Tag ohne Jahr - das Profil ist ein laufender Zettel, kein Archiv.
+      profil: stunde.datum.slice(8, 10) + "." + stunde.datum.slice(5, 7) + ".: " + satz,
+      anhaengen: true
+    };
+    const fach = String((kurs.planrFach || "")).trim();
+    if (fach) b.fach = fach;
+    return b;
+  }
+
   /** Kurzfassung fürs Protokoll am Kurs: "25.08.: Lösungsformel, Faktorisierung". */
   function notiz(brief) {
     if (!brief) return "";
@@ -1275,7 +1365,7 @@ const MerkrRueckmeldung = (function () {
   }
 
   return { wackelThemen: wackelThemen, brief: brief, notiz: notiz,
-    zielstand: zielstand, ZIELSTAND: ZIELSTAND };
+    profilBrief: profilBrief, zielstand: zielstand, ZIELSTAND: ZIELSTAND };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueckmeldung;
@@ -3166,9 +3256,61 @@ function wackelBlockHtml(st){
     '<button class="klein" data-a="wackeltMelden" data-id="'+st.id+'">An planr melden</button>'+
     '<span class="hinweis" id="wackelStand">'+
       (gemeldet.length ? "zuletzt gemeldet: "+esc(gemeldet.join(", ")) : "Themen der TÜ dieser Stunde")+
-    '</span></div></div>';
+    '</span></div>'+
+    nachtragFeld(st)+'</div>';
   return html;
 }
+
+/* Was nicht auf dem Blatt stand.
+
+   Die Ankreuzliste kann nur, was planr vor der Stunde als TÜ-Thema genannt hat.
+   Eine Kompetenz, die im Unterricht auffällt und dort nicht steht, hat keinen
+   Platz - und als freies "gewackelt"-Thema stünde sie drüben für immer offen,
+   weil keine Aufgabe sie trifft. Sie geht deshalb ins Klassenprofil: Freitext,
+   der bei jeder Planung gelesen wird. */
+function nachtragFeld(st){
+  const gesetzt = String(st.profilNachtrag || "").trim();
+  return '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--linie)">'+
+    '<label style="font-size:12px;color:var(--text2);font-weight:700">'+
+    'Was sonst noch fehlt (optional, geht ins Klassenprofil)</label>'+
+    '<textarea id="profilNachtrag" rows="2" placeholder="z. B. Klammern auflösen sitzt noch nicht">'+
+    esc(gesetzt)+'</textarea>'+
+    '<div class="zeile" style="margin-top:6px">'+
+    '<button class="klein" data-a="nachtragMelden" data-id="'+st.id+'">Ins Klassenprofil</button>'+
+    '<span class="hinweis" id="nachtragStand">'+
+    (gesetzt ? "zuletzt gemeldet" : "wird beim Planen der nächsten Stunden gelesen")+
+    '</span></div></div>';
+}
+
+document.addEventListener("click", function(ev){
+  const el = ev.target.closest("[data-a]");
+  if (!el || el.dataset.a !== "nachtragMelden") return;
+  const st = stundeVon(el.dataset.id);
+  const k = st ? kursVon(st.kursId) : null;
+  const feld = document.getElementById("profilNachtrag");
+  const stand = document.getElementById("nachtragStand");
+  const text = feld ? feld.value.trim() : "";
+
+  const brief = MerkrRueckmeldung.profilBrief(k, st, text);
+  if (!brief){
+    if (stand) stand.textContent = text ? "Dieser Kurs kommt nicht aus planr." : "Nichts eingetragen.";
+    return;
+  }
+  if (stand) stand.textContent = "wird gemeldet ...";
+  /* Erst merken, dann senden - wie bei der Ankreuzliste: der Satz soll auch
+     stehen, wenn das iPad gerade kein Netz hat. */
+  st.profilNachtrag = text;
+  speichern();
+  sendeAnBridge({typ:"planrProfilAnhang", url: planrBasis(), brief: brief});
+});
+
+window.__KB_planrProfilAntwort = function(antwort){
+  const stand = document.getElementById("nachtragStand");
+  if (!stand) return;
+  stand.textContent = (antwort && antwort.fehler)
+    ? "Ging nicht hinaus - der Satz bleibt hier stehen."
+    : "Steht im Klassenprofil.";
+};
 
 /* Eigener Listener statt eines Eintrags im großen Handler - dasselbe Muster wie
    die Jahresübersicht, und der Dialog entsteht bei jedem Öffnen neu. */

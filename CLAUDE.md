@@ -301,6 +301,46 @@ Note neu auf, und ein Haken, der dabei verschwindet, wird kein zweites Mal geset
 stand seither vollständig da und bekam nie etwas zu zeigen - der Block blendet sich ohne Themen
 einfach aus, deshalb fiel es nicht auf. Seit dem 22.08. übernimmt der Importer die Themen wieder.
 
+## Der Notenvorschlag war zu gut (25.08.2026)
+
+Der erste echte Unterrichtstag hat 71 bestätigte Stundennoten geliefert, und daran ist der
+Vorschlag gemessen worden: **in 19 Fällen hat die Lehrkraft von Hand korrigiert, 18 davon nach
+unten.** Die Ursache stand in der Kurve - jeder Beitrag hob sofort, ein einzelnes "+" ergab die
+Eins.
+
+Seither ein Freibetrag statt einer geraden Linie durch den Nullpunkt: die ersten drei Beitragspunkte
+sind die gewöhnliche Stunde und bewegen nichts, erst was darüber hinausgeht, hebt - und dann steil,
+weil "besonders häufig" in der Beschlussvorlage genau der Sprung von der Zwei zur Eins ist.
+
+| Beitragswert der Stunde | vorher | jetzt | von Hand gesetzt |
+|---|---|---|---|
+| 0 (keine Notiz) | 3 | 3 | 3 (34×) |
+| 2 (ein gutes Wort) | 1 | 3 | 3 (5×), 2 (2×) |
+| 3 | 1 | 3 | 3 (2×) |
+| 4 (zwei gute) | 1 | 2 | 2 (6×) |
+| 5 und mehr | 1 | 1 | 1 |
+| −1 (keine Antwort) | 5 | 3 | 3 |
+
+Der Vorschlag trifft damit 56 der 71 Noten statt 52 - und, was zählt, 15 der 19 Korrekturen.
+
+Zwei Feinheiten dabei: **eine nicht beantwortete Frage allein zieht nicht mehr** (Freibetrag 1 nach
+unten) - wer nicht antworten kann, hat nicht verweigert. Eine **Störung wiegt in der Einzelstunde
+zwei** (`stundenbeitrag`) und schlägt deshalb sofort durch; in der Halbjahresachse bleibt sie eine
+Verweigerung unter anderen, sonst hätte sich das Modell dort mitverschoben. Dieselbe Trennung gilt
+für die Kappung: `stundeMax` gehört der Bilanz, `stundeKappeMax` der Einzelnote.
+
+## Was nicht auf dem Blatt stand (seit 2026-08-25)
+
+Unter der Ankreuzliste im Stundendialog steht ein optionales Freitextfeld. Die Liste kann nur, was
+planr vorher als TÜ-Thema genannt hat; eine Kompetenz, die im Unterricht auffällt und dort nicht
+steht, hätte sonst keinen Platz - und als freies "gewackelt"-Thema stünde sie drüben für immer
+offen, weil keine Aufgabe sie trifft.
+
+Sie geht deshalb über einen zweiten Kanal: `POST /api/klassenprofil` mit `anhaengen`, also in
+`classes.notizen`. Das ist Freitext und wird bei jeder Planung gelesen. Angehängt wird mit dem Tag
+davor ("25.08.: Klammern auflösen sitzt noch nicht"), und der Satz bleibt lokal stehen
+(`stunde.profilNachtrag`), auch wenn das iPad gerade kein Netz hat.
+
 ## Der Rückweg zu planr (seit 2026-08-20)
 
 planr liefert mit der Stoffverteilung je Termin `tuThemen` - woraus die TÜ dieser Stunde gebaut ist,
