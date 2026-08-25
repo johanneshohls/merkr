@@ -3692,15 +3692,37 @@ function viewWochenraster(){
   }
   html += '</tr>';
 
+  /* Passt dieser Eintrag in die Zeile? Einmal hier, weil die Aufsichtszeile
+     dieselbe Frage stellt wie die Blockzeile darunter. */
+  const inZeile = (e, nr) => {
+    const z = zeitVon(nr);
+    return z ? (z.stunden||[]).includes(Number(e.stunde)) : e.stunde===nr;
+  };
+
   for (const nr of zeilen){
     const z = zeitVon(nr);
+
+    /* Eine Aufsicht ist keine Stunde - sie liegt davor, in der Pause. Als
+       Kachel im Block stünde sie da, wo Unterricht steht, und behauptete eine
+       Klasse, die es nicht gibt. Deshalb eine schmale Zeile darüber: ein roter
+       Balken am Tag, an dem eine ansteht. Wo genau, sagt der Vertretungsplan
+       der Schule - hier zählt nur, dass man vor dieser Stunde nicht in Ruhe
+       sitzen bleibt. */
+    const aufsichten = belegung.map(t => t.liste.some(e => e.art==="aufsicht" && inZeile(e, nr)));
+    if (aufsichten.some(Boolean)){
+      html += '<tr><td></td>';
+      for (const [i, hat] of aufsichten.entries())
+        html += '<td style="padding:0"><div title="'+(hat?'Aufsicht':'')+'" style="height:5px;border-radius:3px;background:'+
+          (hat ? 'var(--rot)' : 'transparent')+'"></div></td>';
+      html += '</tr>';
+    }
+
     html += '<tr><td style="text-align:right;vertical-align:middle">'+
       '<div style="font-weight:800;font-size:13px">'+esc(blockLabel(nr))+'</div>'+
       (z?'<div class="hinweis" style="font-size:10px">'+esc(z.von)+'</div>':'')+'</td>';
 
     for (const t of belegung){
-      const z2 = zeitVon(nr);
-      const treffer = t.liste.filter(e=>z2 ? (z2.stunden||[]).includes(Number(e.stunde)) : e.stunde===nr);
+      const treffer = t.liste.filter(e=>e.art!=="aufsicht" && inZeile(e, nr));
       const istHeute = t.iso === heute;
       if (!treffer.length){
         html += '<td><div style="min-height:52px;border-radius:12px;background:'+
@@ -3722,10 +3744,6 @@ function viewWochenraster(){
         const zusatz = [];
         if (anders === "verlegt") zusatz.push("verlegt");
         if (anders === "zusatz") zusatz.push("Vertretung");
-        /* Bei der Aufsicht steht die Art schon im Namen - die Zeile darunter
-           gehört dem Ort, sonst stünde zweimal "Aufsicht" übereinander. */
-        if (anders === "aufsicht" && e.hinweis) zusatz.push(e.hinweis.replace(/^Aufsicht\s*/i, ""));
-        else if (anders === "aufsicht") zusatz.push("Aufsicht");
         /* Der Raum steht nur da, wo er die Nachricht ist. Im Regelfall gehört
            die Zeile dem Thema - den Raum weiß man. */
         if (anders && e.raum) zusatz.push("Raum "+e.raum);
