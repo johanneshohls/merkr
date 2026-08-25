@@ -65,6 +65,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Noten-Reiter: ein Notenbuch, TÜ und Was-wäre-wenn | fertig, 11 Tests für die TÜ-Rechnung |
 | Ziel und Verlauf aus planr zum Abhaken | merkr fertig (7 Tests); planr-Route erweitert, noch nicht ausgerollt |
 | Der Tag aus planr, mit Vertretung | fertig, 7 Tests, im Browser geprüft |
+| Drei Sitzordnungen je Kurs | fertig, im Browser geprüft |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -208,6 +209,22 @@ gespeichert wird allein `S`.
 Geblieben sind `notenlistePdf`, `stundenlistePdf` und `viewMuendlich` - sie werden an ihren neuen
 Orten gerufen und erzeugen nachweislich weiter Papier.
 
+## Drei Sitzordnungen je Kurs (seit 2026-08-25)
+
+Eine Klasse sitzt nicht das ganze Jahr gleich: Frontalphase, Gruppentische,
+Klassenarbeit. Neben "Aufrufen" stehen jetzt drei Knöpfe 1 2 3, und jeder hält seine eigene
+Ordnung. An Tagen ohne Unterricht steht dieselbe Wahl im Band darüber - eingerichtet wird eine
+Sitzordnung meist dann, wenn keine Stunde ist.
+
+**Der erste Plan trägt weiter den nackten Kursschlüssel** in `s.sitz` (`s.sitz["m8d"]`), die
+anderen hängen ein `#2` an. Damit bleibt jede vorhandene Sitzordnung, wo sie ist, ohne Umzug der
+Daten - und ein Bestand, der noch nie von Plänen gehört hat, ist einfach auf dem ersten. Der
+Schlüssel kommt aus `sitzSchluessel(kurs)`, die aktive Nummer steht als `kurs.sitzplan`.
+
+Ein Plan, in dem noch niemand sitzt, übernimmt beim Hinwechseln die Ordnung, die gerade auf dem
+Schirm steht. Wer auf "2" tippt, will meist eine Abwandlung der jetzigen - zwei Tische verschieben
+statt dreissig.
+
 ## Das Schüler-Popup bleibt offen (25.08.2026)
 
 Eine Wortmeldung hat oft mehr als ein Merkmal - gute Idee und laut dazwischen. Bisher schloss das
@@ -253,7 +270,8 @@ bleibt es beim eigenen. Ein Tag, über den er nichts sagt, ist kein Tag ohne Unt
 | Ausfall | Kachel bleibt stehen, durchgestrichen und blass; zählt nicht als Unterricht |
 | Raumänderung | Kachel mit dem neuen Raum statt dem Thema |
 | Verlegung | Kachel im neuen Block; ohne Zielblock nur der Ausfall am alten Platz |
-| Vertretung, Aufsicht | eigene Kachel, ohne Kurs und ohne Klick, wenn merkr die Lerngruppe nicht führt |
+| Vertretung | eigene Kachel, ohne Kurs und ohne Klick, wenn merkr die Lerngruppe nicht führt |
+| Aufsicht | ein schmaler roter Balken in der Zeile über dem Block, ohne Text - sie ist keine Stunde |
 
 Gerechnet wird in `src/kern/tagesplan.js` (7 Tests). Die Zuordnung planr-Kurs zu merkr-Kurs macht
 weiter `MerkrPlanr.kursFuer` - der Tagesplan reicht sie nur als Funktion herein, damit die beiden

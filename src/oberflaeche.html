@@ -696,7 +696,7 @@ function viewSitzplan(k){
   let html = '<div id="sitzflaeche">';
   let auto = 0;
   for (const s of schueler){
-    const pos = (s.sitz && s.sitz[k.id]) || {x: 12+(auto%7)*124, y: 12+Math.floor(auto/7)*92};
+    const pos = (s.sitz && s.sitz[sitzSchluessel(k)]) || {x: 12+(auto%7)*124, y: 12+Math.floor(auto/7)*92};
     auto++;
     const anw = st ? anwesenheitVon(s.id, st.id) : null;
     const fehlt = anw && anw.status==="fehlt";
@@ -750,6 +750,29 @@ function viewListe(k){
 
 /* ============ Drag & Drop im Sitzplan ============ */
 function initSitzplanDrag(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
+
+/* ============ Mehrere Sitzordnungen je Kurs ============
+   Eine Klasse sitzt nicht das ganze Jahr gleich: Frontalphase, Gruppentische,
+   Klassenarbeit. Statt vor jeder Umstellung dreissig Kacheln zu schieben,
+   hält der Kurs drei Pläne, und der Umschalter über dem Sitzplan wechselt.
+
+   Der erste Plan trägt weiterhin den nackten Kursschlüssel in `s.sitz`. Damit
+   bleibt jede vorhandene Sitzordnung, wo sie ist - kein Umzug der Daten, und
+   ein Bestand, der noch nie von Plänen gehört hat, ist einfach auf dem ersten. */
+const SITZPLAENE = 3;
+
+function sitzNummer(kurs){
+  const n = Number(kurs && kurs.sitzplan) || 1;
+  return (n >= 1 && n <= SITZPLAENE) ? n : 1;
+}
+
+/** Unter welchem Schlüssel die Plätze dieses Kurses liegen. Nimmt Kurs oder Id. */
+function sitzSchluessel(kursOderId, nummer){
+  const kurs = (kursOderId && kursOderId.id) ? kursOderId : kursVon(kursOderId);
+  if (!kurs) return String(kursOderId);
+  const n = nummer != null ? nummer : sitzNummer(kurs);
+  return n === 1 ? kurs.id : kurs.id + "#" + n;
+}
 
 /* ============ Schüler-Popup (Schnellerfassung) ============ */
 /* Wer gerade im Popup steht. Das Popup bleibt beim Notieren offen: eine
@@ -4375,10 +4398,10 @@ viewSitzplan = function(k){
   const schueler = kursSchueler(k.id);
   let nr = 0;
   for (const s of schueler){
-    if (s.sitz && s.sitz[k.id]) continue;
+    if (s.sitz && s.sitz[sitzSchluessel(k)]) continue;
     const pos = platzPosition(nr++);
     if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
-    s.sitz[k.id] = pos;
+    s.sitz[sitzSchluessel(k)] = pos;
   }
   /* Erst nach dem Setzen neu bauen, sonst stehen die alten Koordinaten drin. */
   const neu = sitzplanOhneRaum(k);
@@ -4499,6 +4522,57 @@ document.addEventListener("click", ev=>{
   }
 });
 
+/* Die Wahl des Sitzplans - drei Knöpfe, der aktive hervorgehoben. Eine Auswahl
+   statt eines Klapplists: bei drei Möglichkeiten ist der eine Tipp kürzer als
+   aufklappen, lesen, tippen. */
+function sitzplanWahlHtml(k){
+  let html = '<div class="splwahl">';
+  for (let n = 1; n <= SITZPLAENE; n++)
+    html += '<button class="'+(sitzNummer(k)===n ? "aktiv" : "")+'" data-a="sitzplanWahl" data-id="'+k.id+
+      '" data-nr="'+n+'" title="Sitzplan '+n+'">'+n+'</button>';
+  return html + '</div>';
+}
+
+(function sitzplanWahlStil(){
+  if (document.getElementById("splwahlStil")) return;
+  const el = document.createElement("style");
+  el.id = "splwahlStil";
+  el.textContent =
+    ".splwahl{display:inline-flex; border:1px solid var(--linie); border-radius:10px; overflow:hidden;}"+
+    ".splwahl button{border:none; border-radius:0; background:var(--karte); color:var(--text2);"+
+      "font-weight:800; font-size:14px; padding:8px 13px; min-width:38px; box-shadow:none;}"+
+    ".splwahl button + button{border-left:1px solid var(--linie);}"+
+    ".splwahl button.aktiv{background:var(--akzent); color:#fff;}";
+  document.head.appendChild(el);
+})();
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="sitzplanWahl"]');
+  if (!el) return;
+  const k = kursVon(el.dataset.id);
+  if (!k) return;
+  const neu = Number(el.dataset.nr);
+  if (sitzNummer(k) === neu) return;
+
+  /* Ein leerer Plan übernimmt, was gerade auf dem Schirm steht. Wer auf
+     "2" tippt, will meist eine Abwandlung der jetzigen Ordnung und nicht das
+     Raster von vorn - zwei Tische verschieben statt dreissig. */
+  const von = sitzSchluessel(k);
+  const nach = sitzSchluessel(k, neu);
+  const schueler = kursSchueler(k.id);
+  if (!schueler.some(s=>s.sitz && s.sitz[nach])){
+    for (const s of schueler){
+      const pos = s.sitz && s.sitz[von];
+      if (!pos) continue;
+      if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
+      s.sitz[nach] = {x: pos.x, y: pos.y};
+    }
+  }
+  k.sitzplan = neu;
+  speichern(); zeichne();
+  toast("Sitzplan "+neu);
+});
+
 /* Der Knopf über dem Sitzplan. */
 const sitzplanOhneAufruf = viewSitzplan;
 viewSitzplan = function(k){
@@ -4509,7 +4583,10 @@ viewSitzplan = function(k){
   const begonnen = topf.length > 0 || !!k.aufrufZuletzt;
   const offen = topf.length ? MerkrAufrufen.offen(topf, kandidaten.map(x=>x.id)) : kandidaten.length;
   const kopf = '<div class="zeile raum" style="margin-bottom:10px">'+
+    '<div class="zeile" style="gap:8px">'+
     '<button class="primar" data-a="aufrufen" data-id="'+k.id+'">Aufrufen</button>'+
+    sitzplanWahlHtml(k)+
+    '</div>'+
     '<span class="hinweis">'+
     (kandidaten.length
       ? (!begonnen ? kandidaten.length+' Schüler anwesend'
@@ -4543,6 +4620,9 @@ viewSitzplan = function(k){
     '<div style="flex:1"><b>'+esc(fmtDatum(R.datum))+' · kein Unterricht</b>'+
     '<div class="hinweis">'+(grund ? esc(grund)+" - " : "")+
     'Plätze lassen sich einrichten. Notieren geht auch - die Notiz legt dann eine Stunde an diesem Tag an.</div></div>'+
+    /* Gerade hier gehört die Wahl hin: Sitzordnungen richtet man ein, wenn kein
+       Unterricht ist. */
+    sitzplanWahlHtml(k)+
     (vor ? '<button data-a="anwTag" data-datum="'+vor+'">Zur nächsten Stunde</button>' : '')+
     '</div>';
 
@@ -4555,9 +4635,9 @@ viewSitzplan = function(k){
 
   let nr = 0;
   for (const s of schueler){
-    if (s.sitz && s.sitz[k.id]) continue;
+    if (s.sitz && s.sitz[sitzSchluessel(k)]) continue;
     if (!s.sitz || typeof s.sitz !== "object") s.sitz = {};
-    s.sitz[k.id] = platzPosition(nr++);
+    s.sitz[sitzSchluessel(k)] = platzPosition(nr++);
   }
   const marke = '<div id="sitzflaeche">';
   const roh = sitzplanOhnePlan(k);
@@ -4629,7 +4709,7 @@ function werSitztAuf(kursId, index, ausser){
   const ziel = platzPosition(index);
   return kursSchueler(kursId).find(s=>{
     if (s.id === ausser) return false;
-    const pos = s.sitz && s.sitz[kursId];
+    const pos = s.sitz && s.sitz[sitzSchluessel(kursId)];
     return pos && Math.abs(pos.x - ziel.x) < 6 && Math.abs(pos.y - ziel.y) < 6;
   }) || null;
 }
@@ -4676,11 +4756,11 @@ initSitzplanDrag = function(){
     const nachbar = werSitztAuf(k.id, index, s.id);
     if (nachbar){
       /* Platztausch: der andere bekommt den, den dieser gerade verlässt. */
-      const vorher = s.sitz[k.id] || ziel;
+      const vorher = s.sitz[sitzSchluessel(k)] || ziel;
       if (!nachbar.sitz || typeof nachbar.sitz !== "object") nachbar.sitz = {};
-      nachbar.sitz[k.id] = {x: vorher.x, y: vorher.y};
+      nachbar.sitz[sitzSchluessel(k)] = {x: vorher.x, y: vorher.y};
     }
-    s.sitz[k.id] = ziel;
+    s.sitz[sitzSchluessel(k)] = ziel;
     speichern(); zeichne();
   });
 
