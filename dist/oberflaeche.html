@@ -4929,7 +4929,10 @@ function viewWochenraster(){
         const zusatz = [];
         if (anders === "verlegt") zusatz.push("verlegt");
         if (anders === "zusatz") zusatz.push("Vertretung");
-        if (anders === "aufsicht") zusatz.push("Aufsicht");
+        /* Bei der Aufsicht steht die Art schon im Namen - die Zeile darunter
+           gehört dem Ort, sonst stünde zweimal "Aufsicht" übereinander. */
+        if (anders === "aufsicht" && e.hinweis) zusatz.push(e.hinweis.replace(/^Aufsicht\s*/i, ""));
+        else if (anders === "aufsicht") zusatz.push("Aufsicht");
         /* Der Raum steht nur da, wo er die Nachricht ist. Im Regelfall gehört
            die Zeile dem Thema - den Raum weiß man. */
         if (anders && e.raum) zusatz.push("Raum "+e.raum);
