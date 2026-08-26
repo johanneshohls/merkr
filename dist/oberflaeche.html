@@ -2474,25 +2474,31 @@ function viewHausaufgaben(k){
 
   const ohneCode = schueler.filter(s=>!String(s.selbrCode||"").trim()).length;
   html += '<div class="karte" style="overflow-x:auto"><table class="tab"><tr><th style="text-align:left">Name</th>';
+  /* Das Ziel steht im Spaltenkopf, in der Zelle nur die geschaffte Zahl. "7/10"
+     in jeder Zelle waere bei zehn Spalten eine Wand aus Schraegstrichen, und das
+     Ziel ist je Aufgabe dasselbe fuer alle. */
   for (const sp of spalten)
-    html += '<th title="'+esc(sp.titel)+'" style="font-size:11px;font-weight:600">'+fmtDatumKurz(sp.faelligAm)+'</th>';
+    html += '<th title="'+esc(sp.titel)+'" style="font-size:11px;font-weight:600;white-space:nowrap">'+
+      fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">von '+sp.ziel+'</span></th>';
   html += '<th style="font-size:11px">Quote</th></tr>';
 
   for (const z of zeilen){
     html += '<tr><td><b>'+esc(z.name)+', '+esc(z.vorname)+'</b></td>';
     for (const f of z.felder){
-      const zeichen = f.zustand==="fertig" ? "●" : f.zustand==="teils" ? "◐" : f.zustand==="nichts" ? "○" : "·";
-      const farbe = f.zustand==="fertig" ? "var(--gruen)" : f.zustand==="nichts" ? "var(--rot)" : "var(--text2)";
-      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code" : f.geschafft+" von "+f.ziel;
-      html += '<td style="text-align:center;color:'+farbe+';font-size:15px" title="'+esc(titel)+'">'+zeichen+'</td>';
+      /* Die Farbe bleibt, damit das Muster trotz Zahlen auf einen Blick da ist:
+         gruen fertig, rot nichts angefangen. */
+      const farbe = f.zustand==="fertig" ? "var(--gruen)" : f.zustand==="nichts" ? "var(--rot)" : "var(--text)";
+      const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>' : String(f.geschafft);
+      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code" : f.geschafft+" von "+f.ziel+" gelöst";
+      html += '<td style="text-align:center;color:'+farbe+';font-size:14px;font-weight:700" title="'+esc(titel)+'">'+inhalt+'</td>';
     }
     html += '<td style="text-align:center;font-size:12px;font-weight:700">'+
       (z.quote===null ? '<span class="hinweis">–</span>' : z.fertig+"/"+z.von)+'</td></tr>';
   }
   html += '</table></div>';
 
-  html += '<p class="hinweis">● fertig · ◐ angefangen · ○ nichts · · nicht gewertet. '+
-    'Der Stand ist der vom Fälligkeitstag; Nachgeholtes steht im Stundendialog.</p>';
+  html += '<p class="hinweis">Die Zahl ist, wie viele Aufgaben zum Fälligkeitstag gelöst waren - '+
+    'grün heißt fertig, rot nichts angefangen, · nicht gewertet. Nachgeholtes steht im Stundendialog.</p>';
   if (ohneCode)
     html += '<p class="hinweis">'+ohneCode+' '+(ohneCode===1?"Kind hat":"Kinder haben")+
       ' keinen selbr-Code und wird nicht gemessen. Einzutragen im Reiter Kurs.</p>';
