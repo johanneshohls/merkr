@@ -23,9 +23,9 @@ Eigene CI-Farbe, nicht selbrs Grün:
 
 | Rolle | Wert |
 |---|---|
-| Papier (Hintergrund) | `#faf6fb` |
-| Tinte (Text) | `#3b1f3e` |
-| Akzent (Marke, aktive Zustände, Hauptknopf) | `#6b3f6e` |
+| Papier (Hintergrund) | `#f4f2ef` |
+| Tinte (Text) | `#1d2124` |
+| Akzent (Marke, aktive Zustände, Hauptknopf) | `#2f3439` |
 | Karte | `#ffffff` |
 
 Die fünf Mitarbeitsstufen brauchen eine eigene, klar getrennte Skala von sehr gut bis sehr schwach. Sie ist die einzige Stelle, an der Farbe etwas bedeutet — halte den Rest der Oberfläche farblich zurück, damit diese fünf Werte sofort lesbar bleiben. Rot ist für "Lücke" reserviert und darf sonst nirgends auftauchen.

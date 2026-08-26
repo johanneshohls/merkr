@@ -70,6 +70,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Der Tag aus planr, mit Vertretung | fertig, 7 Tests, im Browser geprüft |
 | Drei Sitzordnungen je Kurs | fertig, im Browser geprüft |
 | merkr aktualisiert sich selbst | gebaut, auf dem Gerät ungetestet |
+| Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy steht aus |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -414,3 +415,32 @@ Kurs "9d" mit Fach "Mathematik", hier vielleicht "Mathe 9d". Ein Kurs ohne diese
 nichts - dasselbe Muster wie `planrKlasse` bei der Zuordnung.
 
 Namen gehen nicht hinaus. Die Rückmeldung kennt Kurs, Datum und Thema, sonst nichts.
+
+## Regie: was am Lehrertisch liegen muss (seit 27.08.2026)
+
+Zwischen Anwesend und Noten steht ein Reiter Regie. Er zeigt zum eingestellten Tag drei Dinge:
+Thema und Ziel der Stunde, darunter die Regie aus planr, darunter den geplanten Verlauf zum
+Mitlesen. Die Terminreihe darüber ist dieselbe wie in Sitzplan und Anwesenheit
+(`STUNDENREIHE_TABS`), man blättert also mit denselben Kacheln.
+
+**Der Reiter liest nur.** Geschrieben wird die Regie drüben in planr, im Stundenkopf oder über
+`stunde_eintragen`; hier steht sie nach dem nächsten Abruf der Stoffverteilung. Ein Eingabefeld an
+dieser Stelle hieße zwei Planungen an zwei Orten, und die zweite wäre die, die niemand
+wiederfindet. Abgehakt wird der Verlauf weiter im Abschluss-Dialog, nicht hier.
+
+Auf der planr-Seite ist es `lesson_plans.regie` (Migration `0022`, additiv) und geht als Feld
+`regie` je Termin über `/api/stoffverteilung` mit - nur für den Betreiber, wie die Hausaufgabe. Der
+Importer übernimmt es nach `st.regie`; fehlt das Feld im Abruf, bleibt der letzte Stand stehen,
+statt eine Notiz zu löschen. Dasselbe Muster wie bei `tuThemen`.
+
+## Graphit statt Pflaume (27.08.2026)
+
+Die Oberfläche trug Pflaume auf hellem Lila. Im Verbund war das eine Modulfarbe wie selbrs Smaragd
+oder planrs Indigo - auf dem Tisch, aufgeschlagen vor fünfundzwanzig Kindern, sah es nach
+Grundschule aus. Jetzt Graphit (`#2f3439`) auf warmem Papier (`#f4f2ef`), Text `#1d2124`.
+
+Die fünf Mitarbeitsstufen bleiben unangetastet: sie sind die einzige Stelle, an der Farbe etwas
+bedeutet, und ein zurückgenommener Rahmen macht sie eher lesbarer. Geändert wurden die neun Werte
+in `:root` und die vier hartkodierten Stellen daneben (Body und Ladeanzeige, Seitenleiste, Tische
+im Sitzplan, Marke) - `docs/design-prompt.md` trägt dieselben Werte, damit die nächste Runde an der
+Oberfläche nicht wieder lila herauskommt.

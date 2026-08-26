@@ -7,14 +7,15 @@
 <style>
 /*__SCHRIFT__*/
 :root{
-  /* Pflaume auf Papier. Eigene Marke im lehrr-Verbund: selbr hat Smaragd,
-     planr Indigo, drillr Blau, prüfr Amber, checkr Rot. */
-  --akzent:#6b3f6e; --akzent-hell:#f4ecf5; --bg:#efe6f0; --karte:#ffffff;
-  --text:#3b1f3e; --text2:#6f5872; --linie:#e4d7e5; --rot:#c02f2f;
+  /* Graphit auf Papier. Die anderen Module tragen eine Modulfarbe - selbr
+     Smaragd, planr Indigo, drillr Blau, prüfr Amber, checkr Rot. merkr liegt
+     im Unterricht offen auf dem Tisch und hält sich heraus. */
+  --akzent:#2f3439; --akzent-hell:#e9ebec; --bg:#f4f2ef; --karte:#ffffff;
+  --text:#1d2124; --text2:#6b7075; --linie:#e2ded8; --rot:#c02f2f;
   /* Die fünf Stufen sind die einzige Stelle, an der Farbe etwas bedeutet.
      Deshalb hält sich der Rest der Oberfläche zurück. */
   --s2:#12715a; --s1:#64a35e; --s0:#d8a417; --sm1:#cf7a2e; --sm2:#8e3b3b;
-  --radius:16px; --schatten:0 1px 3px rgba(59,31,62,.07);
+  --radius:16px; --schatten:0 1px 3px rgba(29,33,36,.07);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;height:100%;}
@@ -44,7 +45,7 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
 /* Seitenleiste nach dem Entwurf: 92 px, Marke oben, sechs Ziele als Kacheln.
    Sie liegt fest am Rand, statt die Seitenstruktur umzubauen - topbar und app
    rücken einfach nach. */
-#seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#f2e9f3;
+#seitenleiste{position:fixed; left:0; top:0; bottom:0; width:92px; background:#edeae5;
   display:flex; flex-direction:column; align-items:stretch; padding:14px 8px; gap:4px; z-index:50;}
 /* Oben bleibt Platz frei: dort schwebt in Scriptable der eigene
    Schliessen-Knopf über der Seite. 72 px, am Gerät nachgemessen - ohne die
@@ -68,7 +69,7 @@ h1{font-size:22px;margin:0;} h2{font-size:19px;margin:0 0 10px;} h3{font-size:16
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 #seitenleiste .marke{display:none;}
 #seitenleiste .marke b{font-size:17px; font-weight:900; letter-spacing:-.3px; color:var(--akzent);}
-#seitenleiste .marke span{font-size:10px; font-weight:700; color:#96809a;}
+#seitenleiste .marke span{font-size:10px; font-weight:700; color:#8a8781;}
 #seitenleiste button{display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 2px 9px;
   border-radius:16px; background:transparent; color:var(--akzent); min-height:auto; font-size:11px; font-weight:800; line-height:1;}
 #seitenleiste button.aktiv{background:var(--akzent); color:#fff;}
@@ -113,7 +114,7 @@ body.mitleiste #app{padding-left:108px;}
    Kacheln lassen sich weiter frei darauf schieben. */
 #sitzflaeche{position:relative; background:var(--karte);
   border:1px solid var(--linie); border-radius:var(--radius); height:620px; overflow:hidden; touch-action:none;}
-#sitzflaeche .tisch{position:absolute; border-radius:10px; background:#f6f1f7;
+#sitzflaeche .tisch{position:absolute; border-radius:10px; background:#f1efeb;
   border:1px solid var(--linie); pointer-events:none;}
 #sitzflaeche .tisch::after{content:""; position:absolute; top:8px; bottom:8px; left:50%;
   border-left:1px dashed var(--linie);}
@@ -121,7 +122,7 @@ body.mitleiste #app{padding-left:108px;}
   border:1px solid var(--linie); pointer-events:none; display:flex; align-items:center;
   justify-content:center; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.1em;}
 .stile{position:absolute; width:112px; min-height:72px; border-radius:14px; background:var(--karte);
-  box-shadow:0 1px 3px rgba(59,31,62,.09); border:1px solid var(--linie); padding:9px 10px 8px;
+  box-shadow:0 1px 3px rgba(29,33,36,.09); border:1px solid var(--linie); padding:9px 10px 8px;
   cursor:pointer; touch-action:none;}
 .stile .sname{font-size:14px; font-weight:800; line-height:1.15; pointer-events:none; color:var(--text);}
 .stile .sname span{display:block; font-weight:600; color:var(--text2);}
@@ -204,7 +205,7 @@ svg text{font-family:inherit;}
    dunkle Schrift auf hellem Grund. Die Palette oben ist die einzige. */
 </style>
 </head>
-<body style="background:#efe6f0;color:#3b1f3e">
+<body style="background:#f4f2ef;color:#1d2124">
 <script>
 /* Früher Fehlerfänger: zeigt Startfehler sichtbar an, statt weiß zu bleiben */
 window.__KB_startFehlerText = "";
@@ -228,7 +229,7 @@ window.__KB_startOk = false;
 </script>
 <div id="testbanner" style="display:none">Testmodus ohne Scriptable – Änderungen werden <b>nicht dauerhaft</b> gespeichert.</div>
 <div id="topbar"></div>
-<div id="ladeanzeige" style="padding:24px;font:16px 'Nunito',-apple-system,sans-serif;background:#efe6f0;color:#3b1f3e">
+<div id="ladeanzeige" style="padding:24px;font:16px 'Nunito',-apple-system,sans-serif;background:#f4f2ef;color:#1d2124">
 <b>merkr startet …</b><br><br>Bleibt dieser Text stehen, bricht das Skript ab.
 </div>
 <div id="app"></div>
@@ -2913,6 +2914,13 @@ function planImportieren(text){
           const neuZiel = String(th.ziel).trim();
           if (st.ziel !== neuZiel){ st.ziel = neuZiel; geaendert++; }
         }
+        /* Die Regie: was während der Stunde am Lehrertisch liegen muss. Sie
+           kommt nur beim Betreiber mit - fehlt das Feld, bleibt der letzte
+           Stand stehen, statt eine Notiz beim Abruf zu verlieren. */
+        if (th.regie != null){
+          const neuRegie = String(th.regie).trim();
+          if (st.regie !== neuRegie){ st.regie = neuRegie; geaendert++; }
+        }
         if (Array.isArray(th.phasen)){
           const neuPh = th.phasen.filter(x=>x).map((x,i)=>({
             schluessel: String(x.schluessel || x.seq || (i+1)),
@@ -4233,6 +4241,7 @@ const LEISTE_GLOBAL = [
 const LEISTE_KURS = [
   {id:"sitzplan",  label:"Sitzplan",   tab:"sitzplan",    icon:LEISTE[2].icon},
   {id:"anwesend",  label:"Anwesend",   tab:"anwesenheit", icon:LEISTE[3].icon},
+  {id:"regie",     label:"Regie",      tab:"regie",       icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>'},
   {id:"schueler",  label:"Schüler",    tab:"liste",       icon:LEISTE[4].icon},
   {id:"noten",     label:"Noten",      tab:"arbeiten",    icon:LEISTE[5].icon},
   {id:"stunden",   label:"Stunden",    tab:"stunden",     icon:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>'},
@@ -4415,6 +4424,7 @@ viewKurs = function(){
   if (R.tab==="sitzplan" || R.tab==="liste") html += kursKopfzeile(k);
   if (R.tab==="sitzplan") html += viewSitzplan(k);
   else if (R.tab==="anwesenheit") html += anwesenheitDialogHtml(k, true);
+  else if (R.tab==="regie") html += viewRegie(k);
   else if (R.tab==="liste") html += viewListe(k);
   else if (R.tab==="stunden") html += viewStunden(k);
   else if (R.tab==="jahr") html += viewJahr(k);
@@ -5296,7 +5306,7 @@ zeichne();
   document.head.appendChild(s);
 })();
 
-const STUNDENREIHE_TABS = ["sitzplan", "anwesenheit"];
+const STUNDENREIHE_TABS = ["sitzplan", "anwesenheit", "regie"];
 const MONATSKURZ = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 
 /** Alle Unterrichtstage dieses Kurses im laufenden Schuljahr, aufsteigend. */
@@ -6344,6 +6354,59 @@ viewKurs = function(){
   try { return kursOhneListenkopf(); }
   finally { kursKopfzeile = kopfAus; }
 };
+
+/* ================= Der Reiter Regie (27.08.2026) =================
+   Was während der Stunde am Lehrertisch liegen muss, steht in planr: mitzubringendes
+   Material, in welcher Reihenfolge die Klasse drankommt, woran nach zwanzig Minuten
+   zu denken ist. Geschrieben wird das beim Planen, gebraucht wird es im Unterricht -
+   und dort liegt nicht der Laptop, sondern das iPad.
+
+   Der Reiter liest nur. Wer hier etwas ändern wollte, hätte zwei Planungen an zwei
+   Orten, und die zweite wäre die, die niemand wiederfindet. Über der Regie stehen
+   Thema und Ziel der Stunde, darunter der geplante Verlauf zum Mitlesen - abgehakt
+   wird er am Stundenende im Abschluss-Dialog, nicht hier. */
+
+function viewRegie(k){
+  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  if (!st)
+    return tagKopf(k) + leer("An diesem Tag hat der Kurs keine Stunde.", null);
+
+  const thema = String(st.thema || st.geplant || "").trim();
+  const ziel = String(st.ziel || "").trim();
+  const regie = String(st.regie || "").trim();
+  const phasen = Array.isArray(st.phasen) ? st.phasen : [];
+
+  let html = tagKopf(k);
+
+  if (st.ausfall) html += '<div class="karte"><b style="color:var(--rot)">Diese Stunde ist ausgefallen.</b></div>';
+
+  html += '<div class="karte">'+
+    '<div class="hinweis">'+(st.reihe ? esc(st.reihe)+' · ' : '')+esc(fmtDatum(st.datum))+'</div>'+
+    '<h2 style="margin:2px 0 0">'+esc(thema || "Ohne Thema")+'</h2>'+
+    (ziel ? '<p style="margin:8px 0 0">'+esc(ziel)+'</p>' : '')+
+    '</div>';
+
+  if (regie){
+    html += '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Regie</h2>'+
+      '<div style="white-space:pre-wrap;line-height:1.5">'+esc(regie)+'</div></div>';
+  } else {
+    html += '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Regie</h2>'+
+      '<p class="hinweis" style="margin:0">Für diese Stunde steht in planr keine Regie. Geschrieben wird sie dort im Feld Regie; hier steht sie, sobald die Stoffverteilung wieder geholt wurde.</p>'+
+      '<div class="abstand"></div><button class="klein" data-a="planrJetzt">Stoffverteilung holen</button></div>';
+  }
+
+  if (phasen.length){
+    html += '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Verlauf</h2>'+
+      '<table class="tab">';
+    for (const ph of phasen)
+      html += '<tr><td style="width:64px;white-space:nowrap"><b>'+esc(ph.name || "")+'</b></td>'+
+        '<td>'+esc(ph.inhalt || "")+'</td>'+
+        '<td style="width:66px;white-space:nowrap;text-align:right;color:var(--text2)">'+(ph.dauer ? esc(ph.dauer)+' min' : '')+'</td></tr>';
+    html += '</table></div>';
+  }
+
+  return html;
+}
 
 /* ---------- 4. Die TÜ-Spalten lassen sich zuklappen ---------- */
 
