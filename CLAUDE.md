@@ -374,6 +374,26 @@ zwei** (`stundenbeitrag`) und schlägt deshalb sofort durch; in der Halbjahresac
 Verweigerung unter anderen, sonst hätte sich das Modell dort mitverschoben. Dieselbe Trennung gilt
 für die Kappung: `stundeMax` gehört der Bilanz, `stundeKappeMax` der Einzelnote.
 
+## Wie lief die Stunde? (seit 2026-08-26)
+
+Im Abschluss-Dialog steht unter der Geschafft?-Liste ein Freitextfeld. Die Haken sagen, was
+geschafft wurde; sie sagen nicht, dass die Klasse bei den Sachaufgaben abgerissen ist.
+
+Der Satz geht mit der Rückmeldung als `notiz` hinaus und landet drüben in
+`lessonPlans.reflexion`. **Dort lag er bisher tot:** `naechste_stunde` liefert die Vorstunde mit
+Ausblick, Hausaufgabe und Merkhefteinträgen - die Reflexion fehlte, jede Rückmeldung war ein
+Eintrag ins Nichts. Seit dem 26.08. steht sie in `vorstunde.reflexion` (planr, `lib/tuApi.ts`),
+wie die Hausaufgabe nur für den Betreiber, und die Werkzeugbeschreibung sagt ausdrücklich, dass
+sie schwerer wiegt als die Stofffolge.
+
+Beobachtung und offene Phasen gehen als **eine** Notiz hinaus, die Beobachtung vorn: drüben ist es
+ein Feld, und zwei Sätze davor zu trennen hieße, einen zu verlieren. Der Block entsteht jetzt auch
+ohne Ziel und Phasen - sonst hätte eine Stunde ohne planr-Planung kein Feld.
+
+Damit gibt es zwei Freitextwege, und sie meinen Verschiedenes: **diesen hier** für die Stunde
+("bei den Sachaufgaben abgerissen"), und das Feld im Stundendialog für die Lerngruppe auf Dauer
+("Klammern auflösen sitzt noch nicht", geht ins Klassenprofil).
+
 ## Was nicht auf dem Blatt stand (seit 2026-08-25)
 
 Unter der Ankreuzliste im Stundendialog steht ein optionales Freitextfeld. Die Liste kann nur, was

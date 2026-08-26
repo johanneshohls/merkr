@@ -7241,7 +7241,6 @@ function erledigteVon(st){
 function phasenBlockHtml(st){
   const phasen = stundenPhasen(st);
   const ziel = String(st.ziel||"").trim();
-  if (!phasen.length && !ziel) return "";
 
   const fertig = erledigteVon(st);
   let h = '<div class="phasenblock" data-stunde="'+st.id+'" '+
@@ -7274,8 +7273,35 @@ function phasenBlockHtml(st){
           : 'noch nichts abgehakt'))+
       '</div>';
   }
+  /* Was sonst auffiel. Die Haken sagen, was geschafft wurde; sie sagen nicht,
+     dass die Klasse bei den Sachaufgaben abgerissen ist. Dieser Satz geht als
+     Reflexion an planr und kommt beim Planen der nächsten Stunde ungefragt
+     zurück (vorstunde.reflexion) - vorher wurde er geschrieben und nie
+     gelesen. */
+  h += '<div style="margin-top:'+(phasen.length||ziel?'10px':'0')+';padding-top:'+(phasen.length||ziel?'8px':'0')+';'+
+    (phasen.length||ziel ? 'border-top:1px solid var(--linie)' : '')+'">'+
+    '<div class="hinweis" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">'+
+    'Wie lief die Stunde?</div>'+
+    '<textarea class="beobachtung" rows="2" '+
+    'placeholder="z. B. bei den Sachaufgaben abgerissen - Text in Gleichung ist der Knackpunkt">'+
+    esc(String(st.beobachtung||""))+'</textarea>'+
+    '<div class="hinweis" style="font-size:12px;margin-top:4px">'+
+    'Geht an planr und steht beim Planen der nächsten Stunde oben.</div></div>';
+
   return h + '</div>';
 }
+
+/* Der Satz wird beim Tippen behalten, wie die Haken - der Dialog baut sich bei
+   jeder Note neu auf. */
+document.addEventListener("input", function(ev){
+  const feld = ev.target.closest(".beobachtung");
+  if (!feld) return;
+  const block = feld.closest(".phasenblock");
+  const st = block ? stundeVon(block.dataset.stunde) : null;
+  if (!st) return;
+  st.beobachtung = feld.value;
+  speichern();
+});
 
 /* Jeder Haken wird sofort behalten. Das ist wichtiger als es aussieht: der
    Dialog baut sich bei jedem Tipp auf eine Note neu auf, und ein Haken, der
@@ -7319,18 +7345,22 @@ document.addEventListener("click", ev=>{
   if (!st || !k) return;
 
   const phasen = stundenPhasen(st);
-  if (!phasen.length) return;
   const z = MerkrRueckmeldung.zielstand(phasen, erledigteVon(st));
-  if (!z.zielErreicht) return;
 
   /* Erst merken, dann senden - wie bei den gewackelten Themen: der Haken soll
      auch stehen, wenn das iPad gerade kein Netz hat. */
-  st.zielGemeldet = z.zielErreicht + (z.offen.length ? " ("+z.offen.join(", ")+")" : "");
-  speichern();
+  if (z.zielErreicht){
+    st.zielGemeldet = z.zielErreicht + (z.offen.length ? " ("+z.offen.join(", ")+")" : "");
+    speichern();
+  }
 
   if (!planrGekoppelt()) return;
+  /* Beobachtung und offene Phasen gehen als eine Notiz hinaus - drüben ist es
+     ein Feld, und zwei Sätze davor zu trennen hieße, eines zu verlieren. Die
+     Beobachtung steht vorn: sie ist das, was ein Mensch aufgeschrieben hat. */
+  const notiz = [String(st.beobachtung||"").trim(), z.notiz].filter(Boolean).join(" · ");
   const brief = MerkrRueckmeldung.brief(k, st, Array.isArray(st.gewackelt) ? st.gewackelt : [],
-    {zielErreicht: z.zielErreicht, notiz: z.notiz});
+    {zielErreicht: z.zielErreicht, notiz: notiz});
   if (brief) sendeAnBridge({typ:"planrRueckmeldung", url: planrBasis(), brief: brief});
 });
 
