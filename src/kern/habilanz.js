@@ -65,26 +65,69 @@ const MerkrHaBilanz = (function () {
    * seinem ersten Eintrag liegen, kommen in der Quote nicht vor. Sonst stünde
    * ein Kind, das im November dazukam, mit lauter Fehlstellen da.
    */
-  function tabelle(bilanz, schueler) {
+  /**
+   * Was gerade läuft, als Spalte im selben Format wie eine festgehaltene.
+   *
+   * Aufgaben, deren Termin noch bevorsteht - der Zwischenstand. Er ändert sich
+   * mit jedem Abruf und wird bewusst nicht in die Quote gezählt: solange die
+   * Aufgabe läuft, ist "noch nicht fertig" keine Aussage über das Kind.
+   */
+  function laufende(kursStand, heute) {
+    if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
+    return kursStand.hausaufgaben
+      .filter((h) => String(h.faelligAm) > String(heute))
+      .map((h) => ({
+        ref: "laufend:" + String(h.quelleRef || ""),
+        titel: String(h.titel || ""),
+        ziel: Number(h.zielAufgaben) || 0,
+        faelligAm: String(h.faelligAm),
+        laeuft: true,
+        stand: null,
+        codeStand: h.schueler || [],
+      }))
+      .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)));
+  }
+
+  /**
+   * `laufend` sind die Spalten aus `laufende()`; sie stehen rechts und zaehlen
+   * in der Quote nicht mit. Ohne sie verhaelt sich alles wie vorher.
+   */
+  function tabelle(bilanz, schueler, laufend) {
+    const codeVon = Object.create(null);
+    for (const s of schueler) {
+      const c = norm(s.selbrCode);
+      if (c) codeVon[s.id] = c;
+    }
     const spalten = Object.keys(bilanz || {})
       .map((ref) => Object.assign({ ref: ref }, bilanz[ref]))
-      .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)));
+      .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)))
+      .concat(laufend || []);
 
     const zeilen = schueler.slice()
       .sort((a, b) => ((a.name || "") + " " + (a.vorname || ""))
         .localeCompare((b.name || "") + " " + (b.vorname || ""), "de"))
       .map((s) => {
         const felder = spalten.map((sp) => {
-          const wert = sp.stand ? sp.stand[s.id] : undefined;
-          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: sp.ziel };
+          let wert;
+          if (sp.laeuft) {
+            const code = codeVon[s.id];
+            const treffer = code && (sp.codeStand || []).find((e) => norm(e.code) === code);
+            wert = treffer ? Number(treffer.geschafft) || 0 : undefined;
+          } else {
+            wert = sp.stand ? sp.stand[s.id] : undefined;
+          }
+          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: sp.ziel, laeuft: !!sp.laeuft };
           const fertig = sp.ziel > 0 && wert >= sp.ziel;
           return {
             zustand: fertig ? "fertig" : wert > 0 ? "teils" : "nichts",
             geschafft: wert,
             ziel: sp.ziel,
+            laeuft: !!sp.laeuft,
           };
         });
-        const gezaehlt = felder.filter((f) => f.zustand !== "unbekannt");
+        // Laufendes zaehlt nicht: "noch nicht fertig" ist vor dem Termin keine
+        // Aussage ueber das Kind.
+        const gezaehlt = felder.filter((f) => f.zustand !== "unbekannt" && !f.laeuft);
         const fertig = gezaehlt.filter((f) => f.zustand === "fertig").length;
         return {
           id: s.id, name: s.name, vorname: s.vorname,
@@ -98,7 +141,7 @@ const MerkrHaBilanz = (function () {
     return { spalten: spalten, zeilen: zeilen };
   }
 
-  return { festschreiben, tabelle };
+  return { festschreiben, tabelle, laufende };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHaBilanz;

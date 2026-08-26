@@ -92,3 +92,36 @@ test("die Spalten stehen nach Fälligkeit", () => {
   };
   assert.deepEqual(B.tabelle(bilanz, schueler()).spalten.map((s) => s.titel), ["früh", "spät"]);
 });
+
+test("laufende Aufgaben kommen als eigene Spalten", () => {
+  const ks = stand("2026-09-08", [7, 0]);
+  const l = B.laufende(ks, "2026-09-01");
+  assert.equal(l.length, 1);
+  assert.equal(l[0].laeuft, true);
+  const { spalten, zeilen } = B.tabelle({}, schueler(), l);
+  assert.equal(spalten.length, 1);
+  assert.equal(zeilen.find((z) => z.id === "a").felder[0].geschafft, 7);
+  assert.equal(zeilen.find((z) => z.id === "b").felder[0].zustand, "nichts");
+});
+
+test("was noch laeuft, zaehlt nicht in der Quote", () => {
+  const fest = B.festschreiben({}, stand("2026-09-01", [10, 0]), schueler(), "2026-09-01");
+  const l = B.laufende(stand("2026-09-15", [3, 3]), "2026-09-02");
+  const { zeilen } = B.tabelle(fest, schueler(), l);
+  const ann = zeilen.find((z) => z.id === "a");
+  assert.equal(ann.von, 1);          // nur die abgeschlossene
+  assert.equal(ann.quote, 100);
+  assert.equal(ann.felder.length, 2); // beide Spalten sind aber sichtbar
+  assert.equal(ann.felder[1].laeuft, true);
+});
+
+test("was schon faellig war, gilt nicht als laufend", () => {
+  assert.deepEqual(B.laufende(stand("2026-09-01", [1, 1]), "2026-09-01"), []);
+});
+
+test("laufende Spalten stehen rechts", () => {
+  const fest = B.festschreiben({}, stand("2026-09-01", [10, 0]), schueler(), "2026-09-01");
+  const l = B.laufende(stand("2026-08-20", [1, 1]), "2026-08-01");   // frueher faellig
+  const { spalten } = B.tabelle(fest, schueler(), l);
+  assert.equal(spalten[spalten.length - 1].laeuft, true);
+});

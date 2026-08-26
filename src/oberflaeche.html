@@ -894,6 +894,15 @@ function stundeDialogHtml(){ return ""; }   /* ersetzt - die geltende Fassung st
 /* ============ Anwesenheit ============ */
 function anwesenheitDialogHtml(){ return ""; }   /* ersetzt - die geltende Fassung steht weiter unten */
 
+/* Wie alt der Stand ist, in Worten - "vor 5 min" liest sich schneller als eine Uhrzeit. */
+function fmtStandAlter(iso){
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "gerade eben";
+  if (min < 60) return "vor " + min + " min";
+  const std = Math.round(min / 60);
+  return std < 24 ? "vor " + std + " h" : "vor " + Math.round(std / 24) + " Tagen";
+}
+
 /* ============ Hausaufgaben ============ */
 //
 // Wer hatte seine Aufgaben fertig, als sie faellig waren? Kinder in den Zeilen,
@@ -909,17 +918,22 @@ function viewHausaufgaben(k){
   if (!schueler.length) return leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
 
   const bilanz = (S.hausaufgabenBilanz || {})[k.id] || {};
-  const { spalten, zeilen } = MerkrHaBilanz.tabelle(bilanz, schueler);
+  /* Was laeuft, kommt live dazu - der Zwischenstand vom letzten Abruf. Sonst
+     saehe man bis zum Faelligkeitstag gar nichts und wuesste am Vorabend nicht,
+     ob sich jemand ruehrt. */
+  const heute = new Date().toLocaleDateString("sv-SE");
+  const laufend = MerkrHaBilanz.laufende(
+    MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, k), heute);
+  const { spalten, zeilen } = MerkrHaBilanz.tabelle(bilanz, schueler, laufend);
 
-  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Hausaufgaben</h2></div>';
+  let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Hausaufgaben</h2>'+
+    (S.hausaufgabenStand ? '<span class="hinweis">Stand '+fmtStandAlter(S.hausaufgabenStand.geholtAm)+
+      ' <button class="klein" data-a="planrJetzt">neu holen</button></span>' : '')+'</div>';
 
-  if (!spalten.length){
-    const offen = MerkrHausaufgaben.fuerStunde(
-      MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, k), "", schueler);
+  if (!spalten.length)
     return html + leer(
-      "Noch keine Hausaufgabe fällig gewesen. Sobald der erste Termin da ist, wird der Stand hier festgehalten - "+
-      "einmal, am Fälligkeitstag.", "Stand aus planr holen", "planrJetzt");
-  }
+      "Noch keine Hausaufgabe gestellt oder fällig. Sobald eine läuft, steht hier der Zwischenstand; "+
+      "am Fälligkeitstag wird er festgehalten.", "Stand aus planr holen", "planrJetzt");
 
   const ohneCode = schueler.filter(s=>!String(s.selbrCode||"").trim()).length;
   html += '<div class="karte" style="overflow-x:auto"><table class="tab"><tr><th style="text-align:left">Name</th>';
@@ -927,8 +941,10 @@ function viewHausaufgaben(k){
      in jeder Zelle waere bei zehn Spalten eine Wand aus Schraegstrichen, und das
      Ziel ist je Aufgabe dasselbe fuer alle. */
   for (const sp of spalten)
-    html += '<th title="'+esc(sp.titel)+'" style="font-size:11px;font-weight:600;white-space:nowrap">'+
-      fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">von '+sp.ziel+'</span></th>';
+    html += '<th title="'+esc(sp.titel)+(sp.laeuft?" (laeuft noch)":"")+'" style="font-size:11px;font-weight:600;white-space:nowrap'+
+      (sp.laeuft?';border-left:2px solid var(--linie)':'')+'">'+
+      fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">'+
+      (sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span></th>';
   html += '<th style="font-size:11px">Quote</th></tr>';
 
   for (const z of zeilen){
@@ -936,18 +952,25 @@ function viewHausaufgaben(k){
     for (const f of z.felder){
       /* Die Farbe bleibt, damit das Muster trotz Zahlen auf einen Blick da ist:
          gruen fertig, rot nichts angefangen. */
-      const farbe = f.zustand==="fertig" ? "var(--gruen)" : f.zustand==="nichts" ? "var(--rot)" : "var(--text)";
+      /* Solange die Aufgabe laeuft, ist Null noch kein Versaeumnis - deshalb dort
+         kein Rot, nur ein blasser Wert. */
+      const farbe = f.zustand==="fertig" ? "var(--gruen)"
+        : (f.zustand==="nichts" && !f.laeuft) ? "var(--rot)"
+        : f.laeuft ? "var(--text2)" : "var(--text)";
       const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>' : String(f.geschafft);
-      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code" : f.geschafft+" von "+f.ziel+" gelöst";
-      html += '<td style="text-align:center;color:'+farbe+';font-size:14px;font-weight:700" title="'+esc(titel)+'">'+inhalt+'</td>';
+      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code"
+        : f.geschafft+" von "+f.ziel+(f.laeuft?" - läuft noch bis "+fmtDatum(spalten[z.felder.indexOf(f)].faelligAm):" gelöst");
+      html += '<td style="text-align:center;color:'+farbe+';font-size:14px;font-weight:700'+
+        (f.laeuft?';border-left:2px solid var(--linie)':'')+'" title="'+esc(titel)+'">'+inhalt+'</td>';
     }
     html += '<td style="text-align:center;font-size:12px;font-weight:700">'+
       (z.quote===null ? '<span class="hinweis">–</span>' : z.fertig+"/"+z.von)+'</td></tr>';
   }
   html += '</table></div>';
 
-  html += '<p class="hinweis">Die Zahl ist, wie viele Aufgaben zum Fälligkeitstag gelöst waren - '+
-    'grün heißt fertig, rot nichts angefangen, · nicht gewertet. Nachgeholtes steht im Stundendialog.</p>';
+  html += '<p class="hinweis">Die Zahl ist, wie viele Aufgaben gelöst waren - grün heißt fertig, '+
+    'rot nichts angefangen, · nicht gewertet. Abgeschlossene Spalten zeigen den Stand vom Fälligkeitstag; '+
+    'die Spalte rechts läuft noch und zählt nicht in die Quote.</p>';
   if (ohneCode)
     html += '<p class="hinweis">'+ohneCode+' '+(ohneCode===1?"Kind hat":"Kinder haben")+
       ' keinen selbr-Code und wird nicht gemessen. Einzutragen im Reiter Kurs.</p>';
