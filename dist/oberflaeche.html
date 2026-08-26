@@ -1336,6 +1336,93 @@ const MerkrRueckmeldung = (function () {
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueckmeldung;
 
+/* --- kern/selbr.js --- */
+/**
+ * selbr-Codes: der Schlüssel zwischen merkr und selbr.
+ *
+ * Anders als das Kürzel für checkr ist dieser Code kein Pseudonym, sondern die
+ * vollständige Anmeldung - selbr kennt kein Passwort, wer den Code hat, ist im
+ * Konto des Kindes. Deshalb ein eigenes Feld und nicht das Kürzel mitbenutzt:
+ * das steht auf dem Deckblatt jeder Klassenarbeit und geht in checkrs Datenbank.
+ *
+ * Die Richtung ist dieselbe wie überall in merkr: Der Code darf hinaus, der Name
+ * bleibt hier. planr fragt selbr nach dem Stand je Code; wer dahintersteckt,
+ * löst erst dieses Gerät auf.
+ */
+const MerkrSelbr = (function () {
+
+  /** Wie verglichen wird: ohne Rand, Großbuchstaben - die Codes kommen aus selbr so. */
+  function normalisiert(x) {
+    return String(x == null ? "" : x).trim().toUpperCase();
+  }
+
+  /** Namensschlüssel für den Abgleich: klein, ohne Mehrfach-Leerzeichen. */
+  function namensschluessel(vorname, name) {
+    return String(vorname + " " + name).toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  /**
+   * Codes, die mehr als einem Kind zugeordnet sind.
+   *
+   * Zwei gleiche Codes heißen: zwei Kinder teilen ein Konto. Der eine sieht den
+   * Lernstand des anderen, und die Hausaufgabe gilt für beide als erledigt,
+   * sobald einer rechnet.
+   */
+  function doppelte(schueler) {
+    const gesehen = Object.create(null);
+    const raus = [];
+    for (const s of schueler) {
+      const c = normalisiert(s.selbrCode);
+      if (!c) continue;
+      if (gesehen[c] && raus.indexOf(c) < 0) raus.push(c);
+      gesehen[c] = true;
+    }
+    return raus;
+  }
+
+  /**
+   * Eine eingefügte Liste "Name<Trenner>Code" auf die Schüler des Kurses legen.
+   *
+   * Erlaubte Trenner sind Tabulator, Semikolon und das Pfeilzeichen - alles, was
+   * beim Kopieren aus einer Tabelle oder einer Mail herauskommt. Der Name darf
+   * "Nachname, Vorname" oder "Vorname Nachname" lauten.
+   *
+   * Zurück kommt, was zugeordnet wurde und was nicht - eine Liste, die still
+   * die Hälfte verschluckt, ist schlimmer als eine Fehlermeldung.
+   */
+  function ausListe(schueler, text) {
+    const treffer = [];
+    const unbekannt = [];
+    const zeilen = String(text || "").split(/\r?\n/);
+
+    for (const roh of zeilen) {
+      const zeile = roh.trim();
+      if (!zeile) continue;
+      const teile = zeile.split(/\t|;|→|->/).map((t) => t.trim()).filter(Boolean);
+      if (teile.length < 2) { unbekannt.push(zeile); continue; }
+
+      const code = normalisiert(teile[teile.length - 1]);
+      const namensteil = teile.slice(0, -1).join(" ");
+      // "Nachname, Vorname" umdrehen, damit beide Schreibweisen treffen.
+      const gedreht = namensteil.indexOf(",") >= 0
+        ? namensteil.split(",").map((t) => t.trim()).reverse().join(" ")
+        : namensteil;
+      const schluessel = namensschluessel("", gedreht);
+
+      const gefunden = schueler.filter(
+        (s) => namensschluessel(s.vorname, s.name) === schluessel
+      );
+      if (gefunden.length === 1) treffer.push({ id: gefunden[0].id, code });
+      else unbekannt.push(zeile);
+    }
+    return { treffer, unbekannt };
+  }
+
+  return { normalisiert, namensschluessel, doppelte, ausListe };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrSelbr;
+
 /* --- kern/tagesplan.js --- */
 /**
  * Der Schultag, wie er wirklich liegt - aus planr.
@@ -2460,7 +2547,7 @@ document.addEventListener("click", ev=>{
     let anzahl = 0;
     for (const zeile of text.split("\n")){
       const p = nameParsen(zeile); if(!p || (!p.vorname && !p.name)) continue;
-      S.schueler.push({id:uid(), vorname:p.vorname, name:p.name, kuerzel:"", notizen:"", kursIds:[id], sitz:{}});
+      S.schueler.push({id:uid(), vorname:p.vorname, name:p.name, kuerzel:"", selbrCode:"", notizen:"", kursIds:[id], sitz:{}});
       anzahl++;
     }
     if (anzahl){ speichern(); zeichne(); toast(anzahl+" Schüler hinzugefügt"); }
@@ -3359,6 +3446,7 @@ function viewKursCfg(k){
 
   html += planrKarte(k);
   html += kuerzelKarte(k);
+  html += selbrKarte(k);
 
   /* Stundenplan-Slots */
   html += '<div class="karte"><h2>Stundenplan (für die „Heute"-Ansicht)</h2>';
@@ -3816,6 +3904,40 @@ function kuerzelKarte(k){
   return html;
 }
 
+/* ================= selbr-Codes =================
+   Der Zugangscode, mit dem sich ein Kind in selbr anmeldet. Eigenes Feld und
+   nicht das Kürzel mitbenutzt: selbr kennt kein Passwort, der Code IST die
+   Anmeldung - und das Kürzel steht auf dem Deckblatt jeder Arbeit. Gerechnet
+   wird in kern/selbr.js. */
+
+function selbrKarte(k){
+  const schueler = kursSchueler(k.id).slice()
+    .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
+  const doppelt = MerkrSelbr.doppelte(schueler);
+  const ohne = schueler.filter(s=>!MerkrSelbr.normalisiert(s.selbrCode)).length;
+
+  let html = '<div class="karte"><h2>selbr-Zugangscodes</h2>'+
+    '<p class="hinweis">Womit sich dieses Kind in selbr anmeldet. Damit sieht merkr, wer die '+
+    'Hausaufgaben gemacht hat. Der Code ist die vollständige Anmeldung - er gehört nicht auf '+
+    'eine Arbeit und nicht in eine Liste, die herumliegt.</p>';
+
+  if (!schueler.length) return html + '<p class="hinweis">Noch keine Schüler in diesem Kurs.</p></div>';
+
+  if (doppelt.length)
+    html += '<p class="hinweis" style="color:var(--rot)"><b>Doppelt vergeben: '+esc(doppelt.join(", "))+'.</b> '+
+      'Zwei gleiche Codes heißen ein geteiltes Konto: der eine sieht den Lernstand des anderen.</p>';
+
+  html += '<table class="tab">';
+  for (const s of schueler)
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+      '<td style="width:130px"><input id="sc-'+s.id+'" value="'+esc(s.selbrCode||"")+'" placeholder="ABC12"></td></tr>';
+  html += '</table><div class="abstand"></div>'+
+    '<div class="zeile"><button class="primar" data-a="selbrSpeichern" data-id="'+k.id+'">Codes speichern</button>'+
+    '<button data-a="selbrEinfuegen" data-id="'+k.id+'">Liste einfügen'+(ohne?' ('+ohne+' offen)':'')+'</button></div>'+
+    '<p class="hinweis">Beim Einfügen eine Zeile je Kind: Name, dann Tabulator, Semikolon oder Pfeil, dann der Code.</p></div>';
+  return html;
+}
+
 /* Zum Ausschneiden oder Aufkleben - ohne diesen Zettel kommt kein Code auf eine Arbeit. */
 function kuerzellistePdf(kursId){
   const kurs = kursVon(kursId);
@@ -3840,7 +3962,27 @@ document.addEventListener("click", ev=>{
   if (!kurs) return;
   const schueler = kursSchueler(kurs.id);
 
-  if (a==="kuerzelSpeichern"){
+  if (a==="selbrSpeichern"){
+    for (const s of schueler){
+      const feld = document.getElementById("sc-"+s.id);
+      if (feld) s.selbrCode = MerkrSelbr.normalisiert(feld.value);
+    }
+    speichern(); zeichne();
+    const doppelt = MerkrSelbr.doppelte(schueler);
+    toast(doppelt.length ? "Gespeichert, aber doppelt: "+doppelt.join(", ") : "selbr-Codes gespeichert");
+  }
+  else if (a==="selbrEinfuegen"){
+    const text = prompt("Eine Zeile je Kind: Name, Trenner (Tab, Semikolon oder Pfeil), Code.");
+    if (text == null) return;
+    const { treffer, unbekannt } = MerkrSelbr.ausListe(schueler, text);
+    for (const t of treffer){
+      const s = schueler.find(x=>x.id===t.id);
+      if (s) s.selbrCode = t.code;
+    }
+    speichern(); zeichne();
+    toast(treffer.length+" zugeordnet"+(unbekannt.length ? ", "+unbekannt.length+" nicht erkannt" : ""));
+  }
+  else if (a==="kuerzelSpeichern"){
     for (const s of schueler){
       const feld = document.getElementById("ku-"+s.id);
       if (feld) s.kuerzel = feld.value.trim();

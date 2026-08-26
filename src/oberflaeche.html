@@ -1197,7 +1197,7 @@ document.addEventListener("click", ev=>{
     let anzahl = 0;
     for (const zeile of text.split("\n")){
       const p = nameParsen(zeile); if(!p || (!p.vorname && !p.name)) continue;
-      S.schueler.push({id:uid(), vorname:p.vorname, name:p.name, kuerzel:"", notizen:"", kursIds:[id], sitz:{}});
+      S.schueler.push({id:uid(), vorname:p.vorname, name:p.name, kuerzel:"", selbrCode:"", notizen:"", kursIds:[id], sitz:{}});
       anzahl++;
     }
     if (anzahl){ speichern(); zeichne(); toast(anzahl+" Schüler hinzugefügt"); }
@@ -2096,6 +2096,7 @@ function viewKursCfg(k){
 
   html += planrKarte(k);
   html += kuerzelKarte(k);
+  html += selbrKarte(k);
 
   /* Stundenplan-Slots */
   html += '<div class="karte"><h2>Stundenplan (für die „Heute"-Ansicht)</h2>';
@@ -2553,6 +2554,40 @@ function kuerzelKarte(k){
   return html;
 }
 
+/* ================= selbr-Codes =================
+   Der Zugangscode, mit dem sich ein Kind in selbr anmeldet. Eigenes Feld und
+   nicht das Kürzel mitbenutzt: selbr kennt kein Passwort, der Code IST die
+   Anmeldung - und das Kürzel steht auf dem Deckblatt jeder Arbeit. Gerechnet
+   wird in kern/selbr.js. */
+
+function selbrKarte(k){
+  const schueler = kursSchueler(k.id).slice()
+    .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
+  const doppelt = MerkrSelbr.doppelte(schueler);
+  const ohne = schueler.filter(s=>!MerkrSelbr.normalisiert(s.selbrCode)).length;
+
+  let html = '<div class="karte"><h2>selbr-Zugangscodes</h2>'+
+    '<p class="hinweis">Womit sich dieses Kind in selbr anmeldet. Damit sieht merkr, wer die '+
+    'Hausaufgaben gemacht hat. Der Code ist die vollständige Anmeldung - er gehört nicht auf '+
+    'eine Arbeit und nicht in eine Liste, die herumliegt.</p>';
+
+  if (!schueler.length) return html + '<p class="hinweis">Noch keine Schüler in diesem Kurs.</p></div>';
+
+  if (doppelt.length)
+    html += '<p class="hinweis" style="color:var(--rot)"><b>Doppelt vergeben: '+esc(doppelt.join(", "))+'.</b> '+
+      'Zwei gleiche Codes heißen ein geteiltes Konto: der eine sieht den Lernstand des anderen.</p>';
+
+  html += '<table class="tab">';
+  for (const s of schueler)
+    html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
+      '<td style="width:130px"><input id="sc-'+s.id+'" value="'+esc(s.selbrCode||"")+'" placeholder="ABC12"></td></tr>';
+  html += '</table><div class="abstand"></div>'+
+    '<div class="zeile"><button class="primar" data-a="selbrSpeichern" data-id="'+k.id+'">Codes speichern</button>'+
+    '<button data-a="selbrEinfuegen" data-id="'+k.id+'">Liste einfügen'+(ohne?' ('+ohne+' offen)':'')+'</button></div>'+
+    '<p class="hinweis">Beim Einfügen eine Zeile je Kind: Name, dann Tabulator, Semikolon oder Pfeil, dann der Code.</p></div>';
+  return html;
+}
+
 /* Zum Ausschneiden oder Aufkleben - ohne diesen Zettel kommt kein Code auf eine Arbeit. */
 function kuerzellistePdf(kursId){
   const kurs = kursVon(kursId);
@@ -2577,7 +2612,27 @@ document.addEventListener("click", ev=>{
   if (!kurs) return;
   const schueler = kursSchueler(kurs.id);
 
-  if (a==="kuerzelSpeichern"){
+  if (a==="selbrSpeichern"){
+    for (const s of schueler){
+      const feld = document.getElementById("sc-"+s.id);
+      if (feld) s.selbrCode = MerkrSelbr.normalisiert(feld.value);
+    }
+    speichern(); zeichne();
+    const doppelt = MerkrSelbr.doppelte(schueler);
+    toast(doppelt.length ? "Gespeichert, aber doppelt: "+doppelt.join(", ") : "selbr-Codes gespeichert");
+  }
+  else if (a==="selbrEinfuegen"){
+    const text = prompt("Eine Zeile je Kind: Name, Trenner (Tab, Semikolon oder Pfeil), Code.");
+    if (text == null) return;
+    const { treffer, unbekannt } = MerkrSelbr.ausListe(schueler, text);
+    for (const t of treffer){
+      const s = schueler.find(x=>x.id===t.id);
+      if (s) s.selbrCode = t.code;
+    }
+    speichern(); zeichne();
+    toast(treffer.length+" zugeordnet"+(unbekannt.length ? ", "+unbekannt.length+" nicht erkannt" : ""));
+  }
+  else if (a==="kuerzelSpeichern"){
     for (const s of schueler){
       const feld = document.getElementById("ku-"+s.id);
       if (feld) s.kuerzel = feld.value.trim();
