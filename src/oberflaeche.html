@@ -1990,9 +1990,53 @@ function stundeDialogHtml(st){
       : '<div class="feld"><label>Geplantes Thema (Soll, aus Langfristplanung)</label>'+
         '<input id="stGeplant" value="'+esc(st.geplant||"")+'"></div>')+
     '<div class="feld"><label><input type="checkbox" id="stAusfall" '+(st.ausfall?"checked":"")+' style="width:auto"> Ausfall / Vertretung</label></div>'+
+    hausaufgabenBlockHtml(st)+
     wackelBlockHtml(st)+
     '<div class="zeile"><button class="primar" data-a="stundeSpeichern" data-id="'+st.id+'">Speichern</button>'+
     '<button data-a="modalZu">Abbrechen</button></div>';
+}
+
+/* ---------- Wer hat die Hausaufgaben gemacht? ---------- */
+//
+// Steht in der Stunde, in der die Aufgabe faellig ist. planr liefert je
+// Zugangscode, wie viele Aufgaben richtig waren; die Namen setzt merkr dazu -
+// die Zuordnung Code zu Mensch gibt es nur hier.
+//
+// Gezaehlt wird, was selbr gemessen hat, nicht was jemand angekreuzt hat.
+function hausaufgabenBlockHtml(st){
+  if (!planrGekoppelt()) return "";
+  const kurs = kursVon(st.kursId);
+  if (!kurs) return "";
+  const stand = S.hausaufgabenStand;
+  if (!stand || !Array.isArray(stand.kurse)) return "";
+
+  const kursStand = MerkrHausaufgaben.kursStandVon(stand, kurs);
+  const aufgaben = MerkrHausaufgaben.fuerStunde(kursStand, st.datum, kursSchueler(kurs.id));
+  if (!aufgaben.length) return "";
+
+  const alter = Math.round((Date.now() - new Date(stand.geholtAm).getTime()) / 60000);
+  const frisch = alter < 1 ? "gerade eben" : alter < 60 ? "vor " + alter + " min" : "vor " + Math.round(alter/60) + " h";
+
+  let html = "";
+  for (const h of aufgaben){
+    const gesamt = h.erledigt.length + h.offen.length;
+    html += '<div class="feld"><label>Hausaufgabe: '+esc(h.titel)+'</label>'+
+      '<p class="hinweis" style="margin-top:0">'+h.erledigt.length+' von '+gesamt+' fertig ('+h.ziel+' Aufgaben) · Stand '+frisch+'</p>';
+    if (h.offen.length){
+      html += '<p style="margin:4px 0"><b>Offen:</b> '+
+        h.offen.map(x=>esc(x.vorname)+" "+esc(x.name)+' <span class="hinweis">'+x.geschafft+'/'+x.ziel+'</span>').join(", ")+'</p>';
+    }
+    if (h.erledigt.length){
+      html += '<p style="margin:4px 0;color:var(--gruen)"><b>Fertig:</b> '+
+        h.erledigt.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
+    }
+    if (h.ohneCode.length){
+      html += '<p class="hinweis">Ohne selbr-Code, deshalb nicht gemessen: '+
+        h.ohneCode.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
+    }
+    html += "</div>";
+  }
+  return html;
 }
 
 /* ---------- Was hat gewackelt? Rückmeldung an planr ---------- */
@@ -2812,8 +2856,26 @@ function planrHolen(still){
   planrStill = !!still;
   if (!still) toast("Stoffverteilung wird geholt …");
   sendeAnBridge({typ:"planrAbruf", url: planrBasis()});
+  /* Der Stand der Hausaufgaben kommt gleich mit: er gehoert zur selben Planung,
+     und ein zweiter Knopf waere ein zweites Ding, an das man denken muss. */
+  sendeAnBridge({typ:"hausaufgabenAbruf", url: planrBasis()});
 }
 let planrStill = false;
+
+/* Wer hat die Hausaufgaben gemacht - Antwort aus planr, Codes ohne Namen.
+   Aufgeloest wird erst beim Anzeigen, hier liegt sie nur. */
+window.__KB_hausaufgabenAntwort = function(text){
+  let daten = null;
+  try { daten = JSON.parse(text); } catch(e){ daten = null; }
+  if (!daten || daten.fehler || !Array.isArray(daten.kurse)){
+    /* Still bleiben: der Stand ist eine Zugabe zum Stoffplan. Wer ihn braucht,
+       sieht im Stundendialog, wie alt er ist. */
+    return "fehler";
+  }
+  S.hausaufgabenStand = { geholtAm: new Date().toISOString(), kurse: daten.kurse };
+  speichern();
+  return "ok";
+};
 
 window.__KB_planrAntwort = function(text){
   let plan = null;

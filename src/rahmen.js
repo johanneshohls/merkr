@@ -391,6 +391,24 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrAntwort(" + JSON.stringify(antwort) + ")", false);
       } catch (e) { console.error("planr-Antwort nicht zugestellt: " + e); }
+    } else if (msg.typ === "hausaufgabenAbruf") {
+      // Wer hat die Hausaufgaben gemacht? Derselbe Schlüssel wie die
+      // Stoffverteilung - es ist dieselbe Planung, nur der Rückweg.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_PLANR)) throw new Error("Kein planr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine planr-Adresse eingetragen.");
+        const req = new Request(basis + "/api/hausaufgaben");
+        req.headers = { authorization: "Bearer " + Keychain.get(SCHLUESSEL_PLANR) };
+        antwort = await req.loadString();
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_hausaufgabenAntwort(" + JSON.stringify(antwort) + ")", false);
+      } catch (e) { console.error("Hausaufgaben-Antwort nicht zugestellt: " + e); }
     } else if (msg.typ === "planrRueckmeldung") {
       // Der Rückweg: was in der Stunde gewackelt hat, geht als Signal nach planr.
       // Derselbe Schlüssel wie beim Abruf, nur ein POST - die Rückmeldung gehört
