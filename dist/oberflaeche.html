@@ -1538,6 +1538,9 @@ const MerkrTue = (function () {
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrTue;
 
 const KB_MODE = /*__KURSBUCH_MODE__*/"standalone";
+/* Welche Fassung hier läuft. Der Rahmen setzt sie beim Anzeigen ein - die
+   Oberfläche allein weiss davon nichts, sie ist nur eine Datei im Skript. */
+const MERKR_FASSUNG = /*__KURSBUCH_FASSUNG__*/"";
 /* Ob im Keychain ein API-Schlüssel liegt. Der Schlüssel selbst kommt nie in die
    Seite: er lag früher in S.einstellungen.apiKey und wanderte damit in jeden
    unverschlüsselten Export - zusammen mit den Schülerdaten. */
@@ -3491,9 +3494,27 @@ function viewEinstellungen(){
 
   html += einstellungenZusatz();
 
+  html += fassungKarte();
+
   html += '<div class="karte"><h2>Gefahrenzone</h2>'+
     '<button class="gefahr" data-a="allesLoeschenDialog">Alle Daten löschen</button></div>';
   return html;
+}
+
+/* Welche Fassung hier läuft, und der Weg zur nächsten. Ganz unten, weil man sie
+   selten braucht - merkr sieht von selbst nach. */
+function fassungKarte(){
+  const hier = MERKR_FASSUNG || "";
+  const dort = S.einstellungen.fassungDort || "";
+  const neuer = fassungNeuer(dort, hier);
+  return '<div class="karte"><h2>Fassung</h2>'+
+    '<p class="hinweis">Hier läuft '+esc(hier || "eine Fassung ohne Datum")+'.'+
+    (neuer ? ' Neuer verfügbar: '+esc(dort)+'.'
+           : (S.einstellungen.fassungGeprueft ? ' Zuletzt nachgesehen am '+fmtDatum(S.einstellungen.fassungGeprueft)+'.' : ''))+
+    ' merkr sieht beim Start einmal am Tag nach und fragt, bevor es etwas austauscht.</p>'+
+    '<div class="zeile">'+
+    (neuer ? '<button class="primar" data-a="fassungLaden">Neue Fassung laden</button>' : '')+
+    '<button data-a="fassungJetztPruefen">Jetzt nachsehen</button></div></div>';
 }
 /* Erweiterungspunkt für Phase 3 (Claude-API) */
 function einstellungenZusatz(){ return ""; }
@@ -4163,6 +4184,84 @@ const PLANR_PAUSE_MINUTEN = 30;
     if (!(minuten >= PLANR_PAUSE_MINUTEN)) return;
   }
   planrHolen(true);
+})();
+
+/* ================= merkr aktualisiert sich selbst =================
+   Seit merkr nicht mehr nur auf einem Gerät läuft, ist "die neue Fassung liegt
+   in einem Ordner" kein Weg mehr. Also sieht merkr selbst nach - beim Start,
+   höchstens einmal am Tag, und über die kleine Fassungsdatei statt der halben
+   Megabyte des Skripts (siehe bau.mjs).
+
+   Gefragt wird trotzdem. Ein Skript, das sich unbemerkt ändert, ist im
+   Unterricht der falsche Moment für eine Überraschung: wer um 7:38 Uhr das
+   Klassenbuch aufschlägt, will die Stunde halten und nicht herausfinden, was
+   sich über Nacht bewegt hat. */
+
+function fassungNeuer(dort, hier){
+  const a = String(dort||"").trim(), b = String(hier||"").trim();
+  /* Beide sind "YYYY-MM-TT HH:MM" - da genügt der Textvergleich. Ist die
+     eigene Fassung unbekannt ("ungebaut"), wird nichts angeboten: das ist ein
+     Stand aus der Werkstatt, und der soll sich nicht selbst überschreiben. */
+  if (!a || !b || b === "ungebaut") return false;
+  return a > b;
+}
+
+function fassungPruefen(still){
+  if (KB_MODE!=="scriptable") return;
+  R.fassungStill = !!still;
+  sendeAnBridge({typ:"fassungPruefen"});
+}
+
+window.__KB_fassungAntwort = function(a){
+  const still = R.fassungStill;
+  R.fassungStill = false;
+  if (!a || a.fehler){
+    if (!still) alertBox("Der Stand lässt sich gerade nicht abrufen - ohne Netz geht das nicht.");
+    return;
+  }
+  S.einstellungen.fassungGeprueft = todayISO();
+  S.einstellungen.fassungDort = a.version || "";
+  speichern();
+
+  if (!fassungNeuer(a.version, a.hier)){
+    if (!still) alertBox("merkr ist auf dem neuesten Stand (Fassung "+(a.hier||"?")+").");
+    return;
+  }
+  zeigeModal('<h2>Neue Fassung</h2>'+
+    '<p>Es gibt eine neuere Fassung von merkr.</p>'+
+    '<p class="hinweis">Hier: '+esc(a.hier||"?")+'<br>Neu: '+esc(a.version)+'</p>'+
+    '<p class="hinweis">Die Daten bleiben, wo sie sind - ausgetauscht wird nur das Skript. '+
+    'Nach dem Laden merkr einmal schließen und neu öffnen.</p>'+
+    '<div class="zeile" style="margin-top:12px">'+
+    '<button class="primar" data-a="fassungLaden">Jetzt laden</button>'+
+    '<button data-a="modalZu">Später</button></div>');
+};
+
+window.__KB_fassungGeladen = function(a){
+  if (a && a.ok){
+    zeigeModal('<h2>Geladen</h2>'+
+      '<p>Die neue Fassung liegt bereit. Schließe merkr einmal und öffne es neu.</p>'+
+      '<div class="zeile" style="margin-top:12px"><button class="primar" data-a="modalZu">Alles klar</button></div>');
+    return;
+  }
+  alertBox("Die neue Fassung ließ sich nicht laden. Die alte läuft unverändert weiter."+
+    ((a && a.fehler) ? "\n\n"+a.fehler : ""));
+};
+
+document.addEventListener("click", function(ev){
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  if (el.dataset.a === "fassungLaden"){
+    zeigeModal('<h2>Wird geladen …</h2><p class="hinweis">Einen Moment.</p>');
+    sendeAnBridge({typ:"fassungLaden"});
+  }
+  else if (el.dataset.a === "fassungJetztPruefen") fassungPruefen(false);
+});
+
+(function fassungAutomatik(){
+  if (KB_MODE!=="scriptable") return;
+  if (S.einstellungen.fassungGeprueft === todayISO()) return;
+  fassungPruefen(true);
 })();
 
 /* ================= Ergebnisse aus checkr =================

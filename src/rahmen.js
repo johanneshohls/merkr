@@ -36,6 +36,16 @@ const SCHLUESSEL_PLANR = "merkr.planr";
 // (CHECKR_ROSTER_TOKEN).
 const SCHLUESSEL_CHECKR = "merkr.checkr";
 
+// Woher merkr seine eigenen Aktualisierungen holt.
+//
+// Der Quellzweig auf GitHub, roh. Zwei Adressen statt einer: die kleine sagt,
+// ob es etwas Neues gibt, die große ist die neue Fassung selbst - siehe
+// bau.mjs. Wer merkr weitergibt, gibt damit auch den Weg zu allen weiteren
+// Fassungen weiter, ohne dass jemand eine Datei herumreichen muss.
+const QUELLE_BASIS = "https://raw.githubusercontent.com/johanneshohls/merkr/main/dist";
+const QUELLE_FASSUNG = QUELLE_BASIS + "/fassung.json";
+const QUELLE_SKRIPT = QUELLE_BASIS + "/merkr.js";
+
 function schluesselName(name) {
   if (name === "planr") return SCHLUESSEL_PLANR;
   if (name === "checkr") return SCHLUESSEL_CHECKR;
@@ -193,6 +203,7 @@ function baueHtml(datenText) {
     .replace(/\u2029/g, "\\u2029");
   return KURSBUCH_HTML
     .replace('/*__KURSBUCH_MODE__*/"standalone"', function () { return '"scriptable"'; })
+    .replace('/*__KURSBUCH_FASSUNG__*/""', function () { return JSON.stringify(VERSION); })
     .replace('/*__KURSBUCH_SCHLUESSEL__*/false', function () { return schluesselDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_PLANR__*/false', function () { return planrDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_CHECKR__*/false', function () { return checkrDa ? "true" : "false"; })
@@ -309,6 +320,48 @@ async function bruecke() {
           await wv.evaluateJavaScript("window.__KB_planImport(" + JSON.stringify(inhalt) + ")", false);
         }
       } catch (e) { /* abgebrochen */ }
+    } else if (msg.typ === "fassungPruefen") {
+      // Nur die kleine Datei. Ein Fehler ist hier kein Fehler: wer im Schulnetz
+      // ohne Verbindung sitzt, soll davon nichts merken - merkr läuft weiter.
+      let antwort;
+      try {
+        const req = new Request(QUELLE_FASSUNG);
+        req.timeoutInterval = 8;
+        const roh = await req.loadString();
+        const daten = JSON.parse(roh);
+        antwort = JSON.stringify({ version: String(daten.version || ""), hier: VERSION });
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e), hier: VERSION });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_fassungAntwort(" + antwort + ")", false);
+      } catch (e) { console.error("Fassungsstand nicht zugestellt: " + e); }
+    } else if (msg.typ === "fassungLaden") {
+      // Die neue Fassung holen und an die Stelle schreiben, an der dieses
+      // Skript liegt. Erst danebenlegen, dann umbenennen: ein Abbruch mitten im
+      // Schreiben hinterließe sonst ein halbes Skript, und das startet nicht
+      // mehr - genau der Zustand, aus dem man sich ohne Rechner nicht befreit.
+      let antwort;
+      try {
+        const req = new Request(QUELLE_SKRIPT);
+        req.timeoutInterval = 30;
+        const text = await req.loadString();
+        if (!text || text.length < 100000 || text.indexOf("const KURSBUCH_HTML") < 0) {
+          throw new Error("Die geladene Datei sieht nicht wie merkr aus.");
+        }
+        const fm = FileManager.iCloud();
+        const eigen = module.filename;
+        const neben = eigen + ".neu";
+        fm.writeString(neben, text);
+        if (fm.fileExists(eigen)) fm.remove(eigen);
+        fm.move(neben, eigen);
+        antwort = JSON.stringify({ ok: true });
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_fassungGeladen(" + antwort + ")", false);
+      } catch (e) { console.error("Ladeergebnis nicht zugestellt: " + e); }
     } else if (msg.typ === "schluesselSetzen") {
       try {
         Keychain.set(schluesselName(msg.name), String(msg.key || ""));

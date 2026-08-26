@@ -112,6 +112,18 @@ fs.mkdirSync(path.dirname(ziel), { recursive: true });
 fs.writeFileSync(ziel, ergebnis);
 console.log("dist/merkr.js " + ergebnis.length + " Zeichen");
 
+// Die Fassung auch einzeln, als kleine Datei neben der großen.
+//
+// merkr sieht beim Start nach, ob es etwas Neueres gibt. Dafür die halbe
+// Megabyte-Datei zu holen, nur um eine Zeile daraus zu lesen, wäre im
+// Schulnetz jeden Morgen eine halbe Minute umsonst. Diese hier sind 60 Bytes;
+// geholt wird die große erst, wenn jemand "ja" sagt.
+fs.writeFileSync(
+  path.join(hier, "dist/fassung.json"),
+  JSON.stringify({ version: fassung, zeichen: ergebnis.length }, null, 2) + "\n",
+);
+console.log("dist/fassung.json " + fassung);
+
 const i = process.argv.indexOf("--pruefe");
 if (i >= 0) {
   const vorgabe = fs.readFileSync(process.argv[i + 1], "utf8");

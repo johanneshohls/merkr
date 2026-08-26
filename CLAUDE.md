@@ -24,8 +24,11 @@ node bau.mjs
 node --test test/*.mjs
 ```
 
-**Das Repo liegt seit dem 19.08.2026 privat auf GitHub** (`johanneshohls/merkr`) - vorher gab es
-nur die Platte. Privat bleibt es, solange merkr nicht fertig ist. Datendateien dürfen nie hinein:
+**Das Repo liegt seit dem 19.08.2026 auf GitHub** (`johanneshohls/merkr`), seit dem 26.08.2026
+öffentlich - der Auslöser war ein Kollege, der merkr mitbenutzen will. Vor dem Umstellen wurde die
+gesamte Historie geprüft: 56 Commits, keine Schülernamen (die Treffer waren Base64-Fragmente der
+eingebetteten Schrift und die Platzhalter „Müller, Anna / Schmidt, Ben"), keine Schlüssel, keine
+eingebetteten Daten - auch nicht im ersten Commit mit dem Altbestand. Datendateien dürfen nie hinein:
 die `.gitignore` sperrt `*.json`, `Kursbuch*` und `merkr-sicherung*`, weil hier als einzigem Modul
 die Zuordnung Kürzel zu Mensch entsteht.
 
@@ -66,6 +69,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Ziel und Verlauf aus planr zum Abhaken | merkr fertig (7 Tests); planr-Route erweitert, noch nicht ausgerollt |
 | Der Tag aus planr, mit Vertretung | fertig, 7 Tests, im Browser geprüft |
 | Drei Sitzordnungen je Kurs | fertig, im Browser geprüft |
+| merkr aktualisiert sich selbst | gebaut, auf dem Gerät ungetestet |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -208,6 +212,25 @@ gespeichert wird allein `S`.
 
 Geblieben sind `notenlistePdf`, `stundenlistePdf` und `viewMuendlich` - sie werden an ihren neuen
 Orten gerufen und erzeugen nachweislich weiter Papier.
+
+## merkr aktualisiert sich selbst (seit 2026-08-26)
+
+Solange merkr nur auf einem Gerät lief, war „die neue Fassung liegt im Ordner" ein Weg. Mit einem
+zweiten Menschen ist es keiner mehr. Seit dem 26.08. sieht merkr beim Start selbst nach - höchstens
+einmal am Tag, über `dist/fassung.json` statt über die halbe Megabyte des Skripts. Geholt wird die
+große Datei erst, wenn jemand zustimmt.
+
+**Gefragt wird immer.** Ein Skript, das sich unbemerkt ändert, ist im Unterricht der falsche Moment
+für eine Überraschung: wer um 7:38 Uhr das Klassenbuch aufschlägt, will die Stunde halten.
+
+Der Weg: `QUELLE_BASIS` in `src/rahmen.js` zeigt auf den rohen `main`-Zweig. `fassungPruefen` holt
+die kleine Datei, `fassungLaden` die große und schreibt sie an `module.filename` - erst daneben,
+dann umbenannt, weil ein Abbruch mitten im Schreiben ein halbes Skript hinterließe, und das startet
+nicht mehr. Zwei Prüfungen davor: mindestens 100.000 Zeichen und der Text `const KURSBUCH_HTML`.
+
+Die eigene Fassung steht als `MERKR_FASSUNG` in der Oberfläche; der Rahmen setzt sie beim Anzeigen
+ein, wie `KB_MODE`. Ist sie „ungebaut", wird nichts angeboten - ein Stand aus der Werkstatt soll
+sich nicht selbst überschreiben.
 
 ## Drei Sitzordnungen je Kurs (seit 2026-08-25)
 
