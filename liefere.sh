@@ -15,7 +15,24 @@ set -e
 ORDNER=~/Library/Mobile\ Documents/iCloud~dk~simonbs~Scriptable/Documents
 ZIEL="$ORDNER/merkr.js"
 cd "$(dirname "$0")"
-node bau.mjs >/dev/null
+
+# Bewusst kein Bau an dieser Stelle mehr.
+#
+# Seit merkr sich selbst aktualisiert, ist die Fassung kein Etikett mehr, sondern
+# eine Zusage: das Geraet vergleicht sie mit dem, was im Repo liegt. Ein Bau hier
+# stempelte jedes Mal eine neue Uhrzeit, die es auf GitHub nie gab - das Geraet
+# waere dann dauerhaft "neuer" als die Quelle und bekaeme nie wieder etwas
+# angeboten. Also: bauen, einchecken, pushen, dann ausliefern.
+if [ -n "$(git status --porcelain dist src bau.mjs 2>/dev/null)" ]; then
+  echo "Abbruch: dist/ oder src/ sind nicht eingecheckt." >&2
+  echo "Erst 'node bau.mjs', dann committen und pushen - sonst traegt das Geraet" >&2
+  echo "eine Fassung, die es auf GitHub nicht gibt, und sieht nie wieder ein Update." >&2
+  exit 1
+fi
+if [ -n "$(git log origin/main..HEAD --oneline 2>/dev/null)" ]; then
+  echo "Abbruch: es liegen Commits vor origin/main. Erst pushen." >&2
+  exit 1
+fi
 
 # Duplikate aus frueheren Konflikten wegraeumen, bevor neue entstehen.
 find "$ORDNER" -maxdepth 1 -name "merkr [0-9]*.js" -delete 2>/dev/null || true
