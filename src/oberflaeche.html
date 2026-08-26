@@ -1095,6 +1095,43 @@ function anwesenheitAuffrischen(k){
   zeigeModal(anwesenheitDialogHtml(k));
 }
 
+/* Die offenen Fehlzeiten, über alle Kurse hinweg.
+ *
+ * Auf der Startseite stand "5 Fehlzeiten ohne Entscheidung" und daneben ein
+ * Knopf, der nur `R.tab` umstellte - auf der Startseite gibt es aber keine
+ * Reiter, also passierte sichtbar nichts. Einen Knopf zum Entschuldigen gab es
+ * ohnehin nirgends mehr; der Handler dafür stand ohne Bedienung da.
+ *
+ * Ein Dialog statt eines Sprungs in einen Reiter: die offenen Fehlzeiten
+ * verteilen sich über Kurse, und wer sie klärt, will sie am Stück durchgehen
+ * und nicht sechsmal den Kurs wechseln.
+ */
+function fehlzeitenOffenHtml(){
+  const offen = S.anwesenheit
+    .filter(a=>a.status==="fehlt" && a.entschuldigt===null)
+    .map(a=>({a, st:stundeVon(a.stundeId)}))
+    .filter(x=>x.st)
+    .sort((x,y)=>(y.st.datum||"").localeCompare(x.st.datum||""));
+
+  let html = '<h2>Fehlzeiten klären</h2>';
+  if (!offen.length)
+    return html + '<p class="hinweis">Alles entschieden.</p>'+
+      '<div class="zeile" style="margin-top:12px"><button class="primar" data-a="modalZu">Schließen</button></div>';
+
+  html += '<p class="hinweis">'+offen.length+(offen.length===1?' Fehlzeit ohne Entscheidung.':' Fehlzeiten ohne Entscheidung.')+
+    ' Neueste zuerst.</p>';
+  for (const {a, st} of offen){
+    const s = schuelerVon(a.schuelerId);
+    const k = kursVon(st.kursId);
+    html += '<div class="karte" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:7px">'+
+      '<div style="flex:1"><b>'+esc(s ? s.name+", "+s.vorname : "?")+'</b>'+
+      '<div class="hinweis">'+esc(fmtDatum(st.datum))+(k?' · '+esc(k.name):'')+'</div></div>'+
+      '<button class="klein" data-a="entschuldigen" data-id="'+a.id+'" data-wert="true">entschuldigt</button>'+
+      '<button class="klein" data-a="entschuldigen" data-id="'+a.id+'" data-wert="false">unentschuldigt</button></div>';
+  }
+  return html + '<div class="abstand"></div><button class="primar" data-a="modalZu">Später</button>';
+}
+
 /* ============ Aktions-Delegation ============ */
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-a]");
@@ -1292,8 +1329,14 @@ document.addEventListener("click", ev=>{
   }
   else if (a==="entschuldigen"){
     const anw = S.anwesenheit.find(x=>x.id===id);
-    if (anw){ anw.entschuldigt = (el.dataset.wert==="true"); speichern(); zeichne(); }
+    if (anw){ anw.entschuldigt = (el.dataset.wert==="true"); speichern(); }
+    zeichne();
+    /* Fünf Fehlzeiten klärt man am Stück - der Dialog bleibt stehen und
+       schrumpft mit jeder Entscheidung. Ist die letzte weg, geht er zu. */
+    if (offeneFehlzeiten()) zeigeModal(fehlzeitenOffenHtml());
+    else { schliessePopover(); toast("Alle Fehlzeiten geklärt"); }
   }
+  else if (a==="fehlzeitenKlaeren"){ zeigeModal(fehlzeitenOffenHtml()); }
 
   /* Arbeiten */
   else if (a==="arbeitNeuDialog") arbeitNeuDialog();
@@ -3369,7 +3412,7 @@ viewProfil = function(){
     '<div><div style="font-size:26px;font-weight:900;color:'+(fz.unentschuldigt?'var(--rot)':'inherit')+'">'+fz.unentschuldigt+'</div><div class="hinweis">unentschuldigt</div></div>'+
     '<div><div style="font-size:26px;font-weight:900;color:'+(fz.offen?'var(--rot)':'inherit')+'">'+fz.offen+'</div><div class="hinweis">offen</div></div>'+
     '<div><div style="font-size:26px;font-weight:900">'+fz.verspaetungen+'</div><div class="hinweis">verspätet, '+fz.minuten+' min</div></div></div>';
-  if (fz.offen) html += '<div class="abstand"></div><button data-a="tab" data-id="liste">'+fz.offen+
+  if (fz.offen) html += '<div class="abstand"></div><button data-a="fehlzeitenKlaeren">'+fz.offen+
     (fz.offen===1?' offene Fehlzeit klären':' offene Fehlzeiten klären')+'</button>';
   html += '</div>';
 
@@ -3988,7 +4031,7 @@ viewHome = function(){
   const gibtEsDaten = S.schueler.length > 0 || S.noten.length > 0 || S.ereignisse.length > 0;
   const punkte = [];
   if (of) punkte.push(["rot", of+(of===1?" Fehlzeit":" Fehlzeiten")+" ohne Entscheidung",
-    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "tab", "liste"]);
+    "entschuldigt oder unentschuldigt ist noch offen", "Klären", "fehlzeitenKlaeren", null]);
   if (gibtEsDaten && bt===null) punkte.push(["gelb", "Noch keine Sicherung exportiert",
     "die Daten liegen bisher nur in iCloud", "Jetzt sichern", "backupDialog", null]);
   else if (bt!==null && bt>7) punkte.push(["gelb", "Sicherung überfällig",

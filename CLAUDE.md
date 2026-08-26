@@ -264,6 +264,18 @@ Der Notiz-Dialog schiebt sich davor und gibt danach das Popup an seinen Platz zu
 Nebenbei zählt ein offenes Popup jetzt als "die Oberfläche ist beschäftigt": der stille planr-Abruf
 zeichnet sonst mitten im Notieren neu.
 
+## „Klären" tat nichts (26.08.2026)
+
+Auf der Startseite stand „5 Fehlzeiten ohne Entscheidung" und daneben ein Knopf, der `R.tab` auf
+„liste" setzte - auf der Startseite gibt es aber keine Reiter, also passierte sichtbar nichts.
+Dahinter lag der zweite Fehler: einen Knopf zum Entschuldigen gab es nirgends mehr, nur den
+Handler dafür. Der Weg von der Zahl zur Entscheidung war also nie zu Ende gebaut.
+
+Jetzt ein Dialog über alle Kurse (`fehlzeitenOffenHtml`), neueste zuerst, je Zeile Name, Datum,
+Kurs und zwei Knöpfe. Er bleibt beim Entscheiden stehen und schrumpft mit jeder Zeile; ist die
+letzte weg, geht er zu. Kein Sprung in einen Reiter - die offenen Fehlzeiten verteilen sich über
+Kurse, und wer sie klärt, geht sie am Stück durch.
+
 ## Die Anwesenheit kommt ohne zweites Fenster aus (25.08.2026)
 
 Im Reiter Anwesenheit stand die Liste auf der Seite - und jeder Tipp auf "fehlt", "verspätet" oder
