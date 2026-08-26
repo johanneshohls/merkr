@@ -5,6 +5,9 @@ node_modules/
 # Datendateien und Sicherungen gehören nie ins Repo - merkr ist das einzige Modul mit Klarnamen.
 *.json
 !package.json
+# Nur die Fassungsangabe darf hinein - sie sagt, welcher Stand gebaut wurde,
+# und merkr fragt sie beim Start ab. Sie traegt eine Zeitangabe und sonst nichts.
+!dist/fassung.json
 Kursbuch*
 merkr-sicherung*
 
