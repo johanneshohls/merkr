@@ -390,21 +390,9 @@ Beobachtung und offene Phasen gehen als **eine** Notiz hinaus, die Beobachtung v
 ein Feld, und zwei Sätze davor zu trennen hieße, einen zu verlieren. Der Block entsteht jetzt auch
 ohne Ziel und Phasen - sonst hätte eine Stunde ohne planr-Planung kein Feld.
 
-Damit gibt es zwei Freitextwege, und sie meinen Verschiedenes: **diesen hier** für die Stunde
-("bei den Sachaufgaben abgerissen"), und das Feld im Stundendialog für die Lerngruppe auf Dauer
-("Klammern auflösen sitzt noch nicht", geht ins Klassenprofil).
-
-## Was nicht auf dem Blatt stand (seit 2026-08-25)
-
-Unter der Ankreuzliste im Stundendialog steht ein optionales Freitextfeld. Die Liste kann nur, was
-planr vorher als TÜ-Thema genannt hat; eine Kompetenz, die im Unterricht auffällt und dort nicht
-steht, hätte sonst keinen Platz - und als freies "gewackelt"-Thema stünde sie drüben für immer
-offen, weil keine Aufgabe sie trifft.
-
-Sie geht deshalb über einen zweiten Kanal: `POST /api/klassenprofil` mit `anhaengen`, also in
-`classes.notizen`. Das ist Freitext und wird bei jeder Planung gelesen. Angehängt wird mit dem Tag
-davor ("25.08.: Klammern auflösen sitzt noch nicht"), und der Satz bleibt lokal stehen
-(`stunde.profilNachtrag`), auch wenn das iPad gerade kein Netz hat.
+Ein zweites Freitextfeld gab es einen Tag lang: es hing im Stundendialog und schrieb ins
+Klassenprofil. Zwei Kästen für "was mir aufgefallen ist" sind einer zu viel - es ist am 26.08.
+wieder entfernt worden, mit `profilBrief`, seinen vier Tests und der Brücke `planrProfilAnhang`.
 
 ## Der Rückweg zu planr (seit 2026-08-20)
 

@@ -97,40 +97,6 @@ const MerkrRueckmeldung = (function () {
     };
   }
 
-  /**
-   * Was nicht auf dem Blatt stand: der freie Nachtrag ans Klassenprofil.
-   *
-   * Die Ankreuzliste kann nur, was planr vor der Stunde als TÜ-Thema genannt
-   * hat. Was im Unterricht sonst auffällt - eine Kompetenz, die noch fehlt -
-   * hat dort keinen Platz, und als freies "gewackelt"-Thema stünde es drüben
-   * für immer offen, weil keine Aufgabe es trifft.
-   *
-   * Deshalb der zweite Kanal: `classes.notizen`, das Klassenprofil. Es ist
-   * Freitext und wird bei jeder Planung gelesen - genau das, was ein solcher
-   * Satz braucht. Angehängt statt ersetzt, mit dem Datum davor, damit man
-   * später sieht, wann es auffiel.
-   *
-   * @returns {klasse, fach?, profil, anhaengen} für POST /api/klassenprofil,
-   *          oder null, wenn nichts zu senden ist.
-   */
-  function profilBrief(kurs, stunde, text) {
-    if (!kurs || !stunde || !stunde.datum) return null;
-    const klasse = String((kurs.planrName || "")).trim();
-    if (!klasse) return null;
-    const satz = String(text == null ? "" : text).trim();
-    if (!satz) return null;
-
-    const b = {
-      klasse: klasse,
-      // Der Tag ohne Jahr - das Profil ist ein laufender Zettel, kein Archiv.
-      profil: stunde.datum.slice(8, 10) + "." + stunde.datum.slice(5, 7) + ".: " + satz,
-      anhaengen: true
-    };
-    const fach = String((kurs.planrFach || "")).trim();
-    if (fach) b.fach = fach;
-    return b;
-  }
-
   /** Kurzfassung fürs Protokoll am Kurs: "25.08.: Lösungsformel, Faktorisierung". */
   function notiz(brief) {
     if (!brief) return "";
@@ -138,7 +104,7 @@ const MerkrRueckmeldung = (function () {
   }
 
   return { wackelThemen: wackelThemen, brief: brief, notiz: notiz,
-    profilBrief: profilBrief, zielstand: zielstand, ZIELSTAND: ZIELSTAND };
+    zielstand: zielstand, ZIELSTAND: ZIELSTAND };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueckmeldung;

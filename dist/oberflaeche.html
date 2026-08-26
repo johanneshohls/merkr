@@ -1324,40 +1324,6 @@ const MerkrRueckmeldung = (function () {
     };
   }
 
-  /**
-   * Was nicht auf dem Blatt stand: der freie Nachtrag ans Klassenprofil.
-   *
-   * Die Ankreuzliste kann nur, was planr vor der Stunde als TÜ-Thema genannt
-   * hat. Was im Unterricht sonst auffällt - eine Kompetenz, die noch fehlt -
-   * hat dort keinen Platz, und als freies "gewackelt"-Thema stünde es drüben
-   * für immer offen, weil keine Aufgabe es trifft.
-   *
-   * Deshalb der zweite Kanal: `classes.notizen`, das Klassenprofil. Es ist
-   * Freitext und wird bei jeder Planung gelesen - genau das, was ein solcher
-   * Satz braucht. Angehängt statt ersetzt, mit dem Datum davor, damit man
-   * später sieht, wann es auffiel.
-   *
-   * @returns {klasse, fach?, profil, anhaengen} für POST /api/klassenprofil,
-   *          oder null, wenn nichts zu senden ist.
-   */
-  function profilBrief(kurs, stunde, text) {
-    if (!kurs || !stunde || !stunde.datum) return null;
-    const klasse = String((kurs.planrName || "")).trim();
-    if (!klasse) return null;
-    const satz = String(text == null ? "" : text).trim();
-    if (!satz) return null;
-
-    const b = {
-      klasse: klasse,
-      // Der Tag ohne Jahr - das Profil ist ein laufender Zettel, kein Archiv.
-      profil: stunde.datum.slice(8, 10) + "." + stunde.datum.slice(5, 7) + ".: " + satz,
-      anhaengen: true
-    };
-    const fach = String((kurs.planrFach || "")).trim();
-    if (fach) b.fach = fach;
-    return b;
-  }
-
   /** Kurzfassung fürs Protokoll am Kurs: "25.08.: Lösungsformel, Faktorisierung". */
   function notiz(brief) {
     if (!brief) return "";
@@ -1365,7 +1331,7 @@ const MerkrRueckmeldung = (function () {
   }
 
   return { wackelThemen: wackelThemen, brief: brief, notiz: notiz,
-    profilBrief: profilBrief, zielstand: zielstand, ZIELSTAND: ZIELSTAND };
+    zielstand: zielstand, ZIELSTAND: ZIELSTAND };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueckmeldung;
@@ -3314,61 +3280,9 @@ function wackelBlockHtml(st){
     '<button class="klein" data-a="wackeltMelden" data-id="'+st.id+'">An planr melden</button>'+
     '<span class="hinweis" id="wackelStand">'+
       (gemeldet.length ? "zuletzt gemeldet: "+esc(gemeldet.join(", ")) : "Themen der TÜ dieser Stunde")+
-    '</span></div>'+
-    nachtragFeld(st)+'</div>';
+    '</span></div></div>';
   return html;
 }
-
-/* Was nicht auf dem Blatt stand.
-
-   Die Ankreuzliste kann nur, was planr vor der Stunde als TÜ-Thema genannt hat.
-   Eine Kompetenz, die im Unterricht auffällt und dort nicht steht, hat keinen
-   Platz - und als freies "gewackelt"-Thema stünde sie drüben für immer offen,
-   weil keine Aufgabe sie trifft. Sie geht deshalb ins Klassenprofil: Freitext,
-   der bei jeder Planung gelesen wird. */
-function nachtragFeld(st){
-  const gesetzt = String(st.profilNachtrag || "").trim();
-  return '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--linie)">'+
-    '<label style="font-size:12px;color:var(--text2);font-weight:700">'+
-    'Was sonst noch fehlt (optional, geht ins Klassenprofil)</label>'+
-    '<textarea id="profilNachtrag" rows="2" placeholder="z. B. Klammern auflösen sitzt noch nicht">'+
-    esc(gesetzt)+'</textarea>'+
-    '<div class="zeile" style="margin-top:6px">'+
-    '<button class="klein" data-a="nachtragMelden" data-id="'+st.id+'">Ins Klassenprofil</button>'+
-    '<span class="hinweis" id="nachtragStand">'+
-    (gesetzt ? "zuletzt gemeldet" : "wird beim Planen der nächsten Stunden gelesen")+
-    '</span></div></div>';
-}
-
-document.addEventListener("click", function(ev){
-  const el = ev.target.closest("[data-a]");
-  if (!el || el.dataset.a !== "nachtragMelden") return;
-  const st = stundeVon(el.dataset.id);
-  const k = st ? kursVon(st.kursId) : null;
-  const feld = document.getElementById("profilNachtrag");
-  const stand = document.getElementById("nachtragStand");
-  const text = feld ? feld.value.trim() : "";
-
-  const brief = MerkrRueckmeldung.profilBrief(k, st, text);
-  if (!brief){
-    if (stand) stand.textContent = text ? "Dieser Kurs kommt nicht aus planr." : "Nichts eingetragen.";
-    return;
-  }
-  if (stand) stand.textContent = "wird gemeldet ...";
-  /* Erst merken, dann senden - wie bei der Ankreuzliste: der Satz soll auch
-     stehen, wenn das iPad gerade kein Netz hat. */
-  st.profilNachtrag = text;
-  speichern();
-  sendeAnBridge({typ:"planrProfilAnhang", url: planrBasis(), brief: brief});
-});
-
-window.__KB_planrProfilAntwort = function(antwort){
-  const stand = document.getElementById("nachtragStand");
-  if (!stand) return;
-  stand.textContent = (antwort && antwort.fehler)
-    ? "Ging nicht hinaus - der Satz bleibt hier stehen."
-    : "Steht im Klassenprofil.";
-};
 
 /* Eigener Listener statt eines Eintrags im großen Handler - dasselbe Muster wie
    die Jahresübersicht, und der Dialog entsteht bei jedem Öffnen neu. */

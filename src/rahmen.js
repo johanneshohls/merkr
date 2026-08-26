@@ -416,32 +416,6 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrRueckAntwort(" + antwort + ")", false);
       } catch (e) { console.error("planr-Rückmeldung nicht zugestellt: " + e); }
-    } else if (msg.typ === "planrProfilAnhang") {
-      // Der zweite Rückweg: ein Satz übers Fach, der ins Klassenprofil gehört.
-      // Derselbe Schlüssel, dieselbe Adresse, nur eine andere Route - und
-      // "anhaengen" steht im Brief, nicht hier: was geschrieben wird, entscheidet
-      // die Oberfläche, der Rahmen trägt es nur hinaus.
-      let antwort;
-      try {
-        if (!Keychain.contains(SCHLUESSEL_PLANR)) throw new Error("Kein planr-Wort im Schlüsselbund.");
-        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
-        if (!basis) throw new Error("Keine planr-Adresse eingetragen.");
-        if (!msg.brief) throw new Error("Nichts zu melden.");
-        const req = new Request(basis + "/api/klassenprofil");
-        req.method = "POST";
-        req.headers = {
-          authorization: "Bearer " + Keychain.get(SCHLUESSEL_PLANR),
-          "content-type": "application/json",
-        };
-        req.body = JSON.stringify(msg.brief);
-        antwort = await req.loadString();
-        JSON.parse(antwort);
-      } catch (e) {
-        antwort = JSON.stringify({ fehler: String(e) });
-      }
-      try {
-        await wv.evaluateJavaScript("window.__KB_planrProfilAntwort(" + antwort + ")", false);
-      } catch (e) { console.error("Klassenprofil-Nachtrag nicht zugestellt: " + e); }
     } else if (msg.typ === "checkrAbruf") {
       // Punkte einer Arbeit je Kürzel. Der Weg ist derselbe wie bei planr, nur
       // ein anderes Wort und eine andere Adresse.
