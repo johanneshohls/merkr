@@ -1469,6 +1469,73 @@ const MerkrPlanr = (function () {
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrPlanr;
 
+/* --- kern/raster.js --- */
+/**
+ * Das Wochenraster aus planr, in merkrs Sprache.
+ *
+ * planr führt den Stundenplan in `class_slots`: Wochentyp A oder B, Wochentag,
+ * Doppelstunden-Block (1 = 1./2. Stunde). merkr führt ihn je Kurs als
+ * `{tag, stunde, woche}` mit der Anfangsstunde und "AB" für beide Wochen -
+ * dieselbe Auskunft, andere Zählung.
+ *
+ * Die Umrechnung steht hier und nicht im Importer, weil sie zwei Fallen hat,
+ * die man beim Hinsehen nicht bemerkt: dieselbe Stunde steht in A und in B und
+ * ergibt zusammen "AB", und `block*2-1` ist dieselbe Rechnung, die der
+ * Tagesplan macht - stünde sie zweimal, liefe sie irgendwann auseinander.
+ */
+const MerkrRaster = (function () {
+
+  /** Die Anfangsstunde des Blocks: 1 = 1./2., 2 = 3./4. */
+  function stundeVon(block) {
+    return Number(block) * 2 - 1;
+  }
+
+  /**
+   * @param roh [{woche, tag, block, raum}] aus /api/stoffverteilung
+   * @returns [{tag, stunde, woche}] sortiert, "AB" wo A und B dasselbe sagen
+   */
+  function ausPlanr(roh) {
+    const gefunden = {};
+    for (const e of roh || []) {
+      if (!e) continue;
+      const tag = Number(e.tag);
+      const block = Number(e.block);
+      const woche = String(e.woche || "").toUpperCase();
+      if (!(tag >= 1 && tag <= 5)) continue;
+      if (!(block >= 1)) continue;
+      if (woche !== "A" && woche !== "B") continue;
+      const schluessel = tag + "-" + block;
+      const bisher = gefunden[schluessel];
+      /* Steht dieselbe Stunde in beiden Wochen, ist der A/B-Wechsel für sie
+         keine Information - genau das meint "AB". */
+      gefunden[schluessel] = { tag: tag, stunde: stundeVon(block),
+        woche: bisher && bisher.woche !== woche ? "AB" : woche };
+    }
+    return Object.keys(gefunden).map(function (s) { return gefunden[s]; })
+      .sort(function (a, b) { return a.tag - b.tag || a.stunde - b.stunde; });
+  }
+
+  /**
+   * Sagen zwei Raster dasselbe?
+   *
+   * Für die Frage, ob merkrs Stundenplan noch zu planrs passt. Verglichen wird
+   * nur, was merkr führt - ein Raumwechsel in planr ist hier kein Unterschied.
+   */
+  function gleich(a, b) {
+    const schluessel = function (liste) {
+      return (liste || []).slice()
+        .sort(function (x, y) { return x.tag - y.tag || x.stunde - y.stunde; })
+        .map(function (s) { return s.tag + "-" + s.stunde + "-" + (s.woche || "AB"); })
+        .join(",");
+    };
+    return schluessel(a) === schluessel(b);
+  }
+
+  return { ausPlanr: ausPlanr, gleich: gleich, stundeVon: stundeVon };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrRaster;
+
 /* --- kern/rueckmeldung.js --- */
 /**
  * Die Rückmeldung an planr: was in der Stunde gewackelt hat.
@@ -2064,8 +2131,27 @@ function mondayOf(iso){
   const tag = (d.getDay()+6)%7; d.setDate(d.getDate()-tag);
   return d;
 }
+function isoVon(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+/* Welche Woche ist A, welche B?
+ *
+ * Wenn planr es gesagt hat, steht es Montag für Montag in sj.abWochen - und das
+ * schlägt jede eigene Rechnung. Drüben zählt der Wechsel Schulwochen: die
+ * Ferien fallen heraus, der Buchstabe läuft über sie hinweg weiter. Aus einem
+ * Anker und der Zahl der Kalenderwochen gerechnet, kippt das Ergebnis nach
+ * jeder ungeraden Zahl Ferienwochen - eine Woche lang stimmt dann jede Kachel
+ * des Wochenplans nicht.
+ *
+ * Der Anker bleibt für alle, die planr nicht verbunden haben. Steht die Liste,
+ * gilt sie allein: zwei Rhythmen nebeneinander wären schlimmer als einer, der
+ * eine Woche nicht kennt. */
 function wochenBuchstabe(sj, iso){
-  if (!sj || !sj.aWocheAnker) return null;
+  if (!sj) return null;
+  if (sj.abWochen && typeof sj.abWochen === "object"){
+    return sj.abWochen[isoVon(mondayOf(iso))] || null;
+  }
+  if (!sj.aWocheAnker) return null;
   const a = mondayOf(sj.aWocheAnker), b = mondayOf(iso);
   const diff = Math.round((b-a)/(7*24*3600*1000));
   return ((diff % 2)+2) % 2 === 0 ? "A" : "B";
@@ -3782,6 +3868,22 @@ window.__KB_planrRueckAntwort = function(antwort){
 };
 
 /* Kurs-Einstellungen inkl. Stundenplan-Slots (ersetzt Phase-1-Fassung) */
+/* Was planr über den Stundenplan dieses Kurses sagt.
+   Beim ersten Abruf füllt es den leeren Stundenplan von selbst; danach steht
+   hier nur noch etwas, wenn die beiden auseinandergelaufen sind - jemand hat
+   drüben umgeplant oder hier von Hand nachgebessert. Übernommen wird auf
+   Tippen, nicht im Vorbeigehen: welcher von beiden stimmt, weiß nur die
+   Lehrkraft. */
+function planrRasterZeile(k){
+  const ausPlanr = k.planrSlots || [];
+  if (!ausPlanr.length) return "";
+  if (MerkrRaster.gleich(ausPlanr, k.slots||[])) return "";
+  const text = ausPlanr.map(s=>wochentagName(s.tag)+" "+s.stunde+"."+(s.woche==="AB"?"":" ("+s.woche+")")).join(" · ");
+  return '<div class="zeile raum" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--linie)">'+
+    '<div class="hinweis" style="flex:1;min-width:0">In planr steht: '+esc(text)+'</div>'+
+    '<button class="klein primar" data-a="slotsAusPlanr" data-id="'+k.id+'">Übernehmen</button></div>';
+}
+
 function viewKursCfg(k){
   const schueler = kursSchueler(k.id);
   const ws = gewSonstige(k), wmA = gewMdlAnteil(k);
@@ -3833,6 +3935,7 @@ function viewKursCfg(k){
     }
     html += '</table><div class="abstand"></div>';
   } else html += '<p class="hinweis">Noch keine Unterrichtsstunden eingetragen.</p>';
+  html += planrRasterZeile(k);
   html += '<div class="zeile">'+
     '<select id="slotTag">'+[1,2,3,4,5].map(t=>'<option value="'+t+'">'+wochentagName(t)+'</option>').join("")+'</select>'+
     '<select id="slotStunde">'+[1,2,3,4,5,6,7,8,9,10].map(s=>'<option value="'+s+'">'+s+'. Stunde</option>').join("")+'</select>'+
@@ -3976,6 +4079,13 @@ document.addEventListener("click", async ev=>{
       stunde:Number(document.getElementById("slotStunde").value),
       woche:document.getElementById("slotWoche").value});
     speichern(); zeichne();
+  }
+  else if (a==="slotsAusPlanr"){
+    const kurs = kursVon(id);
+    if (!kurs || !(kurs.planrSlots||[]).length) return;
+    kurs.slots = kurs.planrSlots.map(x=>({tag:x.tag, stunde:x.stunde, woche:x.woche}));
+    speichern(); zeichne();
+    toast("Stundenplan aus planr übernommen");
   }
   else if (a==="slotLoeschen"){
     const kurs = kursVon(id);
@@ -4428,7 +4538,7 @@ function planImportieren(text){
   const sj = aktivesSchuljahr();
   if (!sj) return {fehler:"Es ist kein Schuljahr angelegt - ohne das gibt es keinen Kalender, in den die Stunden passen."};
 
-  let ferienNeu=0, themen=0, mitReihe=0, grenzeNeu=false;
+  let ferienNeu=0, themen=0, mitReihe=0, grenzeNeu=false, rasterNeu=0;
   /* Wie viel sich wirklich bewegt hat. Der stille Abruf beim Start soll nur
      dann die Ansicht neu bauen und melden, wenn planr etwas anderes sagt als
      beim letzten Mal - sonst zuckt die Oberfläche mehrmals täglich ohne Grund. */
@@ -4441,6 +4551,15 @@ function planImportieren(text){
   if (plan.schuljahr && plan.schuljahr.halbjahrGrenze && sj.halbjahrGrenze !== plan.schuljahr.halbjahrGrenze){
     sj.halbjahrGrenze = String(plan.schuljahr.halbjahrGrenze);
     grenzeNeu = true; geaendert++;
+  }
+
+  /* Welche Woche A ist und welche B, Montag für Montag. Ohne das bleiben alle
+     Stunden unsichtbar, die nur in einer der beiden Wochen liegen - und genau
+     die kommen jetzt mit dem Raster herein. Eine leere Liste heißt "Schule ohne
+     A/B" und wird nicht übernommen: dann bliebe der eigene Anker ungenutzt. */
+  if (plan.schuljahr && plan.schuljahr.abWochen && Object.keys(plan.schuljahr.abWochen).length){
+    const neuAb = plan.schuljahr.abWochen;
+    if (JSON.stringify(sj.abWochen||null) !== JSON.stringify(neuAb)){ sj.abWochen = neuAb; geaendert++; }
   }
 
   if (Array.isArray(plan.ferien)){
@@ -4472,6 +4591,32 @@ function planImportieren(text){
       const kurs = MerkrPlanr.kursFuer(S.kurse, p, sj.id);
       if (!kurs){ unbekannt.push(String(p.kurs||"?")); continue; }
       if (!kurs.reihenFarben || typeof kurs.reihenFarben!=="object") kurs.reihenFarben = {};
+
+      /* Wie der Kurs drüben heißt. Die Rückmeldung nach der Stunde braucht
+         planrs Namen, nicht merkrs - und ohne ihn bleibt sie ganz aus
+         (MerkrRueckmeldung.brief gibt dann null zurück). Beim Umbau des
+         Importers war die Übernahme verlorengegangen, derselbe stille Ausfall
+         wie damals bei tuThemen. */
+      if (p.name && kurs.planrName !== String(p.name)){ kurs.planrName = String(p.name); geaendert++; }
+      if (p.fach && kurs.planrFach !== String(p.fach)){ kurs.planrFach = String(p.fach); geaendert++; }
+
+      /* Das Wochenraster, wie planr es führt: Wochentyp, Tag, Doppelstunde.
+         Es füllt merkrs Stundenplan nur, solange der Kurs keinen hat - ein
+         Abruf, der eine Eintragung von Hand überschreibt, wäre die
+         Überraschung, die niemand sucht. Weicht er später ab, steht in der
+         Kurskarte ein Knopf, und die Entscheidung bleibt hier. */
+      if (Array.isArray(p.raster)){
+        const rasterPlanr = MerkrRaster.ausPlanr(p.raster);
+        if (rasterPlanr.length){
+          if (!MerkrRaster.gleich(kurs.planrSlots||[], rasterPlanr)){
+            kurs.planrSlots = rasterPlanr; geaendert++;
+          }
+          if (!(kurs.slots||[]).length){
+            kurs.slots = rasterPlanr.map(x=>({tag:x.tag, stunde:x.stunde, woche:x.woche}));
+            rasterNeu++; geaendert++;
+          }
+        }
+      }
 
       for (const th of p.themen||[]){
         if (!th || !th.datum || !/^\d{4}-\d{2}-\d{2}$/.test(th.datum)) continue;
@@ -4530,7 +4675,7 @@ function planImportieren(text){
   }
 
   speichern();
-  return {ferienNeu, themen, unbekannt, mitReihe, grenzeNeu, geaendert};
+  return {ferienNeu, themen, unbekannt, mitReihe, grenzeNeu, rasterNeu, geaendert};
 }
 
 /* Abruf anstoßen. Das Wort liegt im Schlüsselbund, der Rahmen holt die Daten. */
@@ -4606,6 +4751,7 @@ window.__KB_planrAntwort = function(text){
   const teile = [erg.themen+" Stunden"];
   if (erg.ferienNeu) teile.push(erg.ferienNeu+" Ferienzeiträume");
   if (erg.grenzeNeu) teile.push("Halbjahresgrenze");
+  if (erg.rasterNeu) teile.push("Stundenplan für "+erg.rasterNeu+(erg.rasterNeu===1?" Kurs":" Kurse"));
   if (erg.unbekannt.length) teile.push("ohne Zuordnung: "+erg.unbekannt.join(", "));
   toast("Aus planr: "+teile.join(" · "));
   return "ok";

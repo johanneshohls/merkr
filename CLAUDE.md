@@ -71,6 +71,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Drei Sitzordnungen je Kurs | fertig, im Browser geprüft |
 | merkr aktualisiert sich selbst | gebaut, auf dem Gerät ungetestet |
 | Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy steht aus |
+| Stundenplan und A/B-Wochen aus planr | merkr fertig (8 Tests, im Browser geprüft); planr-Route erweitert, Deploy steht aus |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -444,3 +445,47 @@ bedeutet, und ein zurückgenommener Rahmen macht sie eher lesbarer. Geändert wu
 in `:root` und die vier hartkodierten Stellen daneben (Body und Ladeanzeige, Seitenleiste, Tische
 im Sitzplan, Marke) - `docs/design-prompt.md` trägt dieselben Werte, damit die nächste Runde an der
 Oberfläche nicht wieder lila herauskommt.
+
+## Der Stundenplan kommt jetzt mit (27.08.2026)
+
+Ein Kollege hat merkr installiert, planr verbunden - und sah trotzdem eine leere
+Woche. Der Wochenplan hängt an `kurs.slots`, und die trug bisher jeder von Hand
+ein: Tag, Stunde, A oder B, je Kurs. Bei sechs eigenen Kursen ist das einmal
+Tippen und danach nie wieder ein Thema, beim zweiten Menschen ist es der Schritt,
+an dem er hängenbleibt.
+
+Dabei liegt der Plan drüben. planr führt ihn in `class_slots` und braucht ihn
+selbst für die Terminerzeugung; er ging nur nie hinaus. Seit dem 27.08. trägt
+`/api/stoffverteilung` je Klasse ein Feld `raster` - Wochentyp, Wochentag,
+Doppelstunden-Block, Raum. Also planrs eigene Zählung, dieselbe wie im
+Tagesplan: die Umrechnung auf merkrs Einzelstunden (`block*2-1`) steht damit an
+einer Stelle statt an zweien.
+
+**Übernommen wird nur in einen leeren Stundenplan.** Wer seine Stunden von Hand
+eingetragen hat, dem soll ein Abruf am Dienstagmorgen nichts umstellen. Weicht
+planrs Raster später ab, steht in der Kurskarte eine Zeile „In planr steht: Do 5.
+(A)" mit einem Knopf daneben - welche der beiden Fassungen stimmt, weiß nur die
+Lehrkraft. Der Stand von drüben liegt dafür als `kurs.planrSlots` bereit,
+getrennt von dem, was gilt.
+
+**Die A/B-Wochen mussten mit.** Sonst wäre das Raster angekommen und die halben
+Stunden trotzdem unsichtbar geblieben: merkr rechnete den Buchstaben aus einem
+Anker-Montag und der Zahl der Kalenderwochen seither, und ohne Anker gab es gar
+keinen. planr zählt anders - der Wechsel läuft über Schulwochen, Ferienwochen
+fallen heraus und der Takt läuft über sie hinweg weiter. Nach jeder ungeraden
+Zahl Ferienwochen liefen die beiden auseinander, eine ganze Woche lang und in
+jeder Kachel. Deshalb geht die Zuordnung jetzt als Liste hinaus, Montag für
+Montag (`schuljahr.abWochen`), und merkr schlägt nach, statt zu rechnen. Der
+Anker bleibt für alle ohne planr.
+
+Gerechnet wird in `src/kern/raster.js` (8 Tests): Block zu Anfangsstunde, und
+dieselbe Stunde in A und B wird zu „AB". Auf der planr-Seite baut die Route den
+Kalender selbst, statt `aktiverKalender()` zu rufen - der liest den A/B-Modus
+über die Browser-Sitzung, und dieser Abruf kommt mit einem Schlüssel.
+
+**Dabei fiel ein stiller Ausfall auf:** `kurs.planrName` wurde nur von der alten,
+längst ersetzten Fassung des Importers gesetzt. `MerkrRueckmeldung.brief` gibt
+ohne diesen Namen `null` zurück - die Rückmeldung nach der Stunde ging also seit
+dem Umbau des Importers gar nicht mehr hinaus, ohne Fehler und ohne Meldung.
+Derselbe Fehlertyp wie damals bei `tuThemen`, an derselben Stelle. Jetzt
+übernimmt der Importer `name` und `fach` wieder.
