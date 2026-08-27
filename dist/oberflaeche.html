@@ -5777,7 +5777,17 @@ function schnellzugriff(){
   const kopf = a.art==="laeuft" ? "Läuft gerade"
     : a.art==="gleich" ? "Gleich, in "+a.minuten+" Minuten" : "Als Nächstes heute";
 
-  return '<div class="karte" style="display:flex;align-items:center;gap:16px;padding:16px 18px;margin-bottom:20px;'+
+  /* Die ganze Karte trifft, nicht nur der Knopf am Rand. Sie steht oben auf der
+     Startseite und beantwortet genau eine Frage - "wo muss ich jetzt hin" -,
+     und darauf zielt man im Gehen mit dem Daumen. Ein Kurs, den merkr nicht
+     führt (Vertretung in einer fremden Klasse, Aufsicht), bleibt unberührbar:
+     dahinter liegt keine Stunde, die sich öffnen ließe. */
+  const klick = kurs
+    ? ' data-a="stundeOeffnen" data-id="'+kurs.id+'" data-datum="'+todayISO()+'"'
+    : '';
+
+  return '<div class="karte"'+klick+' style="display:flex;align-items:center;gap:16px;padding:16px 18px;margin-bottom:20px;'+
+    (kurs ? 'cursor:pointer;' : '')+
     'border:1px solid var(--akzent)">'+
     '<div style="background:var(--akzent);color:#fff;border-radius:14px;padding:10px 14px;text-align:center;min-width:74px">'+
     '<div style="font-size:19px;font-weight:900;line-height:1">'+esc(blockLabel(a.e.stunde))+'</div>'+
@@ -5787,7 +5797,7 @@ function schnellzugriff(){
     '<div><b style="font-size:19px">'+esc(a.e.name || (kurs ? kurs.name : "?"))+'</b></div>'+
     '<div class="hinweis" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
     esc(a.e.hinweis || (a.e.raum ? "Raum "+a.e.raum : "") || thema || "kein Thema")+'</div></div>'+
-    (kurs ? '<button class="primar" data-a="stundeOeffnen" data-id="'+kurs.id+'" data-datum="'+todayISO()+'">Sitzplan</button>' : '')+
+    (kurs ? '<div style="color:var(--text2);font-size:22px;flex:0 0 auto">›</div>' : '')+
     '</div>';
 }
 
