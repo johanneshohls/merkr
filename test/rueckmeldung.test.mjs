@@ -119,3 +119,41 @@ test("ein erfundener Zielstand geht nicht hinaus", () => {
 test("ohne Inhalt entsteht kein Brief", () => {
   assert.equal(R.brief({ planrName: "9d" }, { datum: "2026-09-17" }, [], {}), null);
 });
+
+/* Der Rückfall auf den Themenblock, seit dem 27.08.2026.
+
+   Bis dahin hing die ganze Ankreuzliste an `tuThemen`, und das Feld stand nur
+   da, wenn die TÜ über planrs Knopf entstanden war. Da sie in der Praxis direkt
+   in drillr gebaut wird, blieb es leer - der Block erschien nie, und in planr
+   standen null Wiederholungssignale, seit es die Tabelle gibt. */
+test("ohne TÜ-Themen greifen die Themen des Blocks", () => {
+  const themen = R.wackelThemen({ datum: "2026-09-17", wackelThemen: ["terme", "klammern"] });
+  assert.deepEqual(themen, ["terme", "klammern"]);
+});
+
+test("mit TÜ-Themen gewinnen die genaueren", () => {
+  const themen = R.wackelThemen({
+    datum: "2026-09-17",
+    tuThemen: ["lösungsformel"],
+    wackelThemen: ["quadratische gleichungen"],
+  });
+  assert.deepEqual(themen, ["lösungsformel"]);
+});
+
+test("eine leere TÜ-Liste zählt wie keine", () => {
+  const themen = R.wackelThemen({ datum: "2026-09-17", tuThemen: [], wackelThemen: ["Optik"] });
+  assert.deepEqual(themen, ["Optik"]);
+});
+
+test("aus dem Block gemeldete Themen kommen in den Brief", () => {
+  const b = R.brief(
+    { planrName: "8d", planrFach: "Mathematik" },
+    { datum: "2026-09-17", wackelThemen: ["terme", "klammern"] },
+    ["klammern"],
+  );
+  assert.deepEqual(b.wackelt, ["klammern"]);
+});
+
+test("ohne beide Listen gibt es nichts anzukreuzen", () => {
+  assert.deepEqual(R.wackelThemen({ datum: "2026-09-17" }), []);
+});

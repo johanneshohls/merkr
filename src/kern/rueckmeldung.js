@@ -17,9 +17,23 @@ const MerkrRueckmeldung = (function () {
   /** Die drei Zustände, die planr für das Stundenziel kennt. */
   const ZIELSTAND = ["ja", "teilweise", "nein"];
 
-  /** Was kann man für diese Stunde ankreuzen? Leer, wenn keine TÜ dran hing. */
+  /**
+   * Was kann man für diese Stunde ankreuzen?
+   *
+   * Zuerst die Themen der TÜ - sie sind das Genaueste, was es gibt. Sie stehen
+   * aber nur da, wenn die TÜ über planrs Knopf in drillr entstanden ist; wird
+   * sie direkt in drillr gebaut und hier nur verlinkt, bleibt das Feld leer.
+   * Genau das war der Normalfall, und deshalb erschien der Wackelblock nie:
+   * in planr standen am 27.08.2026 null Wiederholungssignale, seit es die
+   * Tabelle gibt.
+   *
+   * `wackelThemen` ist der Rückfall auf den laufenden Themenblock, den planr
+   * seitdem mitschickt. Leer bleibt es nur, wenn der Kurs gar keine Grobplanung
+   * hat.
+   */
   function wackelThemen(stunde) {
-    const roh = (stunde && stunde.tuThemen) || [];
+    const roh = (stunde && stunde.tuThemen && stunde.tuThemen.length ? stunde.tuThemen
+      : (stunde && stunde.wackelThemen)) || [];
     const raus = [];
     for (const t of roh) {
       const s = String(t == null ? "" : t).trim();
