@@ -965,9 +965,9 @@ function viewHausaufgaben(k){
       (sp.laeuft?';border-left:2px solid var(--linie)':'')+'">'+
       fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">'+
       (sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
-      /* Wie viele Kinder fertig sind, von den gewerteten - der Blick ueber die
-         Klasse, ohne die Spalte hinunterzuzaehlen. */
-      '<br><span class="hinweis">'+sp.fertig+'/'+sp.gewertet+' fertig</span></th>';
+      /* Wie viele Kinder etwas gemacht haben, von den gewerteten - der Blick
+         ueber die Klasse, ohne die Spalte hinunterzuzaehlen. */
+      '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span></th>';
   html += '<th style="font-size:11px">Quote</th></tr>';
 
   for (const z of zeilen){

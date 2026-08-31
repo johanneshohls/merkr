@@ -119,14 +119,14 @@ test("was schon faellig war, gilt nicht als laufend", () => {
   assert.deepEqual(B.laufende(stand("2026-09-01", [1, 1]), "2026-09-01"), []);
 });
 
-test("jede Spalte zählt, wie viele fertig sind", () => {
+test("jede Spalte zählt, wer mehr als null Aufgaben gemacht hat", () => {
   const bilanz = B.festschreiben({}, stand("2026-09-01", [10, 3]), schueler(), "2026-09-01");
-  const l = B.laufende(stand("2026-09-15", [10, 10]), "2026-09-02");
+  const l = B.laufende(stand("2026-09-15", [10, 0]), "2026-09-02");
   const { spalten } = B.tabelle(bilanz, schueler(), l);
-  // Cem hat keinen Code und zählt in keiner Spalte mit.
-  assert.equal(spalten[0].fertig, 1);
+  // Cem hat keinen Code und zählt in keiner Spalte mit; Bens 3 von 10 zählen als gemacht.
+  assert.equal(spalten[0].gemacht, 2);
   assert.equal(spalten[0].gewertet, 2);
-  assert.equal(spalten[1].fertig, 2);
+  assert.equal(spalten[1].gemacht, 1);
   assert.equal(spalten[1].gewertet, 2);
 });
 

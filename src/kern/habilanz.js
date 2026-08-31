@@ -138,18 +138,19 @@ const MerkrHaBilanz = (function () {
         };
       });
 
-    // Je Spalte: wie viele Kinder fertig waren, von den gewerteten - fuer den
-    // Spaltenkopf. Unbekannte zaehlen nicht, sonst drueckt jedes Kind ohne Code
-    // die Zahl.
+    // Je Spalte: wie viele Kinder etwas gemacht haben, von den gewerteten - fuer
+    // den Spaltenkopf. Mehr als null Aufgaben zaehlt, auch angefangen; wer die
+    // Klasse ueberblicken will, fragt zuerst, wer sich gar nicht geruehrt hat.
+    // Unbekannte zaehlen nicht, sonst drueckt jedes Kind ohne Code die Zahl.
     for (let i = 0; i < spalten.length; i++) {
-      let fertig = 0, gewertet = 0;
+      let gemacht = 0, gewertet = 0;
       for (const z of zeilen) {
         const f = z.felder[i];
         if (f.zustand === "unbekannt") continue;
         gewertet++;
-        if (f.zustand === "fertig") fertig++;
+        if (f.geschafft > 0) gemacht++;
       }
-      spalten[i].fertig = fertig;
+      spalten[i].gemacht = gemacht;
       spalten[i].gewertet = gewertet;
     }
 

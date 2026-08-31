@@ -691,18 +691,19 @@ const MerkrHaBilanz = (function () {
         };
       });
 
-    // Je Spalte: wie viele Kinder fertig waren, von den gewerteten - fuer den
-    // Spaltenkopf. Unbekannte zaehlen nicht, sonst drueckt jedes Kind ohne Code
-    // die Zahl.
+    // Je Spalte: wie viele Kinder etwas gemacht haben, von den gewerteten - fuer
+    // den Spaltenkopf. Mehr als null Aufgaben zaehlt, auch angefangen; wer die
+    // Klasse ueberblicken will, fragt zuerst, wer sich gar nicht geruehrt hat.
+    // Unbekannte zaehlen nicht, sonst drueckt jedes Kind ohne Code die Zahl.
     for (let i = 0; i < spalten.length; i++) {
-      let fertig = 0, gewertet = 0;
+      let gemacht = 0, gewertet = 0;
       for (const z of zeilen) {
         const f = z.felder[i];
         if (f.zustand === "unbekannt") continue;
         gewertet++;
-        if (f.zustand === "fertig") fertig++;
+        if (f.geschafft > 0) gemacht++;
       }
-      spalten[i].fertig = fertig;
+      spalten[i].gemacht = gemacht;
       spalten[i].gewertet = gewertet;
     }
 
@@ -2655,9 +2656,9 @@ function viewHausaufgaben(k){
       (sp.laeuft?';border-left:2px solid var(--linie)':'')+'">'+
       fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">'+
       (sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
-      /* Wie viele Kinder fertig sind, von den gewerteten - der Blick ueber die
-         Klasse, ohne die Spalte hinunterzuzaehlen. */
-      '<br><span class="hinweis">'+sp.fertig+'/'+sp.gewertet+' fertig</span></th>';
+      /* Wie viele Kinder etwas gemacht haben, von den gewerteten - der Blick
+         ueber die Klasse, ohne die Spalte hinunterzuzaehlen. */
+      '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span></th>';
   html += '<th style="font-size:11px">Quote</th></tr>';
 
   for (const z of zeilen){
