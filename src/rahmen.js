@@ -325,7 +325,10 @@ async function bruecke() {
       // ohne Verbindung sitzt, soll davon nichts merken - merkr läuft weiter.
       let antwort;
       try {
-        const req = new Request(QUELLE_FASSUNG);
+        /* GitHubs Auslieferung haelt die Datei bis zu fuenf Minuten fest - eine
+           frische Kennung an der Adresse holt den echten Stand statt des
+           festgehaltenen. */
+        const req = new Request(QUELLE_FASSUNG + "?stand=" + Date.now());
         req.timeoutInterval = 8;
         const roh = await req.loadString();
         const daten = JSON.parse(roh);
@@ -343,7 +346,10 @@ async function bruecke() {
       // mehr - genau der Zustand, aus dem man sich ohne Rechner nicht befreit.
       let antwort;
       try {
-        const req = new Request(QUELLE_SKRIPT);
+        /* Dieselbe frische Kennung wie beim Pruefen: sonst meldet die kleine
+           Datei schon die neue Fassung, waehrend das Skript noch als alter
+           Stand aus dem Zwischenspeicher kommt. */
+        const req = new Request(QUELLE_SKRIPT + "?stand=" + Date.now());
         req.timeoutInterval = 30;
         const text = await req.loadString();
         if (!text || text.length < 100000 || text.indexOf("const KURSBUCH_HTML") < 0) {
