@@ -41,3 +41,30 @@ test("Kurse anderer Schuljahre bleiben außen vor", () => {
 test("Ohne Treffer kommt null", () => {
   assert.equal(P.kursFuer(kurse(), { kurs: "Chemie 10b" }, "sj"), null);
 });
+
+test("TÜ-Lösungen aus planr werden in Form gebracht", () => {
+  const l = P.loesungenAusPlanr({
+    name: " TÜ 9a – 2026-09-04 ",
+    link: "https://www.drillr.de/s/abc",
+    aufgaben: [
+      { nr: 1, aufgabe: "Berechne: √(225)", loesung: " 15 " },
+      { nr: "x", aufgabe: "", loesung: "14" },
+      null,
+      { nr: 3, aufgabe: "", loesung: "" }
+    ]
+  });
+  assert.deepEqual(l, {
+    name: "TÜ 9a – 2026-09-04",
+    link: "https://www.drillr.de/s/abc",
+    aufgaben: [
+      { nr: 1, aufgabe: "Berechne: √(225)", loesung: "15" },
+      { nr: 2, aufgabe: "", loesung: "14" }
+    ]
+  });
+});
+
+test("Ohne eine einzige Lösung kommt nichts an", () => {
+  assert.equal(P.loesungenAusPlanr({ name: "x", aufgaben: [{ nr: 1, aufgabe: "a", loesung: "" }] }), null);
+  assert.equal(P.loesungenAusPlanr(null), null);
+  assert.equal(P.loesungenAusPlanr({ name: "x" }), null);
+});

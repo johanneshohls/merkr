@@ -3027,6 +3027,14 @@ function planImportieren(text){
           const neuRegie = String(th.regie).trim();
           if (st.regie !== neuRegie){ st.regie = neuRegie; geaendert++; }
         }
+        /* Die Lösungen zur TÜ, aus drillr über planr. planr schickt sie nur
+           für die Stunden der nächsten Tage; fehlt das Feld, bleibt der
+           letzte Stand stehen - eine Stunde von letzter Woche behält ihre
+           Lösungen, ohne dass planr sie jedes Mal neu holen muss. */
+        if (th.tuLoesungen && Array.isArray(th.tuLoesungen.aufgaben)){
+          const neuL = MerkrPlanr.loesungenAusPlanr(th.tuLoesungen);
+          if (neuL && JSON.stringify(st.tuLoesungen||null) !== JSON.stringify(neuL)){ st.tuLoesungen = neuL; geaendert++; }
+        }
         if (Array.isArray(th.phasen)){
           const neuPh = th.phasen.filter(x=>x).map((x,i)=>({
             schluessel: String(x.schluessel || x.seq || (i+1)),
@@ -6511,6 +6519,27 @@ function regieHausaufgabeHtml(k, st){
   return html;
 }
 
+/* Die Lösungen zur TÜ der Stunde: die erste Phase heißt "TÜ + Vergleichen",
+   und dafür müssen die Lösungen am Pult liegen, nicht in drillr auf einem
+   zweiten Gerät. Sie kommen als Klartext aus planr (dort aus drillr geholt);
+   ohne TÜ an der Stunde keine Karte. */
+function regieTueLoesungenHtml(st){
+  const l = st && st.tuLoesungen;
+  if (!l || !Array.isArray(l.aufgaben) || !l.aufgaben.length) return "";
+  let html = '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">TÜ-Lösungen</h2>'+
+    '<div class="hinweis" style="margin-bottom:8px">'+esc(l.name || "TÜ")+'</div>'+
+    '<table class="tab">';
+  for (const a of l.aufgaben){
+    html += '<tr><td style="width:28px;white-space:nowrap;vertical-align:top"><b>'+esc(String(a.nr))+')</b></td>'+
+      '<td style="vertical-align:top">'+
+        (a.aufgabe ? '<div class="hinweis" style="white-space:pre-wrap;margin-bottom:2px">'+esc(a.aufgabe)+'</div>' : '')+
+        '<div style="white-space:pre-wrap;font-weight:600">'+esc(a.loesung || "–")+'</div>'+
+      '</td></tr>';
+  }
+  html += '</table></div>';
+  return html;
+}
+
 function viewRegie(k){
   const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
   if (!st)
@@ -6540,6 +6569,7 @@ function viewRegie(k){
       '<div class="abstand"></div><button class="klein" data-a="planrJetzt">Stoffverteilung holen</button></div>';
   }
 
+  html += regieTueLoesungenHtml(st);
   html += regieHausaufgabeHtml(k, st);
 
   if (phasen.length){

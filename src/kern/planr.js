@@ -42,7 +42,32 @@ const MerkrPlanr = (function () {
     return null;
   }
 
-  return { norm: norm, kursFuer: kursFuer };
+  /**
+   * Die Lösungen zur TÜ, wie planr sie schickt (dort aus drillr geholt und in
+   * Klartext übersetzt): {name, link, aufgaben: [{nr, aufgabe, loesung}]}.
+   * Hier wird nur in Form gebracht - Zeichenketten, fortlaufende Nummern,
+   * nichts Leeres. null, wenn keine einzige Lösung dabei ist.
+   */
+  function loesungenAusPlanr(roh) {
+    if (!roh || !Array.isArray(roh.aufgaben)) return null;
+    const aufgaben = [];
+    for (const a of roh.aufgaben) {
+      if (!a) continue;
+      const loesung = String(a.loesung == null ? "" : a.loesung).trim();
+      const aufgabe = String(a.aufgabe == null ? "" : a.aufgabe).trim();
+      if (!loesung && !aufgabe) continue;
+      const nr = Number(a.nr);
+      aufgaben.push({ nr: isFinite(nr) && nr > 0 ? nr : aufgaben.length + 1, aufgabe: aufgabe, loesung: loesung });
+    }
+    if (!aufgaben.some((a) => a.loesung)) return null;
+    return {
+      name: String(roh.name == null ? "" : roh.name).trim(),
+      link: String(roh.link == null ? "" : roh.link).trim(),
+      aufgaben: aufgaben
+    };
+  }
+
+  return { norm: norm, kursFuer: kursFuer, loesungenAusPlanr: loesungenAusPlanr };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrPlanr;

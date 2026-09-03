@@ -434,6 +434,13 @@ Auf der planr-Seite ist es `lesson_plans.regie` (Migration `0022`, additiv) und 
 Importer übernimmt es nach `st.regie`; fehlt das Feld im Abruf, bleibt der letzte Stand stehen,
 statt eine Notiz zu löschen. Dasselbe Muster wie bei `tuThemen`.
 
+**TÜ-Lösungen** (seit 03.09.2026): Unter der Regie steht eine Karte mit den Lösungen zur TÜ der
+Stunde, nummeriert, Aufgabe klein darüber. Die erste Phase jeder Stunde heißt "TÜ + Vergleichen",
+und dafür lagen die Lösungen bisher nur in drillr. planr holt sie dort ab, übersetzt das LaTeX in
+Klartext und schickt sie als `tuLoesungen` je Termin - nur für die Stunden der nächsten Tage.
+`MerkrPlanr.loesungenAusPlanr` bringt sie in Form (`st.tuLoesungen`), und wie bei `regie` bleibt
+der letzte Stand stehen, wenn das Feld im Abruf fehlt. Ohne TÜ an der Stunde keine Karte.
+
 ## Graphit statt Pflaume (27.08.2026)
 
 Die Oberfläche trug Pflaume auf hellem Lila. Im Verbund war das eine Modulfarbe wie selbrs Smaragd
