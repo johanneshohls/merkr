@@ -785,6 +785,34 @@ const MerkrHausaufgaben = (function () {
   }
 
   /**
+   * Die Aufträge, die an `datum` gestellt wurden - was die Klasse aus dieser
+   * Stunde mitnimmt. Ohne Namen: hier zählt nur, was aufgegeben ist und bis
+   * wann, dazu wie viele schon angefangen haben.
+   *
+   * Getrennt von `fuerStunde`, weil es zwei Fragen sind: "wer hatte es fertig"
+   * gehört zum Stundenbeginn, "was ist aufgegeben" zum Stundenende.
+   */
+  function gestellteFuerStunde(kursStand, datum) {
+    if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
+    return kursStand.hausaufgaben
+      .filter((h) => String(h.gestelltAm) === String(datum))
+      .map((h) => {
+        const liste = h.schueler || [];
+        return {
+          titel: h.titel,
+          hinweis: h.hinweis || "",
+          ziel: Number(h.zielAufgaben) || 0,
+          gestelltAm: h.gestelltAm,
+          faelligAm: h.faelligAm,
+          gesamt: liste.length,
+          angefangen: liste.filter((e) => (Number(e.geschafft) || 0) > 0).length,
+          fertig: liste.filter((e) => !!e.fertig).length,
+        };
+      })
+      .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)));
+  }
+
+  /**
    * Den Eintrag eines Kurses in planrs Antwort finden.
    *
    * Über `kurs.planrKlasse` - das Feld, das der Stoffplan-Import ohnehin setzt
@@ -805,7 +833,7 @@ const MerkrHausaufgaben = (function () {
     return antwort.kurse.find((k) => norm(k.klasse) === name && (!fach || norm(k.fach) === fach)) || null;
   }
 
-  return { fuerStunde, kursStandVon };
+  return { fuerStunde, gestellteFuerStunde, kursStandVon };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHausaufgaben;
@@ -3809,12 +3837,24 @@ function hausaufgabenBlockHtml(st){
 
   const kursStand = MerkrHausaufgaben.kursStandVon(stand, kurs);
   const aufgaben = MerkrHausaufgaben.fuerStunde(kursStand, st.datum, kursSchueler(kurs.id));
-  if (!aufgaben.length) return "";
+  /* Zwei Fragen an dieselbe Stunde: wer hatte die alte fertig (Stundenbeginn),
+     und was nimmt die Klasse als neue mit (Stundenende). Bis zum 03.09.2026
+     stand hier nur die erste - die Aufgabe, die planr zu dieser Stunde gestellt
+     hatte, war in merkr nirgends zu sehen. */
+  const gestellt = MerkrHausaufgaben.gestellteFuerStunde(kursStand, st.datum);
+  if (!aufgaben.length && !gestellt.length) return "";
 
   const alter = Math.round((Date.now() - new Date(stand.geholtAm).getTime()) / 60000);
   const frisch = alter < 1 ? "gerade eben" : alter < 60 ? "vor " + alter + " min" : "vor " + Math.round(alter/60) + " h";
 
   let html = "";
+  for (const g of gestellt){
+    html += '<div class="feld"><label>Aufgegeben in dieser Stunde: '+esc(g.titel)+'</label>'+
+      '<p style="margin:4px 0">'+g.ziel+' Aufgaben in selbr, bis '+esc(fmtDatum(g.faelligAm))+
+      (g.hinweis ? ' · '+esc(g.hinweis) : '')+'</p>'+
+      '<p class="hinweis" style="margin-top:0">'+g.angefangen+' von '+g.gesamt+' haben angefangen, '+
+      g.fertig+' fertig · Stand '+frisch+'</p></div>';
+  }
   for (const h of aufgaben){
     const gesamt = h.erledigt.length + h.offen.length;
     html += '<div class="feld"><label>Hausaufgabe: '+esc(h.titel)+'</label>'+
@@ -8162,6 +8202,34 @@ viewKurs = function(){
    Thema und Ziel der Stunde, darunter der geplante Verlauf zum Mitlesen - abgehakt
    wird er am Stundenende im Abschluss-Dialog, nicht hier. */
 
+/* Die Hausaufgabe am Lehrertisch: was heute fällig war, was heute aufgegeben
+   ist. Beides aus dem selbr-Stand, nur Zahlen - die Namen stehen im
+   Stundendialog. Ohne Aufgabe an diesem Tag keine Karte. */
+function regieHausaufgabeHtml(k, st){
+  if (!planrGekoppelt()) return "";
+  const stand = S.hausaufgabenStand;
+  if (!stand || !Array.isArray(stand.kurse)) return "";
+  const kursStand = MerkrHausaufgaben.kursStandVon(stand, k);
+  const faellig = MerkrHausaufgaben.fuerStunde(kursStand, st.datum, kursSchueler(k.id));
+  const gestellt = MerkrHausaufgaben.gestellteFuerStunde(kursStand, st.datum);
+  if (!faellig.length && !gestellt.length) return "";
+
+  let html = '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Hausaufgabe</h2>';
+  for (const h of faellig){
+    const gesamt = h.erledigt.length + h.offen.length;
+    html += '<p style="margin:0 0 6px"><b>Fällig heute:</b> '+esc(h.titel)+
+      ' <span class="hinweis">· '+h.erledigt.length+' von '+gesamt+' fertig ('+h.ziel+' Aufgaben)</span></p>';
+  }
+  for (const g of gestellt){
+    html += '<p style="margin:0 0 6px"><b>Aufgegeben:</b> '+esc(g.titel)+
+      ' <span class="hinweis">· '+g.ziel+' Aufgaben in selbr, bis '+esc(fmtDatum(g.faelligAm))+
+      (g.hinweis ? ' · '+esc(g.hinweis) : '')+'</span></p>';
+  }
+  html += '<p class="hinweis" style="margin:0">Wer was hat, steht im Stundendialog. Stand '+
+    fmtStandAlter(stand.geholtAm)+' <button class="klein" data-a="planrJetzt">neu holen</button></p></div>';
+  return html;
+}
+
 function viewRegie(k){
   const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
   if (!st)
@@ -8190,6 +8258,8 @@ function viewRegie(k){
       '<p class="hinweis" style="margin:0">Für diese Stunde steht in planr keine Regie. Geschrieben wird sie dort im Feld Regie; hier steht sie, sobald die Stoffverteilung wieder geholt wurde.</p>'+
       '<div class="abstand"></div><button class="klein" data-a="planrJetzt">Stoffverteilung holen</button></div>';
   }
+
+  html += regieHausaufgabeHtml(k, st);
 
   if (phasen.length){
     html += '<div class="karte"><h2 style="font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);margin:0 0 8px">Verlauf</h2>'+

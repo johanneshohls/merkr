@@ -67,6 +67,34 @@ const MerkrHausaufgaben = (function () {
   }
 
   /**
+   * Die Aufträge, die an `datum` gestellt wurden - was die Klasse aus dieser
+   * Stunde mitnimmt. Ohne Namen: hier zählt nur, was aufgegeben ist und bis
+   * wann, dazu wie viele schon angefangen haben.
+   *
+   * Getrennt von `fuerStunde`, weil es zwei Fragen sind: "wer hatte es fertig"
+   * gehört zum Stundenbeginn, "was ist aufgegeben" zum Stundenende.
+   */
+  function gestellteFuerStunde(kursStand, datum) {
+    if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
+    return kursStand.hausaufgaben
+      .filter((h) => String(h.gestelltAm) === String(datum))
+      .map((h) => {
+        const liste = h.schueler || [];
+        return {
+          titel: h.titel,
+          hinweis: h.hinweis || "",
+          ziel: Number(h.zielAufgaben) || 0,
+          gestelltAm: h.gestelltAm,
+          faelligAm: h.faelligAm,
+          gesamt: liste.length,
+          angefangen: liste.filter((e) => (Number(e.geschafft) || 0) > 0).length,
+          fertig: liste.filter((e) => !!e.fertig).length,
+        };
+      })
+      .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)));
+  }
+
+  /**
    * Den Eintrag eines Kurses in planrs Antwort finden.
    *
    * Über `kurs.planrKlasse` - das Feld, das der Stoffplan-Import ohnehin setzt
@@ -87,7 +115,7 @@ const MerkrHausaufgaben = (function () {
     return antwort.kurse.find((k) => norm(k.klasse) === name && (!fach || norm(k.fach) === fach)) || null;
   }
 
-  return { fuerStunde, kursStandVon };
+  return { fuerStunde, gestellteFuerStunde, kursStandVon };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHausaufgaben;

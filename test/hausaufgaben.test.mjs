@@ -103,3 +103,27 @@ test("ohne planrKlasse hilft Fach und Klassenname", () => {
   assert.equal(H.kursStandVon(antwort, { name: "Mathe 9a", fach: "Mathematik" }).fach, "Mathematik");
   assert.equal(H.kursStandVon(antwort, { name: "Physik 9a", fach: "Physik" }).fach, "Physik");
 });
+
+test("gestellte Aufgabe: was die Klasse aus der Stunde mitnimmt", () => {
+  const r = H.gestellteFuerStunde(stand(), "2026-09-01");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].titel, "Spätere Aufgabe");
+  assert.equal(r[0].faelligAm, "2026-09-08");
+  assert.equal(r[0].ziel, 5);
+  assert.equal(r[0].gesamt, 1);
+  assert.equal(r[0].angefangen, 0);
+  assert.equal(r[0].fertig, 0);
+});
+
+test("gestellte Aufgabe: angefangen zählt, wer mindestens eine richtig hat", () => {
+  const r = H.gestellteFuerStunde(stand(), "2026-08-27");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].gesamt, 3);
+  assert.equal(r[0].angefangen, 3);
+  assert.equal(r[0].fertig, 1);
+});
+
+test("gestellte Aufgabe: ohne Stand nichts", () => {
+  assert.deepEqual(H.gestellteFuerStunde(null, "2026-09-01"), []);
+  assert.deepEqual(H.gestellteFuerStunde({ hausaufgaben: [] }, "2026-09-01"), []);
+});
