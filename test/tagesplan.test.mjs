@@ -79,3 +79,15 @@ test("Fehlen die Einzelstunden, werden sie aus dem Block gerechnet", () => {
     "2026-08-25", zuordnen(kurse()));
   assert.deepEqual(e.stunden, [3, 4]);
 });
+
+test("Ein von Hand ergänzter Termin steht mit eigenem Block im Tag", () => {
+  const [e] = T.amTag(
+    plan([{ classId: 4, kurs: "Mathematik 9d", klasse: "9d", block: 1, stunden: [1, 2],
+            raum: "205", art: "termin", hinweis: null }]),
+    "2026-08-25", zuordnen(kurse()));
+  assert.equal(e.kurs.id, "m9d");
+  assert.equal(e.art, "termin");
+  assert.equal(e.stunde, 1);
+  assert.equal(e.raum, "205");
+  assert.equal(T.hatUnterricht([e], "m9d"), true, "ein ergänzter Termin ist Unterricht");
+});

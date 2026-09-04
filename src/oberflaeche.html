@@ -3016,6 +3016,20 @@ function planImportieren(text){
         /* Stundenziel und Verlauf. Sie stehen hier nicht zum Planen - geplant
            wird drüben -, sondern zum Abhaken: am Stundenende sieht man, was
            liegen blieb, und meldet es zurück. */
+        /* Ein Termin, der nicht aus dem Stundenplan kommt: von Hand ergänzt,
+           mit eigenem Block und Raum. Ohne diese Zeilen stand er in planr im
+           ersten Block und in merkr nirgends - das Raster kennt nur die Regel.
+           Fehlt das Feld, fällt der Block weg: er ist eine Aussage über diesen
+           einen Tag, und die gilt nur, solange planr sie macht. */
+        if (th.block != null && Number(th.block) > 0){
+          const neuBlock = Number(th.block);
+          const neuRaum = th.raum != null ? String(th.raum) : null;
+          if (st.block !== neuBlock){ st.block = neuBlock; geaendert++; }
+          if ((st.raum||null) !== neuRaum){ st.raum = neuRaum; geaendert++; }
+        } else if (st.block != null){
+          delete st.block; delete st.raum; geaendert++;
+        }
+
         if (th.ziel != null){
           const neuZiel = String(th.ziel).trim();
           if (st.ziel !== neuZiel){ st.ziel = neuZiel; geaendert++; }
@@ -3975,6 +3989,18 @@ function kurseAmTag(iso){
     for (const slot of (k.slots||[]))
       if (slot.tag===wt && (slot.woche==="AB" || slot.woche===wb))
         liste.push({kurs:k, stunde:slot.stunde, woche:slot.woche});
+  /* Termine mit eigenem Block, aus planr: von Hand ergänzt, nicht aus dem
+     Stundenplan. Sie stehen an der Stunde (st.block), nicht am Kurs - und
+     liegen nur dort, wo das Raster an dem Tag nichts hat. */
+  for (const st of S.stunden){
+    if (st.datum !== iso || st.block == null) continue;
+    const k = S.kurse.find(x=>x.id===st.kursId && x.schuljahrId===sj.id);
+    if (!k) continue;
+    const stunde = Number(st.block)*2-1;
+    if (liste.some(e=>e.kurs.id===k.id && Number(e.stunde)===stunde)) continue;
+    liste.push({kurs:k, stunde:stunde, stunden:[stunde, stunde+1], block:Number(st.block),
+      raum:st.raum||null, art:"termin", name:k.name});
+  }
   return liste.sort((a,b)=>a.stunde-b.stunde);
 }
 
@@ -4270,6 +4296,7 @@ function viewWochenraster(){
         const zusatz = [];
         if (anders === "verlegt") zusatz.push("verlegt");
         if (anders === "zusatz") zusatz.push("Vertretung");
+        if (anders === "termin") zusatz.push("zusätzlich");
         /* Der Raum steht nur da, wo er die Nachricht ist. Im Regelfall gehört
            die Zeile dem Thema - den Raum weiß man. */
         if (anders && e.raum) zusatz.push("Raum "+e.raum);

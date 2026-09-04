@@ -72,6 +72,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | merkr aktualisiert sich selbst | gebaut, auf dem Gerät ungetestet |
 | Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy steht aus |
 | Stundenplan und A/B-Wochen aus planr | merkr fertig (8 Tests, im Browser geprüft); planr-Route erweitert, Deploy steht aus |
+| Termine mit eigenem Block aus planr | merkr fertig (1 Test, im Browser geprüft); planr-Route und Tagesplan erweitert |
 | Einrichten, Probelauf, Parallelbetrieb | offen |
 
 Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
@@ -329,6 +330,23 @@ Auf der planr-Seite steht die Rechnung in `lib/vplan-quelle.ts` als `tagesplanSt
 ein Abruf aus merkr läuft still im Hintergrund und darf planrs Stundenplan nicht anfassen. Ein
 hängender Schulserver hält den Rest der Antwort nicht auf: der Tagesplan läuft nebenher und fällt
 im Fehlerfall auf leer zurück.
+
+## Ein ergänzter Termin steht auch hier im ersten Block (04.09.2026)
+
+planr zeigte am Freitag Mathe 9a im ersten Block, merkr nicht. Der Termin kam nicht aus dem
+Stundenplan: er war drüben von Hand ergänzt ("Termin ergänzen" im Wochenraster) und trägt in
+`termine` einen eigenen Block und Raum. Der Tagesplan rechnete das Soll nur aus `class_slots`, die
+Stoffverteilung schickte je Termin nur das Datum - und merkrs Raster kennt nur die Regel.
+
+Jetzt drei Stellen: planrs `tagesplanStand` nimmt solche Termine als Art `termin` mit auf,
+`/api/stoffverteilung` gibt je Thema `block` und `raum` mit, wo der Termin sie hat, und der
+Importer schreibt sie an die Stunde (`st.block`, `st.raum`). `kurseAmTag` hängt diese Stunden an
+das eigene Raster, deshalb steht der Termin auch an Tagen, über die der Vertretungsplan nichts
+sagt. Fehlt das Feld beim nächsten Abruf, fällt der Block wieder weg - anders als bei `regie`, weil
+er eine Aussage über diesen einen Tag ist. Die Kachel trägt "zusätzlich", wie drüben.
+
+Nicht gelöst: zwei Termine derselben Klasse am selben Tag sind in merkr eine Stunde. Der Importer
+fasst über `ensureStunde(kurs, datum)` zusammen, das zweite Thema überschreibt das erste.
 
 ## Ziel und Verlauf zum Abhaken (seit 2026-08-22)
 
