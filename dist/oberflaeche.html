@@ -2239,15 +2239,33 @@ function wochenBuchstabe(sj, iso){
   const diff = Math.round((b-a)/(7*24*3600*1000));
   return ((diff % 2)+2) % 2 === 0 ? "A" : "B";
 }
-function ensureStunde(kursId, iso){
-  let st = S.stunden.find(x=>x.kursId===kursId && x.datum===iso);
-  if(!st){ st = {id:uid(), kursId, datum:iso, thema:"", hausaufgabe:"", geplant:"", ausfall:false}; S.stunden.push(st); speichern(); }
+/* Eine Stunde ist Kurs und Tag - und, seit dem 04.09.2026, ein Block, wenn
+   derselbe Kurs zweimal an einem Tag liegt. Die Regelstunde trägt keinen Block
+   (null); nur ein Termin, den planr mit eigenem Block schickt, hat einen. So
+   bleibt jeder Bestand, wie er ist, und zwei Kacheln am selben Tag führen zu
+   zwei Stunden statt zu derselben. */
+function blockVon(x){ return x && x.block != null && Number(x.block) > 0 ? Number(x.block) : null; }
+function stundeAm(kursId, iso, block){
+  const b = blockVon({block: block});
+  return S.stunden.find(x=>x.kursId===kursId && x.datum===iso && blockVon(x)===b);
+}
+/* Welche Stunde ein Eintrag des Tagesrasters meint: nur ein ergänzter Termin
+   ("termin") trägt einen eigenen Block, alles andere ist die Regelstunde. */
+function stundeBlockVon(e){ return e && e.art === "termin" ? blockVon(e) : null; }
+function ensureStunde(kursId, iso, block){
+  const b = blockVon({block: block});
+  let st = stundeAm(kursId, iso, b);
+  if(!st){
+    st = {id:uid(), kursId, datum:iso, thema:"", hausaufgabe:"", geplant:"", ausfall:false};
+    if (b) st.block = b;
+    S.stunden.push(st); speichern();
+  }
   return st;
 }
 function stundeVon(id){ return S.stunden.find(x=>x.id===id); }
 
 function addEreignis(schuelerId, kursId, typ, stufe, text){
-  const st = ensureStunde(kursId, R.datum);
+  const st = ensureStunde(kursId, R.datum, R.block);
   const e = {id:uid(), schuelerId, kursId, stundeId:st.id, ts:new Date().toISOString(), typ, stufe:(stufe===undefined?null:stufe), text:text||""};
   S.ereignisse.push(e); speichern();
   return e;
@@ -2369,7 +2387,7 @@ function fehlzeiten(schuelerId, kursId){
   };
 }
 function heutigeEreignisse(schuelerId, kursId){
-  const st = S.stunden.find(x=>x.kursId===kursId && x.datum===R.datum);
+  const st = stundeAm(kursId, R.datum, R.block);
   if (!st) return [];
   return S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.stundeId===st.id);
 }
@@ -2459,7 +2477,7 @@ function kursKopfzeile(){ return ""; }   /* ersetzt - die geltende Fassung steht
 function viewSitzplan(k){
   const schueler = kursSchueler(k.id);
   if (!schueler.length) return leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   let html = '<div id="sitzflaeche">';
   let auto = 0;
   for (const s of schueler){
@@ -2499,7 +2517,7 @@ function viewSitzplan(k){
 function viewListe(k){
   const schueler = kursSchueler(k.id);
   if (!schueler.length) return leer("Noch keine Schüler in diesem Kurs.", "Schüler hinzufügen", "tab", "kurscfg");
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   let html = "";
   for (const s of schueler){
     const anw = st ? anwesenheitVon(s.id, st.id) : null;
@@ -2555,7 +2573,7 @@ let popupAnkerZuletzt = null;
 function popupSchuelerHtml(schuelerId){
   const s = schuelerVon(schuelerId); if (!s) return "";
   const k = kursVon(R.kursId);
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   const anw = st ? anwesenheitVon(s.id, st.id) : null;
   const fehlt = anw && anw.status==="fehlt";
   let html = '<div class="pkopf"><span class="pname">'+esc(s.vorname)+' '+esc(s.name)+'</span>'+
@@ -2993,7 +3011,7 @@ document.addEventListener("click", ev=>{
   const k = R.kursId ? kursVon(R.kursId) : null;
 
   if (a==="go"){ R.view = el.dataset.view; if(R.view==="kurs"&&!R.kursId) R.view="home"; schliessePopover(); zeichne(); }
-  else if (a==="kursOeffnen"){ R.view="kurs"; R.kursId=id; R.tab="sitzplan"; R.datum=todayISO(); zeichne(); }
+  else if (a==="kursOeffnen"){ R.view="kurs"; R.kursId=id; R.tab="sitzplan"; R.datum=todayISO(); R.block=null; zeichne(); }
   else if (a==="tab"){ R.tab=id; zeichne(); }
   else if (a==="modalZu"){ schliessePopover(); zeichne(); }
   else if (a==="modalZuArbeiten"){ schliessePopover(); R.tab="arbeiten"; zeichne(); }
@@ -3103,7 +3121,7 @@ document.addEventListener("click", ev=>{
   }
   else if (a==="popupFertig"){ schliessePopover(); zeichne(); }
   else if (a==="fehltUmschalten"){
-    const st = ensureStunde(R.kursId, R.datum);
+    const st = ensureStunde(R.kursId, R.datum, R.block);
     const anw = anwesenheitVon(id, st.id);
     const neu = (anw && anw.status==="fehlt") ? "anwesend" : "fehlt";
     setzeAnwesenheit(id, st.id, neu);
@@ -3144,7 +3162,7 @@ document.addEventListener("click", ev=>{
   }
 
   /* Stunden */
-  else if (a==="stundeDialog"){ zeigeModal(stundeDialogHtml(ensureStunde(R.kursId, R.datum))); }
+  else if (a==="stundeDialog"){ zeigeModal(stundeDialogHtml(ensureStunde(R.kursId, R.datum, R.block))); }
   else if (a==="stundeNeuDialog"){
     zeigeModal('<h2>Stunde anlegen</h2><div class="feld"><label>Datum</label><input type="date" id="stNeuDatum" value="'+R.datum+'"></div>'+
       '<div class="zeile"><button class="primar" data-a="stundeNeuWeiter">Weiter</button><button data-a="modalZu">Abbrechen</button></div>');
@@ -3262,7 +3280,7 @@ document.addEventListener("click", ev=>{
 
 document.addEventListener("change", ev=>{
   const el = ev.target;
-  if (el.dataset.aChange==="datumWechsel"){ R.datum = el.value || todayISO(); zeichne(); }
+  if (el.dataset.aChange==="datumWechsel"){ R.datum = el.value || todayISO(); R.block = null; zeichne(); }
   else if (el.dataset.aChange==="mdlModusWechsel"){
     const b = document.getElementById("mdlAnteilBlock");
     if (b) b.style.display = (el.value==="anteil") ? "block" : "none";
@@ -4719,7 +4737,10 @@ function planImportieren(text){
       for (const th of p.themen||[]){
         if (!th || !th.datum || !/^\d{4}-\d{2}-\d{2}$/.test(th.datum)) continue;
         const vorher = S.stunden.length;
-        const st = ensureStunde(kurs.id, th.datum);
+        /* Ein Termin mit eigenem Block (von Hand in planr ergänzt) ist eine
+           eigene Stunde neben der Regelstunde des Tages - sonst führten zwei
+           Kacheln am selben Tag auf dieselbe Stunde. */
+        const st = ensureStunde(kurs.id, th.datum, th.block != null ? Number(th.block) : null);
         if (S.stunden.length !== vorher) geaendert++;
 
         const neuesThema = String(th.thema||"");
@@ -4765,13 +4786,9 @@ function planImportieren(text){
            ersten Block und in merkr nirgends - das Raster kennt nur die Regel.
            Fehlt das Feld, fällt der Block weg: er ist eine Aussage über diesen
            einen Tag, und die gilt nur, solange planr sie macht. */
-        if (th.block != null && Number(th.block) > 0){
-          const neuBlock = Number(th.block);
+        if (blockVon(st)){
           const neuRaum = th.raum != null ? String(th.raum) : null;
-          if (st.block !== neuBlock){ st.block = neuBlock; geaendert++; }
           if ((st.raum||null) !== neuRaum){ st.raum = neuRaum; geaendert++; }
-        } else if (st.block != null){
-          delete st.block; delete st.raum; geaendert++;
         }
 
         if (th.ziel != null){
@@ -5316,7 +5333,7 @@ function heuteMarke(text, art){
 
 /* --- Anwesenheit: alle sind da, angetippt wird die Abweichung --- */
 anwesenheitDialogHtml = function(k, alsTab){
-  const st = ensureStunde(k.id, R.datum);
+  const st = ensureStunde(k.id, R.datum, R.block);
   const schueler = kursSchueler(k.id).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
 
@@ -5758,13 +5775,16 @@ function wochenTage(iso){
   return tage;
 }
 
+/* Der Block als Attribut, nur wo er die Stunde unterscheidet. */
+function blockAttr(e){ const b = stundeBlockVon(e); return b ? ' data-block="'+b+'"' : ''; }
+
 function stundenKarte(e, iso, istHeute){
-  const st = S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===iso);
+  const st = stundeAm(e.kurs.id, iso, stundeBlockVon(e));
   const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
   const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
   const gehalten = st && st.thema;
 
-  return '<div class="karte" data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+iso+'" '+
+  return '<div class="karte" data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+iso+'"'+blockAttr(e)+' '+
     /* Feste Breite statt Dehnen: eine einzelne Stunde soll nicht die ganze Zeile
        füllen, sonst steht daneben ein leeres Feld ohne Bedeutung. */
     'style="cursor:pointer;padding:11px 13px;margin:0;flex:0 1 250px;min-width:210px;'+
@@ -5836,6 +5856,7 @@ document.addEventListener("click", ev=>{
     /* Die Stunde des angetippten Tages öffnen, nicht die von heute. */
     R.kursId = el.dataset.id;
     R.datum = el.dataset.datum || todayISO();
+    R.block = el.dataset.block ? Number(el.dataset.block) : null;
     R.view = "kurs"; R.tab = "sitzplan";
     zeichne();
   }
@@ -5917,7 +5938,7 @@ function schnellzugriff(){
   const a = aktuelleStunde();
   if (!a) return "";
   const kurs = a.e.kurs;
-  const st = kurs ? S.stunden.find(x=>x.kursId===kurs.id && x.datum===todayISO()) : null;
+  const st = kurs ? stundeAm(kurs.id, todayISO(), stundeBlockVon(a.e)) : null;
   const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
   const kopf = a.art==="laeuft" ? "Läuft gerade"
     : a.art==="gleich" ? "Gleich, in "+a.minuten+" Minuten" : "Als Nächstes heute";
@@ -5928,7 +5949,7 @@ function schnellzugriff(){
      führt (Vertretung in einer fremden Klasse, Aufsicht), bleibt unberührbar:
      dahinter liegt keine Stunde, die sich öffnen ließe. */
   const klick = kurs
-    ? ' data-a="stundeOeffnen" data-id="'+kurs.id+'" data-datum="'+todayISO()+'"'
+    ? ' data-a="stundeOeffnen" data-id="'+kurs.id+'" data-datum="'+todayISO()+'"'+blockAttr(a.e)
     : '';
 
   return '<div class="karte"'+klick+' style="display:flex;align-items:center;gap:16px;padding:16px 18px;margin-bottom:20px;'+
@@ -6027,7 +6048,7 @@ function viewWochenraster(){
       }
       html += '<td>';
       for (const e of treffer){
-        const st = e.kurs ? S.stunden.find(x=>x.kursId===e.kurs.id && x.datum===t.iso) : null;
+        const st = e.kurs ? stundeAm(e.kurs.id, t.iso, stundeBlockVon(e)) : null;
         const thema = st && st.thema ? st.thema : (st && st.geplant ? st.geplant : "");
         const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
         const gehalten = st && st.thema;
@@ -6046,7 +6067,7 @@ function viewWochenraster(){
         if (anders && e.raum) zusatz.push("Raum "+e.raum);
         const unterzeile = ausfall ? (e.hinweis || "fällt aus")
           : (zusatz.length ? zusatz.join(" · ") : thema);
-        html += '<div '+(klickbar ? 'data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+t.iso+'" ' : '')+
+        html += '<div '+(klickbar ? 'data-a="stundeOeffnen" data-id="'+e.kurs.id+'" data-datum="'+t.iso+'"'+blockAttr(e)+' ' : '')+
           'style="'+(klickbar?'cursor:pointer;':'')+'min-height:52px;border-radius:12px;padding:7px 9px;background:var(--karte);'+
           (ausfall?'opacity:.55;':'')+
           'border-left:5px solid '+esc((e.kurs && e.kurs.farbe) || (anders ? "var(--s2)" : "var(--akzent)"))+';'+
@@ -6428,7 +6449,7 @@ const anwesenheitOhnePlan = anwesenheitDialogHtml;
 document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="anwTag"]');
   if (!el) return;
-  R.datum = el.dataset.datum;
+  R.datum = el.dataset.datum; R.block = null;
   R.view = "kurs"; R.tab = "anwesenheit";
   zeichne();
 });
@@ -6487,7 +6508,7 @@ viewSitzplan = function(k){
 /* Die Kopfzeile: Blätterer statt Datumsfeld, sonst unverändert. */
 kursKopfzeile = function(k){
   if (!hatUnterricht(k.id, R.datum)) return "";
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   const thema = st && st.thema ? esc(st.thema)
     : (st && st.geplant ? esc(st.geplant)+' <span class="hinweis">· geplant</span>'
     : '<span class="hinweis">kein Thema eingetragen</span>');
@@ -6702,7 +6723,7 @@ function aufrufTopf(k){
 
 /** Wer heute in Frage kommt: im Kurs und nicht als fehlend eingetragen. */
 function aufrufbare(k){
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   return kursSchueler(k.id).filter(s=>{
     if (!st) return true;
     const a = anwesenheitVon(s.id, st.id);
@@ -7222,7 +7243,7 @@ function unterrichtstage(k){
 
 /** Was an einem Termin schon steht - dieselben Zeichen wie im Wochenplan. */
 function stundenStand(k, iso){
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===iso);
+  const st = stundeAm(k.id, iso, null);
   if (st && st.ausfall) return {farbe:"var(--rot)", wort:"Ausfall", ausfall:true};
   const notizen = st ? S.ereignisse.filter(x=>x.stundeId===st.id && x.stufe!=null).length : 0;
   if (notizen) return {farbe:"var(--s2)", wort:notizen+(notizen===1?" Notiz":" Notizen")};
@@ -7266,7 +7287,8 @@ const tagKopfMitPfeilen = tagKopf;
 tagKopf = function(k){
   if (STUNDENREIHE_TABS.indexOf(R.tab) < 0) return tagKopfMitPfeilen(k);
   const wt = wochentagName(new Date(R.datum+"T12:00:00").getDay());
-  return '<div class="zeile"><b>'+wt+', '+esc(fmtDatum(R.datum))+'</b>'+
+  return '<div class="zeile"><b>'+wt+', '+esc(fmtDatum(R.datum))+
+    (R.block ? ' · '+esc(blockLabel(R.block*2-1))+' Stunde' : '')+'</b>'+
     (R.datum !== todayISO() && hatUnterricht(k.id, todayISO())
       ? '<button class="klein" data-a="stundenTag" data-datum="'+todayISO()+'">Heute</button>' : '')+
     '</div>';
@@ -7276,7 +7298,7 @@ tagKopf = function(k){
 document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="stundenTag"]');
   if (!el) return;
-  R.datum = el.dataset.datum;
+  R.datum = el.dataset.datum; R.block = null;
   zeichne();
 });
 
@@ -7455,7 +7477,7 @@ document.addEventListener("click", ev=>{
 
   if (a === "stundeAbschliessen"){
     if (!k) return;
-    const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum) || ensureStunde(k.id, R.datum);
+    const st = stundeAm(k.id, R.datum, R.block) || ensureStunde(k.id, R.datum, R.block);
     R.abschluss = null;
     stundeAbschliessenDialog(k, st);
   }
@@ -7485,7 +7507,7 @@ const kopfzeileOhneAbschluss = kursKopfzeile;
 kursKopfzeile = function(k){
   const html = kopfzeileOhneAbschluss(k);
   if (!html || !hatUnterricht(k.id, R.datum)) return html;
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   const fertig = st && st.mitarbeitBestaetigt;
   const knopf = '<button class="klein'+(fertig?'':' primar')+'" data-a="stundeAbschliessen">'+
     (fertig ? 'Mitarbeit steht' : 'Mitarbeit abschließen')+'</button>';
@@ -7756,7 +7778,8 @@ function mitarbeitVerlaufDialog(k, s){
     for (const x of m.liste)
       h += '<tr><td>'+fmtDatum(x.datum)+'</td><td>'+esc(x.thema||"–")+'</td>'+
         '<td><b>'+x.wert+'</b></td>'+
-        '<td><button class="klein" data-a="mitarbeitStunde" data-datum="'+x.datum+'">Ändern</button></td></tr>';
+        '<td><button class="klein" data-a="mitarbeitStunde" data-datum="'+x.datum+'"'+
+        (x.stundeId ? ' data-stunde="'+x.stundeId+'"' : '')+'>Ändern</button></td></tr>';
     h += '</table>';
   }
   h += '<div class="zeile" style="margin-top:14px"><button data-a="modalZu">Schließen</button></div>';
@@ -7772,9 +7795,10 @@ document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="mitarbeitStunde"]');
   if (!el) return;
   const k = kursVon(R.kursId); if (!k) return;
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===el.dataset.datum);
-  if (!st) return;
-  R.datum = st.datum; R.abschluss = null;
+  const st = el.dataset.stunde ? stundeVon(el.dataset.stunde)
+    : stundeAm(k.id, el.dataset.datum, null);
+  if (!st || st.kursId !== k.id) return;
+  R.datum = st.datum; R.block = blockVon(st); R.abschluss = null;
   stundeAbschliessenDialog(k, st);
 });
 
@@ -8312,7 +8336,7 @@ function regieTueLoesungenHtml(st){
 }
 
 function viewRegie(k){
-  const st = S.stunden.find(x=>x.kursId===k.id && x.datum===R.datum);
+  const st = stundeAm(k.id, R.datum, R.block);
   if (!st)
     return tagKopf(k) + leer("An diesem Tag hat der Kurs keine Stunde.", null);
 

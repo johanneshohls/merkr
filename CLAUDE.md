@@ -345,8 +345,16 @@ das eigene Raster, deshalb steht der Termin auch an Tagen, über die der Vertret
 sagt. Fehlt das Feld beim nächsten Abruf, fällt der Block wieder weg - anders als bei `regie`, weil
 er eine Aussage über diesen einen Tag ist. Die Kachel trägt "zusätzlich", wie drüben.
 
-Nicht gelöst: zwei Termine derselben Klasse am selben Tag sind in merkr eine Stunde. Der Importer
-fasst über `ensureStunde(kurs, datum)` zusammen, das zweite Thema überschreibt das erste.
+**Zwei Blöcke, zwei Stunden (seit dem Vormittag desselben Tages):** die 9a lag am 4.9. im ersten und
+im dritten Block, und beide Kacheln öffneten dieselbe Stunde, weil eine Stunde bis dahin Kurs und Tag
+war (`ensureStunde(kurs, datum)`). Jetzt gehört der Block dazu: die Regelstunde trägt keinen
+(`null`), ein ergänzter Termin seinen eigenen (`st.block`), und `stundeAm(kursId, iso, block)` löst
+auf. Die Kacheln geben `data-block` mit, der Handler setzt `R.block`, und jeder Tagwechsel setzt ihn
+zurück. Die zehn Aufrufe am eingestellten Tag laufen über `R.block`; die Terminreihe zeigt weiter
+die Regelstunde. Bestand bleibt unberührt, weil kein Block dasselbe ist wie vorher.
+
+Verlaufsliste der Mitarbeit: der Knopf "Ändern" trägt seit dem 04.09. die Stunden-Id, nicht nur das
+Datum - sonst hätte er an einem Tag mit zwei Blöcken immer die Regelstunde geöffnet.
 
 ## Ziel und Verlauf zum Abhaken (seit 2026-08-22)
 
