@@ -5680,10 +5680,13 @@ function stundeAbschliessenDialog(k, st){
     '<div class="zeile raum">'+
     '<h2 style="margin:0">Mitarbeit '+wt+', '+esc(fmtDatum(st.datum))+'</h2>'+
     '<div class="zeile"><button class="klein" data-a="modalZu">Abbrechen</button>'+
+    '<button class="klein" data-a="abschlussAlleLeer" data-id="'+st.id+'" '+
+    'title="z. B. wenn ein Test geschrieben wird">Alle: keine Note</button>'+
     '<button class="primar" data-a="abschlussSpeichern" data-id="'+st.id+'">'+
     (st.mitarbeitBestaetigt ? 'Erneut bestätigen' : 'Bestätigen')+'</button></div></div>'+
     '<p class="hinweis" style="margin:6px 0 0">Vorgeschlagen ist, was die Notizen dieser Stunde ergeben - '+
-    'ohne Notiz '+(sys.typ==="punkte" ? "acht Punkte" : "eine Drei")+'. Ändern, wo es nicht stimmt.</p></div>';
+    'ohne Notiz '+(sys.typ==="punkte" ? "acht Punkte" : "eine Drei")+'. Ändern, wo es nicht stimmt. '+
+    '"Alle: keine Note" setzt jeden auf "–", etwa wenn statt Mitarbeit ein Test geschrieben wurde.</p></div>';
 
   for (const s of schueler){
     const anw = anwesenheitVon(s.id, st.id);
@@ -5742,6 +5745,16 @@ document.addEventListener("click", ev=>{
     const st = stundeVon(R.abschluss.stundeId);
     if (!st) return;
     R.abschluss.werte[el.dataset.id] = a === "abschlussLeer" ? null : Number(el.dataset.wert);
+    stundeAbschliessenDialog(k, st);
+  }
+  else if (a === "abschlussAlleLeer"){
+    if (!k || !R.abschluss) return;
+    const st = stundeVon(R.abschluss.stundeId);
+    if (!st) return;
+    for (const s of kursSchueler(k.id)){
+      const anw = anwesenheitVon(s.id, st.id);
+      if (!(anw && anw.status === "fehlt")) R.abschluss.werte[s.id] = null;
+    }
     stundeAbschliessenDialog(k, st);
   }
   else if (a === "abschlussSpeichern"){
