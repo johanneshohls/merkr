@@ -7424,13 +7424,13 @@ function stundeAbschliessenDialog(k, st){
     '<div class="zeile raum">'+
     '<h2 style="margin:0">Mitarbeit '+wt+', '+esc(fmtDatum(st.datum))+'</h2>'+
     '<div class="zeile"><button class="klein" data-a="modalZu">Abbrechen</button>'+
-    '<button class="klein" data-a="abschlussAlleLeer" data-id="'+st.id+'" '+
-    'title="z. B. wenn ein Test geschrieben wird">Alle: keine Note</button>'+
     '<button class="primar" data-a="abschlussSpeichern" data-id="'+st.id+'">'+
     (st.mitarbeitBestaetigt ? 'Erneut bestätigen' : 'Bestätigen')+'</button></div></div>'+
     '<p class="hinweis" style="margin:6px 0 0">Vorgeschlagen ist, was die Notizen dieser Stunde ergeben - '+
-    'ohne Notiz '+(sys.typ==="punkte" ? "acht Punkte" : "eine Drei")+'. Ändern, wo es nicht stimmt. '+
-    '"Alle: keine Note" setzt jeden auf "–", etwa wenn statt Mitarbeit ein Test geschrieben wurde.</p></div>';
+    'ohne Notiz '+(sys.typ==="punkte" ? "acht Punkte" : "eine Drei")+'. Ändern, wo es nicht stimmt.</p>'+
+    '<div class="zeile raum" style="margin-top:8px">'+
+    '<button class="klein" data-a="abschlussAlleLeer" data-id="'+st.id+'" '+
+    'title="z. B. wenn ein Test geschrieben wird">Alle: keine Note</button></div></div>';
 
   for (const s of schueler){
     const anw = anwesenheitVon(s.id, st.id);
