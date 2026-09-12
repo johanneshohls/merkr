@@ -65,3 +65,12 @@ test("Die checkr-Zeilen tragen ein Kürzel je Zeile, keine Namen", () => {
     if (s.vorname) assert.ok(!text.includes(s.vorname), "Vorname darf nicht mitgehen: " + s.vorname);
   }
 });
+
+test("Ohne Kürzel geht der selbr-Code nach checkr", () => {
+  const sus = klasse();
+  sus[0].selbrCode = "ZGTQE";
+  sus[1].kuerzel = "9d-01";
+  sus[1].selbrCode = "WNWSD";
+  assert.equal(K.codeVon(sus[1]), "9d-01");
+  assert.equal(K.checkrZeilen(sus), "9d-01\nZGTQE");
+});

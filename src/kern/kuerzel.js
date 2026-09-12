@@ -66,14 +66,28 @@ const MerkrKuerzel = (function () {
   }
 
   /**
+   * Der Code, unter dem ein Kind in checkr steht: das Kürzel, und wo keines
+   * gesetzt ist, der selbr-Code. Ein Kind hat einen Code, nicht zwei - die
+   * Deckblätter des Terme-Tests 8d trugen schon die selbr-Codes.
+   */
+  function codeVon(s) {
+    // Ausgegeben wird die Schreibung, die auf dem Deckblatt steht - verglichen
+    // wird ohnehin normalisiert, gelesen wird von Menschen.
+    const k = String((s && s.kuerzel) || "").trim();
+    if (normalisiert(k)) return k;
+    const c = String((s && s.selbrCode) || "").trim();
+    return normalisiert(c) ? c : "";
+  }
+
+  /**
    * Das, was nach checkr geht: `PUT /api/classes/{id}/students` erwartet
    * [{name}] und vergibt die UUIDs selbst. Namen gehen nicht mit - das ist der
    * ganze Punkt.
    */
   function checkrListe(schueler) {
     return schueler
-      .filter((s) => normalisiert(s.kuerzel))
-      .map((s) => ({ name: String(s.kuerzel).trim() }))
+      .filter((s) => codeVon(s))
+      .map((s) => ({ name: codeVon(s) }))
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
   }
 
@@ -91,6 +105,7 @@ const MerkrKuerzel = (function () {
     normalisiert: normalisiert,
     vergeben: vergeben,
     doppelte: doppelte,
+    codeVon: codeVon,
     checkrListe: checkrListe,
     checkrZeilen: checkrZeilen
   };

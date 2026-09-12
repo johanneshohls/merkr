@@ -57,7 +57,14 @@ const MerkrErgebnisse = (function () {
   /**
    * Die Zeilen aus checkr den Schülern zuordnen.
    *
-   * @param schueler [{id, name, vorname, kuerzel}]
+   * Gesucht wird unter dem Kürzel und, wo keines steht, unter dem selbr-Code:
+   * die Deckblätter des Terme-Tests 8d trugen die selbr-Codes, und zwei
+   * Codespalten für dasselbe Kind zu pflegen ist eine Fehlerquelle ohne Gewinn.
+   * Das Kürzel gewinnt, wo es gesetzt ist. Ein selbr-Code, den zwei Kinder
+   * teilen, ordnet nichts zu - lieber eine Meldung als die Punkte beim
+   * falschen Kind.
+   *
+   * @param schueler [{id, name, vorname, kuerzel, selbrCode}]
    * @param zeilen [{code, erreicht, maximal, prozent}]
    * @param typ "noten" | "punkte"
    * @returns {treffer, ohneSchueler, ohneArbeit, doppelt}
@@ -68,9 +75,19 @@ const MerkrErgebnisse = (function () {
    */
   function zuordnen(schueler, zeilen, typ) {
     const nachKuerzel = new Map();
+    const nachSelbr = new Map();
     for (const s of schueler || []) {
       const k = norm(s.kuerzel);
       if (k) nachKuerzel.set(k, s);
+    }
+    // Der Rückfall auf den selbr-Code, nachrangig: ein Kürzel, das jemand von
+    // Hand gesetzt hat, darf davon nicht verdrängt werden.
+    const mehrdeutig = new Set();
+    for (const s of schueler || []) {
+      const c = norm(s.selbrCode);
+      if (!c || nachKuerzel.has(c)) continue;
+      if (nachSelbr.has(c)) { mehrdeutig.add(c); continue; }
+      nachSelbr.set(c, s);
     }
 
     const treffer = [];
@@ -86,7 +103,7 @@ const MerkrErgebnisse = (function () {
       if (gesehen.has(key)) { doppelt.push(code); continue; }
       gesehen.add(key);
 
-      const s = nachKuerzel.get(key);
+      const s = nachKuerzel.get(key) || (mehrdeutig.has(key) ? null : nachSelbr.get(key));
       if (!s) { ohneSchueler.push(code); continue; }
 
       // Wer nicht mitgeschrieben hat, steht in checkr bei 0 von 0. Daraus eine

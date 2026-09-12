@@ -80,3 +80,36 @@ test("Oberstufe rechnet in Punkten", () => {
   assert.equal(E.wertAusProzent(10, "punkte"), 0);
   assert.equal(E.wertAusProzent(96, "noten"), 1);
 });
+
+test("Ohne Kürzel trifft der selbr-Code", () => {
+  const sus = [
+    { id: "a", name: "Berg", vorname: "Ben", kuerzel: "", selbrCode: "SYR2H" },
+    { id: "b", name: "Meyer", vorname: "Cem", kuerzel: "", selbrCode: "XV63V" }
+  ];
+  const erg = E.zuordnen(sus, [
+    { code: "SYR2H", erreicht: 6, maximal: 33, prozent: 18 },
+    { code: "xv63v", erreicht: 27, maximal: 33, prozent: 82 }
+  ], "noten");
+  assert.deepEqual(erg.treffer.map(t => [t.schuelerId, t.wert]), [["a", 6], ["b", 2]]);
+  assert.deepEqual(erg.ohneSchueler, []);
+});
+
+test("Das Kürzel gewinnt gegen einen fremden selbr-Code", () => {
+  const sus = [
+    { id: "a", name: "Berg", vorname: "Ben", kuerzel: "KR7V3", selbrCode: "AAAAA" },
+    { id: "b", name: "Meyer", vorname: "Cem", kuerzel: "", selbrCode: "KR7V3" }
+  ];
+  const erg = E.zuordnen(sus, [{ code: "KR7V3", erreicht: 22, maximal: 33, prozent: 67 }], "noten");
+  assert.equal(erg.treffer.length, 1);
+  assert.equal(erg.treffer[0].schuelerId, "a");
+});
+
+test("Ein selbr-Code, den zwei teilen, ordnet nichts zu", () => {
+  const sus = [
+    { id: "a", name: "Berg", vorname: "Ben", kuerzel: "", selbrCode: "UJGXP" },
+    { id: "b", name: "Meyer", vorname: "Cem", kuerzel: "", selbrCode: "ujgxp" }
+  ];
+  const erg = E.zuordnen(sus, [{ code: "UJGXP", erreicht: 12, maximal: 33, prozent: 36 }], "noten");
+  assert.deepEqual(erg.treffer, []);
+  assert.deepEqual(erg.ohneSchueler, ["UJGXP"]);
+});

@@ -2732,11 +2732,12 @@ function kuerzelKarte(k){
   const schueler = kursSchueler(k.id).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
   const doppelt = MerkrKuerzel.doppelte(schueler);
-  const ohne = schueler.filter(s=>!MerkrKuerzel.normalisiert(s.kuerzel)).length;
+  const ohne = schueler.filter(s=>!MerkrKuerzel.codeVon(s)).length;
 
   let html = '<div class="karte"><h2>Kürzel für checkr</h2>'+
     '<p class="hinweis">Der Code, unter dem dieser Kurs in checkr geführt wird. Er steht auf dem '+
-    'Deckblatt der Arbeit; checkr sieht nur ihn und nie den Namen.</p>';
+    'Deckblatt der Arbeit; checkr sieht nur ihn und nie den Namen. '+
+    '<b>Bleibt das Feld leer, gilt der selbr-Code</b> - ein Kind, ein Code.</p>';
 
   if (!schueler.length) return html + '<p class="hinweis">Noch keine Schüler in diesem Kurs.</p></div>';
 
@@ -2744,16 +2745,19 @@ function kuerzelKarte(k){
     html += '<p class="hinweis" style="color:var(--rot)"><b>Doppelt vergeben: '+esc(doppelt.join(", "))+'.</b> '+
       'Zwei gleiche Codes sind in checkr ein einziger Schüler - die Arbeit des einen landet beim anderen.</p>';
 
-  html += '<table class="tab">';
-  for (const s of schueler)
+  html += '<table class="tab"><tr><th>Schüler</th><th>Kürzel</th><th>gilt</th></tr>';
+  for (const s of schueler){
+    const code = MerkrKuerzel.codeVon(s);
     html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
-      '<td style="width:130px"><input id="ku-'+s.id+'" value="'+esc(s.kuerzel||"")+'" placeholder="'+esc(k.name)+'-01"></td></tr>';
+      '<td style="width:130px"><input id="ku-'+s.id+'" value="'+esc(s.kuerzel||"")+'" placeholder="'+esc(s.selbrCode||(k.name+"-01"))+'"></td>'+
+      '<td class="hinweis">'+(code ? esc(code)+(MerkrKuerzel.normalisiert(s.kuerzel) ? '' : ' (selbr)') : 'kein Code')+'</td></tr>';
+  }
   html += '</table><div class="abstand"></div>'+
     '<div class="zeile"><button class="primar" data-a="kuerzelSpeichern" data-id="'+k.id+'">Kürzel speichern</button>'+
     '<button data-a="kuerzelVergeben" data-id="'+k.id+'">Fehlende vergeben'+(ohne?' ('+ohne+')':'')+'</button>'+
     '<button data-a="kuerzelExport" data-id="'+k.id+'">Für checkr ausgeben</button>'+
     '<button data-a="kuerzelPdf" data-id="'+k.id+'">Kürzelliste als PDF</button></div>'+
-    '<p class="hinweis">In checkr: Klasse öffnen, "Mehrere hinzufügen", die Kürzel einfügen. '+
+    '<p class="hinweis">In checkr: Klasse öffnen, "Mehrere hinzufügen", die Codes einfügen. '+
     'Die Zuordnung läuft dort über den Code, deshalb muss er auf beiden Seiten gleich geschrieben sein.</p></div>';
   return html;
 }
@@ -2797,7 +2801,7 @@ function kuerzellistePdf(kursId){
   const kurs = kursVon(kursId);
   const zeilen = kursSchueler(kursId).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"))
-    .map(s=>[s.name+", "+s.vorname, s.kuerzel||"–"]);
+    .map(s=>[s.name+", "+s.vorname, MerkrKuerzel.codeVon(s)||"–"]);
   return pdfTabellenDokument(
     "Kürzel "+kurs.name,
     (kurs.fach||"")+" · Jahrgang "+kurs.jahrgang+" · Code für checkr",
@@ -2860,8 +2864,11 @@ document.addEventListener("click", ev=>{
   else if (a==="kuerzelVergeben"){
     /* Belegt sind auch die Kürzel aller anderen Kurse: ein Code darf im ganzen
        Bestand nur einmal vorkommen, sonst trifft der Rückweg den Falschen. */
-    const fremd = S.schueler.filter(x=>!schueler.some(s=>s.id===x.id)).map(x=>x.kuerzel);
-    const neu = MerkrKuerzel.vergeben(schueler, kurs.name, fremd);
+    const fremd = S.schueler.filter(x=>!schueler.some(s=>s.id===x.id)).map(x=>MerkrKuerzel.codeVon(x));
+    /* Wer über seinen selbr-Code erreichbar ist, braucht kein zweites Kürzel -
+       sonst stünden zwei Codes für dasselbe Kind in checkrs Klassenliste. */
+    const offen = schueler.filter(s=>!MerkrKuerzel.codeVon(s));
+    const neu = MerkrKuerzel.vergeben(offen, kurs.name, fremd.concat(schueler.map(s=>MerkrKuerzel.codeVon(s))));
     if (!neu.length) return toast("Alle haben schon ein Kürzel");
     for (const n of neu){
       const s = schuelerVon(n.id);

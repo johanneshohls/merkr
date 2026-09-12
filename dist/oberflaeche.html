@@ -467,7 +467,14 @@ const MerkrErgebnisse = (function () {
   /**
    * Die Zeilen aus checkr den Schülern zuordnen.
    *
-   * @param schueler [{id, name, vorname, kuerzel}]
+   * Gesucht wird unter dem Kürzel und, wo keines steht, unter dem selbr-Code:
+   * die Deckblätter des Terme-Tests 8d trugen die selbr-Codes, und zwei
+   * Codespalten für dasselbe Kind zu pflegen ist eine Fehlerquelle ohne Gewinn.
+   * Das Kürzel gewinnt, wo es gesetzt ist. Ein selbr-Code, den zwei Kinder
+   * teilen, ordnet nichts zu - lieber eine Meldung als die Punkte beim
+   * falschen Kind.
+   *
+   * @param schueler [{id, name, vorname, kuerzel, selbrCode}]
    * @param zeilen [{code, erreicht, maximal, prozent}]
    * @param typ "noten" | "punkte"
    * @returns {treffer, ohneSchueler, ohneArbeit, doppelt}
@@ -478,9 +485,19 @@ const MerkrErgebnisse = (function () {
    */
   function zuordnen(schueler, zeilen, typ) {
     const nachKuerzel = new Map();
+    const nachSelbr = new Map();
     for (const s of schueler || []) {
       const k = norm(s.kuerzel);
       if (k) nachKuerzel.set(k, s);
+    }
+    // Der Rückfall auf den selbr-Code, nachrangig: ein Kürzel, das jemand von
+    // Hand gesetzt hat, darf davon nicht verdrängt werden.
+    const mehrdeutig = new Set();
+    for (const s of schueler || []) {
+      const c = norm(s.selbrCode);
+      if (!c || nachKuerzel.has(c)) continue;
+      if (nachSelbr.has(c)) { mehrdeutig.add(c); continue; }
+      nachSelbr.set(c, s);
     }
 
     const treffer = [];
@@ -496,7 +513,7 @@ const MerkrErgebnisse = (function () {
       if (gesehen.has(key)) { doppelt.push(code); continue; }
       gesehen.add(key);
 
-      const s = nachKuerzel.get(key);
+      const s = nachKuerzel.get(key) || (mehrdeutig.has(key) ? null : nachSelbr.get(key));
       if (!s) { ohneSchueler.push(code); continue; }
 
       // Wer nicht mitgeschrieben hat, steht in checkr bei 0 von 0. Daraus eine
@@ -907,14 +924,28 @@ const MerkrKuerzel = (function () {
   }
 
   /**
+   * Der Code, unter dem ein Kind in checkr steht: das Kürzel, und wo keines
+   * gesetzt ist, der selbr-Code. Ein Kind hat einen Code, nicht zwei - die
+   * Deckblätter des Terme-Tests 8d trugen schon die selbr-Codes.
+   */
+  function codeVon(s) {
+    // Ausgegeben wird die Schreibung, die auf dem Deckblatt steht - verglichen
+    // wird ohnehin normalisiert, gelesen wird von Menschen.
+    const k = String((s && s.kuerzel) || "").trim();
+    if (normalisiert(k)) return k;
+    const c = String((s && s.selbrCode) || "").trim();
+    return normalisiert(c) ? c : "";
+  }
+
+  /**
    * Das, was nach checkr geht: `PUT /api/classes/{id}/students` erwartet
    * [{name}] und vergibt die UUIDs selbst. Namen gehen nicht mit - das ist der
    * ganze Punkt.
    */
   function checkrListe(schueler) {
     return schueler
-      .filter((s) => normalisiert(s.kuerzel))
-      .map((s) => ({ name: String(s.kuerzel).trim() }))
+      .filter((s) => codeVon(s))
+      .map((s) => ({ name: codeVon(s) }))
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
   }
 
@@ -932,6 +963,7 @@ const MerkrKuerzel = (function () {
     normalisiert: normalisiert,
     vergeben: vergeben,
     doppelte: doppelte,
+    codeVon: codeVon,
     checkrListe: checkrListe,
     checkrZeilen: checkrZeilen
   };
@@ -1746,10 +1778,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = MerkrRueck
 /**
  * selbr-Codes: der Schlüssel zwischen merkr und selbr.
  *
- * Anders als das Kürzel für checkr ist dieser Code kein Pseudonym, sondern die
- * vollständige Anmeldung - selbr kennt kein Passwort, wer den Code hat, ist im
- * Konto des Kindes. Deshalb ein eigenes Feld und nicht das Kürzel mitbenutzt:
- * das steht auf dem Deckblatt jeder Klassenarbeit und geht in checkrs Datenbank.
+ * Anders als ein reines Pseudonym ist dieser Code die vollständige Anmeldung -
+ * selbr kennt kein Passwort, wer den Code hat, ist im Konto des Kindes. Das
+ * eigene Feld bleibt deshalb bestehen; seit dem 12.09.2026 gilt er aber auch
+ * als Kürzel für checkr, wo keines gesetzt ist (MerkrKuerzel.codeVon): die
+ * Deckblätter des Terme-Tests 8d trugen ihn schon, und zwei Codespalten für
+ * dasselbe Kind zu pflegen kostet mehr, als die Trennung einbringt. Wer sie
+ * zurückhaben will, setzt im Kurs eigene Kürzel - sie gewinnen.
  *
  * Die Richtung ist dieselbe wie überall in merkr: Der Code darf hinaus, der Name
  * bleibt hier. planr fragt selbr nach dem Stand je Code; wer dahintersteckt,
@@ -4487,11 +4522,12 @@ function kuerzelKarte(k){
   const schueler = kursSchueler(k.id).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"));
   const doppelt = MerkrKuerzel.doppelte(schueler);
-  const ohne = schueler.filter(s=>!MerkrKuerzel.normalisiert(s.kuerzel)).length;
+  const ohne = schueler.filter(s=>!MerkrKuerzel.codeVon(s)).length;
 
   let html = '<div class="karte"><h2>Kürzel für checkr</h2>'+
     '<p class="hinweis">Der Code, unter dem dieser Kurs in checkr geführt wird. Er steht auf dem '+
-    'Deckblatt der Arbeit; checkr sieht nur ihn und nie den Namen.</p>';
+    'Deckblatt der Arbeit; checkr sieht nur ihn und nie den Namen. '+
+    '<b>Bleibt das Feld leer, gilt der selbr-Code</b> - ein Kind, ein Code.</p>';
 
   if (!schueler.length) return html + '<p class="hinweis">Noch keine Schüler in diesem Kurs.</p></div>';
 
@@ -4499,16 +4535,19 @@ function kuerzelKarte(k){
     html += '<p class="hinweis" style="color:var(--rot)"><b>Doppelt vergeben: '+esc(doppelt.join(", "))+'.</b> '+
       'Zwei gleiche Codes sind in checkr ein einziger Schüler - die Arbeit des einen landet beim anderen.</p>';
 
-  html += '<table class="tab">';
-  for (const s of schueler)
+  html += '<table class="tab"><tr><th>Schüler</th><th>Kürzel</th><th>gilt</th></tr>';
+  for (const s of schueler){
+    const code = MerkrKuerzel.codeVon(s);
     html += '<tr><td><b>'+esc(s.name)+', '+esc(s.vorname)+'</b></td>'+
-      '<td style="width:130px"><input id="ku-'+s.id+'" value="'+esc(s.kuerzel||"")+'" placeholder="'+esc(k.name)+'-01"></td></tr>';
+      '<td style="width:130px"><input id="ku-'+s.id+'" value="'+esc(s.kuerzel||"")+'" placeholder="'+esc(s.selbrCode||(k.name+"-01"))+'"></td>'+
+      '<td class="hinweis">'+(code ? esc(code)+(MerkrKuerzel.normalisiert(s.kuerzel) ? '' : ' (selbr)') : 'kein Code')+'</td></tr>';
+  }
   html += '</table><div class="abstand"></div>'+
     '<div class="zeile"><button class="primar" data-a="kuerzelSpeichern" data-id="'+k.id+'">Kürzel speichern</button>'+
     '<button data-a="kuerzelVergeben" data-id="'+k.id+'">Fehlende vergeben'+(ohne?' ('+ohne+')':'')+'</button>'+
     '<button data-a="kuerzelExport" data-id="'+k.id+'">Für checkr ausgeben</button>'+
     '<button data-a="kuerzelPdf" data-id="'+k.id+'">Kürzelliste als PDF</button></div>'+
-    '<p class="hinweis">In checkr: Klasse öffnen, "Mehrere hinzufügen", die Kürzel einfügen. '+
+    '<p class="hinweis">In checkr: Klasse öffnen, "Mehrere hinzufügen", die Codes einfügen. '+
     'Die Zuordnung läuft dort über den Code, deshalb muss er auf beiden Seiten gleich geschrieben sein.</p></div>';
   return html;
 }
@@ -4552,7 +4591,7 @@ function kuerzellistePdf(kursId){
   const kurs = kursVon(kursId);
   const zeilen = kursSchueler(kursId).slice()
     .sort((a,b)=>((a.name||"")+" "+(a.vorname||"")).localeCompare((b.name||"")+" "+(b.vorname||""),"de"))
-    .map(s=>[s.name+", "+s.vorname, s.kuerzel||"–"]);
+    .map(s=>[s.name+", "+s.vorname, MerkrKuerzel.codeVon(s)||"–"]);
   return pdfTabellenDokument(
     "Kürzel "+kurs.name,
     (kurs.fach||"")+" · Jahrgang "+kurs.jahrgang+" · Code für checkr",
@@ -4615,8 +4654,11 @@ document.addEventListener("click", ev=>{
   else if (a==="kuerzelVergeben"){
     /* Belegt sind auch die Kürzel aller anderen Kurse: ein Code darf im ganzen
        Bestand nur einmal vorkommen, sonst trifft der Rückweg den Falschen. */
-    const fremd = S.schueler.filter(x=>!schueler.some(s=>s.id===x.id)).map(x=>x.kuerzel);
-    const neu = MerkrKuerzel.vergeben(schueler, kurs.name, fremd);
+    const fremd = S.schueler.filter(x=>!schueler.some(s=>s.id===x.id)).map(x=>MerkrKuerzel.codeVon(x));
+    /* Wer über seinen selbr-Code erreichbar ist, braucht kein zweites Kürzel -
+       sonst stünden zwei Codes für dasselbe Kind in checkrs Klassenliste. */
+    const offen = schueler.filter(s=>!MerkrKuerzel.codeVon(s));
+    const neu = MerkrKuerzel.vergeben(offen, kurs.name, fremd.concat(schueler.map(s=>MerkrKuerzel.codeVon(s))));
     if (!neu.length) return toast("Alle haben schon ein Kürzel");
     for (const n of neu){
       const s = schuelerVon(n.id);

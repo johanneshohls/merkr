@@ -56,7 +56,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Repo mit Build statt String-Patch | fertig |
 | iCloud-Ablage, Sicherung je Kalendertag | gebaut, auf dem Gerät ungetestet |
 | Notenvorschlag mit Halbjahresgrenze und Zeitgewichtung | fertig, 8 Tests |
-| Kürzel und checkr-Ausgabe | fertig, 6 Tests (Text zum Einfügen, checkr 1 hat keinen Datei-Import) |
+| Kürzel und checkr-Ausgabe | fertig, 7 Tests; ohne eigenes Kürzel gilt der selbr-Code, Ausgabe als Text (checkr 1 hat keinen Datei-Import) |
 | Anthropic-Schlüssel in den Schlüsselbund | am 19.08. wieder entfallen, siehe unten |
 | Stoffverteilung aus planr, automatisch | gebaut, gegen echte planr-Daten geprüft |
 | Ergebnisse aus checkr je Kürzel | gebaut, gegen einen echten Korrekturauftrag geprüft |

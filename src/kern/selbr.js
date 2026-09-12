@@ -1,10 +1,13 @@
 /**
  * selbr-Codes: der Schlüssel zwischen merkr und selbr.
  *
- * Anders als das Kürzel für checkr ist dieser Code kein Pseudonym, sondern die
- * vollständige Anmeldung - selbr kennt kein Passwort, wer den Code hat, ist im
- * Konto des Kindes. Deshalb ein eigenes Feld und nicht das Kürzel mitbenutzt:
- * das steht auf dem Deckblatt jeder Klassenarbeit und geht in checkrs Datenbank.
+ * Anders als ein reines Pseudonym ist dieser Code die vollständige Anmeldung -
+ * selbr kennt kein Passwort, wer den Code hat, ist im Konto des Kindes. Das
+ * eigene Feld bleibt deshalb bestehen; seit dem 12.09.2026 gilt er aber auch
+ * als Kürzel für checkr, wo keines gesetzt ist (MerkrKuerzel.codeVon): die
+ * Deckblätter des Terme-Tests 8d trugen ihn schon, und zwei Codespalten für
+ * dasselbe Kind zu pflegen kostet mehr, als die Trennung einbringt. Wer sie
+ * zurückhaben will, setzt im Kurs eigene Kürzel - sie gewinnen.
  *
  * Die Richtung ist dieselbe wie überall in merkr: Der Code darf hinaus, der Name
  * bleibt hier. planr fragt selbr nach dem Stand je Code; wer dahintersteckt,
