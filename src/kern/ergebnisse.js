@@ -172,6 +172,43 @@ const MerkrErgebnisse = (function () {
     return mitFach.length === 1 ? mitFach[0] : null;
   }
 
+  /**
+   * Was für eine Arbeit das ist, aus dem Namen, den checkr trägt.
+   *
+   * Der Unterschied ist keine Beschriftung: eine Klassenarbeit zählt im eigenen
+   * Bereich, ein Test gehört zu den sonstigen Leistungen (LBVO M-V). Wer den
+   * Test der 8d als Klassenarbeit einträgt, verschiebt jede Halbjahresnote der
+   * Klasse. Erkannt wird am Wort; steht im Namen nichts davon, kommt null
+   * zurück und der Abruf bleibt bei seiner Vorgabe.
+   *
+   * Der Zusatz "Gruppe A" fällt weg - in merkr ist beides eine Arbeit.
+   */
+  const ARTEN = [
+    { wort: /\bklausur/, art: "Klausur", bereich: "arbeit" },
+    { wort: /\bklassenarbeit|\bka\b/, art: "Klassenarbeit", bereich: "arbeit" },
+    { wort: /\blek\b/, art: "LEK", bereich: "sonstige" },
+    { wort: /\btest\b|\bkurzkontrolle/, art: "Test", bereich: "sonstige" },
+    { wort: /\breferat/, art: "Referat", bereich: "sonstige" },
+    { wort: /\bprotokoll/, art: "Protokoll", bereich: "sonstige" },
+    { wort: /\bhefter/, art: "Hefter", bereich: "sonstige" },
+  ];
+
+  function artAusTitel(titel) {
+    const t = norm(titel);
+    if (!t) return null;
+    for (const eintrag of ARTEN) if (eintrag.wort.test(t)) {
+      return { art: eintrag.art, bereich: eintrag.bereich };
+    }
+    return null;
+  }
+
+  /** Der Name ohne den Gruppenzusatz, mit dem checkr die Teilaufträge trennt. */
+  function titelOhneGruppe(titel) {
+    return String(titel == null ? "" : titel)
+      .replace(/[\s,;(-]*\bgruppe\s+[a-z0-9]{1,3}\)?\s*$/i, "")
+      .trim();
+  }
+
   /** Die checkr-Aufträge einer Arbeit. Früher stand dort einer, jetzt eine Liste. */
   function jobsVon(arbeit) {
     if (!arbeit) return [];
@@ -231,6 +268,8 @@ const MerkrErgebnisse = (function () {
   return {
     SCHLUESSEL: SCHLUESSEL,
     kursFuerBericht: kursFuerBericht,
+    artAusTitel: artAusTitel,
+    titelOhneGruppe: titelOhneGruppe,
     jobsVon: jobsVon,
     arbeitFuerBericht: arbeitFuerBericht,
     zusammenlegen: zusammenlegen,

@@ -3450,6 +3450,22 @@ function checkrVorschauHtml(k){
    Was schon eine Note trägt, bleibt stehen. */
 let checkrAllesStill = false;
 
+/* Eine neue Arbeit aus einem checkr-Bericht. Die Art steht im Namen, den die
+   Korrektur drüben trägt ("Test Terme Gruppe A"); ohne einen solchen Namen
+   bleibt es bei der Klassenarbeit, und die Meldung nach dem Abruf nennt jede
+   neu angelegte Zeile mit ihrer Art - eine Klassenarbeit, die ein Test war,
+   verschiebt sonst still jede Halbjahresnote. */
+function checkrArbeitAnlegen(kurs, b){
+  const name = MerkrErgebnisse.titelOhneGruppe(b.titel);
+  const erkannt = MerkrErgebnisse.artAusTitel(name);
+  return {id:uid(), kursId:kurs.id,
+    titel: name || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
+    art: erkannt ? erkannt.art : "Klassenarbeit",
+    bereich: erkannt ? erkannt.bereich : "arbeit",
+    datum: b.datum || todayISO(), gewicht:1,
+    ergebnisse:{}, checkrJobs: [String(b.job_id)]};
+}
+
 function checkrNotenHolen(still){
   if (KB_MODE!=="scriptable"){ if (!still) alertBox("Der Abruf läuft nur in Scriptable."); return; }
   if (!checkrDa){ if (!still) alertBox("Bitte zuerst das checkr-Wort in den Schlüsselbund legen (Einstellungen)."); return; }
@@ -3470,7 +3486,7 @@ window.__KB_checkrAlles = function(text){
 
   const sj = aktivesSchuljahr();
   let neu = 0, behalten = 0, arbeiten = 0;
-  const ohneKurs = [], offeneCodes = [];
+  const ohneKurs = [], offeneCodes = [], angelegt = [];
 
   /* Was vor der Gruppenerkennung doppelt angelegt wurde, wird hier eine Arbeit. */
   const aufgeraeumt = MerkrErgebnisse.zusammenlegen(S.arbeiten);
@@ -3495,10 +3511,9 @@ window.__KB_checkrAlles = function(text){
        Gruppen A und B eines Tests sind eine Arbeit. */
     let arb = MerkrErgebnisse.arbeitFuerBericht(S.arbeiten, k.id, b);
     if (!arb){
-      arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
-        art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
-        ergebnisse:{}, checkrJobs: [b.job_id]};
+      arb = checkrArbeitAnlegen(k, b);
       S.arbeiten.push(arb);
+      angelegt.push(arb);
       arbeiten++;
     } else if (MerkrErgebnisse.jobsVon(arb).indexOf(String(b.job_id)) < 0){
       arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);
@@ -3521,8 +3536,17 @@ window.__KB_checkrAlles = function(text){
     (aufgeraeumt.zusammengelegt===1 ? " doppelte Arbeit zusammengelegt" : " doppelte Arbeiten zusammengelegt");
   if (behalten) satz += ", "+behalten+" vorhandene behalten";
   toast(satz);
-  if (ohneKurs.length || offeneCodes.length){
+  if (ohneKurs.length || offeneCodes.length || angelegt.length){
     let h = '<h2>Noten aus checkr</h2><p class="hinweis">'+esc(satz)+'.</p>';
+    if (angelegt.length){
+      h += '<table class="tab"><tr><th>Arbeit</th><th>Art</th><th>zählt zu</th></tr>';
+      for (const a of angelegt)
+        h += '<tr><td><b>'+esc(a.titel)+'</b><div class="hinweis">'+fmtDatum(a.datum)+'</div></td>'+
+          '<td>'+esc(a.art)+'</td><td class="hinweis">'+
+          (a.bereich==="arbeit" ? "Klassenarbeiten" : "sonstigen Leistungen")+'</td></tr>';
+      h += '</table><p class="hinweis">Stimmt die Art nicht, steht sie im Reiter Arbeiten eine '+
+        'Zeile weit entfernt.</p>';
+    }
     if (ohneKurs.length)
       h += '<p class="hinweis">Ohne Kurs in merkr: <b>'+esc(ohneKurs.join(", "))+'</b>. '+
         'Die Klasse muss hier unter demselben Namen laufen, bei zwei Fächern entscheidet das Fach.</p>';
@@ -3611,9 +3635,7 @@ document.addEventListener("click", ev=>{
        zählt sie doppelt in den Notenstand. */
     let arb = MerkrErgebnisse.arbeitFuerBericht(S.arbeiten, k.id, b);
     if (!arb){
-      arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
-        art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
-        ergebnisse:{}, checkrJobs: [b.job_id]};
+      arb = checkrArbeitAnlegen(k, b);
       S.arbeiten.push(arb);
     } else if (MerkrErgebnisse.jobsVon(arb).indexOf(String(b.job_id)) < 0){
       arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);

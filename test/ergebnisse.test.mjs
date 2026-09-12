@@ -163,3 +163,19 @@ test("Doppelt angelegte checkr-Arbeiten eines Tages werden eine", () => {
   // Vorhandenes gewinnt: b bleibt bei 3
   assert.deepEqual(erg.arbeiten[0].ergebnisse, { a: 2, b: 3, c: 4 });
 });
+
+test("Die Art steht im Namen, und ein Test ist keine Klassenarbeit", () => {
+  assert.deepEqual(E.artAusTitel("Test Terme Gruppe A"), { art: "Test", bereich: "sonstige" });
+  assert.deepEqual(E.artAusTitel("Klassenarbeit 2 - Terme"), { art: "Klassenarbeit", bereich: "arbeit" });
+  assert.deepEqual(E.artAusTitel("LEK Bruchrechnung"), { art: "LEK", bereich: "sonstige" });
+  assert.deepEqual(E.artAusTitel("Klausur 11/1"), { art: "Klausur", bereich: "arbeit" });
+  assert.equal(E.artAusTitel("Mathematik 08.09.2026"), null);
+  assert.equal(E.artAusTitel(""), null);
+});
+
+test("Der Gruppenzusatz fällt aus dem Namen", () => {
+  assert.equal(E.titelOhneGruppe("Test Terme Gruppe A"), "Test Terme");
+  assert.equal(E.titelOhneGruppe("Test Terme (Gruppe B)"), "Test Terme");
+  assert.equal(E.titelOhneGruppe("Test Terme - Gruppe 2"), "Test Terme");
+  assert.equal(E.titelOhneGruppe("Test Gruppenarbeit"), "Test Gruppenarbeit");
+});
