@@ -172,9 +172,68 @@ const MerkrErgebnisse = (function () {
     return mitFach.length === 1 ? mitFach[0] : null;
   }
 
+  /** Die checkr-Aufträge einer Arbeit. Früher stand dort einer, jetzt eine Liste. */
+  function jobsVon(arbeit) {
+    if (!arbeit) return [];
+    if (Array.isArray(arbeit.checkrJobs)) return arbeit.checkrJobs.filter(Boolean).map(String);
+    return arbeit.checkrJob ? [String(arbeit.checkrJob)] : [];
+  }
+
+  /**
+   * Zu welcher Arbeit ein Bericht gehört.
+   *
+   * Ein Test mit den Gruppen A und B ist in checkr zwei Aufträge und im
+   * Klassenbuch eine Arbeit - alles andere ergäbe zwei Spalten im Notenbuch,
+   * von denen jedes Kind nur in einer steht. Gesucht wird erst der Auftrag
+   * selbst, dann eine Arbeit desselben Tages, die schon aus checkr kommt.
+   */
+  function arbeitFuerBericht(arbeiten, kursId, bericht) {
+    const job = String((bericht && bericht.job_id) || "");
+    const datum = String((bericht && bericht.datum) || "");
+    for (const a of arbeiten || []) {
+      if (a.kursId !== kursId) continue;
+      if (job && jobsVon(a).indexOf(job) >= 0) return a;
+    }
+    if (!datum) return null;
+    for (const a of arbeiten || []) {
+      if (a.kursId !== kursId || a.datum !== datum) continue;
+      if (jobsVon(a).length) return a;
+    }
+    return null;
+  }
+
+  /**
+   * Arbeiten desselben Kurses und Tages, die beide aus checkr stammen, zu einer
+   * machen. Räumt auf, was vor der Gruppenerkennung doppelt angelegt wurde: die
+   * ältere Zeile bleibt, die Ergebnisse der jüngeren kommen hinzu, und was
+   * schon eingetragen ist, gewinnt.
+   */
+  function zusammenlegen(arbeiten) {
+    const raus = [];
+    const erste = new Map();
+    let zusammengelegt = 0;
+
+    for (const a of arbeiten || []) {
+      if (!jobsVon(a).length || !a.datum) { raus.push(a); continue; }
+      const key = a.kursId + "|" + a.datum;
+      const alt = erste.get(key);
+      if (!alt) { erste.set(key, a); raus.push(a); continue; }
+
+      alt.checkrJobs = jobsVon(alt).concat(jobsVon(a).filter((j) => jobsVon(alt).indexOf(j) < 0));
+      delete alt.checkrJob;
+      const ergebnisse = Object.assign({}, a.ergebnisse || {}, alt.ergebnisse || {});
+      alt.ergebnisse = ergebnisse;
+      zusammengelegt++;
+    }
+    return { arbeiten: raus, zusammengelegt: zusammengelegt };
+  }
+
   return {
     SCHLUESSEL: SCHLUESSEL,
     kursFuerBericht: kursFuerBericht,
+    jobsVon: jobsVon,
+    arbeitFuerBericht: arbeitFuerBericht,
+    zusammenlegen: zusammenlegen,
     noteAusProzent: noteAusProzent,
     punkteAusProzent: punkteAusProzent,
     wertAusProzent: wertAusProzent,

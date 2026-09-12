@@ -132,3 +132,34 @@ test("Bleibt die Klasse mehrdeutig, wird nichts zugeordnet", () => {
   assert.equal(E.kursFuerBericht(kurse(), { klasse: "7b", fach: "Mathematik" }, "sj"), null);
   assert.equal(E.kursFuerBericht(kurse(), { klasse: "8d", fach: "Mathematik" }, "anderes"), null);
 });
+
+test("Gruppe B findet die Arbeit von Gruppe A", () => {
+  const arbeiten = [
+    { id: "x", kursId: "m8d", datum: "2026-09-08", checkrJobs: ["job-a"], ergebnisse: { a: 2 } },
+    { id: "y", kursId: "m8d", datum: "2026-06-09", checkrJobs: ["alt"], ergebnisse: {} }
+  ];
+  assert.equal(E.arbeitFuerBericht(arbeiten, "m8d", { job_id: "job-a", datum: "2026-09-08" }).id, "x");
+  assert.equal(E.arbeitFuerBericht(arbeiten, "m8d", { job_id: "job-b", datum: "2026-09-08" }).id, "x");
+  assert.equal(E.arbeitFuerBericht(arbeiten, "m8d", { job_id: "job-c", datum: "2026-09-15" }), null);
+  assert.equal(E.arbeitFuerBericht(arbeiten, "m9a", { job_id: "job-b", datum: "2026-09-08" }), null);
+});
+
+test("Eine von Hand angelegte Arbeit am selben Tag zieht nichts an sich", () => {
+  const arbeiten = [{ id: "h", kursId: "m8d", datum: "2026-09-08", ergebnisse: {} }];
+  assert.equal(E.arbeitFuerBericht(arbeiten, "m8d", { job_id: "job-a", datum: "2026-09-08" }), null);
+});
+
+test("Doppelt angelegte checkr-Arbeiten eines Tages werden eine", () => {
+  const arbeiten = [
+    { id: "x", kursId: "m8d", datum: "2026-09-08", checkrJob: "job-a", ergebnisse: { a: 2, b: 3 } },
+    { id: "y", kursId: "m8d", datum: "2026-09-08", checkrJob: "job-b", ergebnisse: { b: 5, c: 4 } },
+    { id: "z", kursId: "m8d", datum: "2026-09-15", ergebnisse: {} }
+  ];
+  const erg = E.zusammenlegen(arbeiten);
+  assert.equal(erg.zusammengelegt, 1);
+  assert.deepEqual(erg.arbeiten.map(a => a.id), ["x", "z"]);
+  assert.deepEqual(erg.arbeiten[0].checkrJobs, ["job-a", "job-b"]);
+  assert.equal(erg.arbeiten[0].checkrJob, undefined);
+  // Vorhandenes gewinnt: b bleibt bei 3
+  assert.deepEqual(erg.arbeiten[0].ergebnisse, { a: 2, b: 3, c: 4 });
+});

@@ -3472,7 +3472,16 @@ window.__KB_checkrAlles = function(text){
   let neu = 0, behalten = 0, arbeiten = 0;
   const ohneKurs = [], offeneCodes = [];
 
+  /* Was vor der Gruppenerkennung doppelt angelegt wurde, wird hier eine Arbeit. */
+  const aufgeraeumt = MerkrErgebnisse.zusammenlegen(S.arbeiten);
+  S.arbeiten = aufgeraeumt.arbeiten;
+
   for (const b of daten.berichte){
+    /* Arbeiten aus einem früheren Schuljahr gehen still vorbei: sie gehören zu
+       Kursen, die es hier nicht mehr gibt, und eine Meldung darüber wäre bei
+       jedem Abruf dieselbe. */
+    if (sj && b.datum && (b.datum < sj.beginn || b.datum > sj.ende)) continue;
+
     const k = MerkrErgebnisse.kursFuerBericht(S.kurse, b, sj ? sj.id : null);
     if (!k){ ohneKurs.push((b.klasse||"?")+(b.fach ? " "+b.fach : "")); continue; }
 
@@ -3482,14 +3491,18 @@ window.__KB_checkrAlles = function(text){
       continue;
     }
 
-    /* Dieselbe Arbeit zweimal zu holen darf keine zweite Zeile anlegen. */
-    let arb = S.arbeiten.find(x=>x.kursId===k.id && x.checkrJob===b.job_id);
+    /* Dieselbe Arbeit zweimal zu holen darf keine zweite Zeile anlegen, und die
+       Gruppen A und B eines Tests sind eine Arbeit. */
+    let arb = MerkrErgebnisse.arbeitFuerBericht(S.arbeiten, k.id, b);
     if (!arb){
       arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
         art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
-        ergebnisse:{}, checkrJob: b.job_id};
+        ergebnisse:{}, checkrJobs: [b.job_id]};
       S.arbeiten.push(arb);
       arbeiten++;
+    } else if (MerkrErgebnisse.jobsVon(arb).indexOf(String(b.job_id)) < 0){
+      arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);
+      delete arb.checkrJob;
     }
     const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, erg.treffer);
     arb.ergebnisse = zus.ergebnisse;
@@ -3504,6 +3517,8 @@ window.__KB_checkrAlles = function(text){
   if (!daten.berichte.length) { toast("In checkr liegt keine korrigierte Arbeit"); return "ok"; }
   let satz = neu ? neu+(neu===1 ? " Note übernommen" : " Noten übernommen") : "Keine neue Note";
   if (arbeiten) satz += ", "+arbeiten+(arbeiten===1 ? " Arbeit angelegt" : " Arbeiten angelegt");
+  if (aufgeraeumt.zusammengelegt) satz += ", "+aufgeraeumt.zusammengelegt+
+    (aufgeraeumt.zusammengelegt===1 ? " doppelte Arbeit zusammengelegt" : " doppelte Arbeiten zusammengelegt");
   if (behalten) satz += ", "+behalten+" vorhandene behalten";
   toast(satz);
   if (ohneKurs.length || offeneCodes.length){
@@ -3594,12 +3609,15 @@ document.addEventListener("click", ev=>{
 
     /* Dieselbe Arbeit zweimal zu holen darf keine zweite Zeile anlegen - sonst
        zählt sie doppelt in den Notenstand. */
-    let arb = S.arbeiten.find(x=>x.kursId===k.id && x.checkrJob===b.job_id);
+    let arb = MerkrErgebnisse.arbeitFuerBericht(S.arbeiten, k.id, b);
     if (!arb){
       arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
         art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
-        ergebnisse:{}, checkrJob: b.job_id};
+        ergebnisse:{}, checkrJobs: [b.job_id]};
       S.arbeiten.push(arb);
+    } else if (MerkrErgebnisse.jobsVon(arb).indexOf(String(b.job_id)) < 0){
+      arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);
+      delete arb.checkrJob;
     }
     const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, b.zuordnung.treffer);
     arb.ergebnisse = zus.ergebnisse;
@@ -3956,7 +3974,9 @@ viewArbeiten = function(k){
       '<div class="hinweis">'+esc(a.art)+' · '+fmtDatum(a.datum)+' · '+
       (ab==="arbeit"?"zählt zu den Klassenarbeiten":"zählt zu den sonstigen Leistungen")+
       (gew(a.gewicht)===0?' · Zwischenstand, zählt nicht':' · Gewicht '+gew(a.gewicht))+
-      (a.checkrJob?' · aus checkr':'')+'</div></div>'+
+      (MerkrErgebnisse.jobsVon(a).length
+        ? ' · aus checkr'+(MerkrErgebnisse.jobsVon(a).length>1 ? ' ('+MerkrErgebnisse.jobsVon(a).length+' Gruppen)' : '')
+        : '')+'</div></div>'+
       '<div class="zeile"><button class="klein" data-a="arbeitEingabe" data-id="'+a.id+'">Punkte eintragen</button>'+
       '<button class="klein" data-a="arbeitBereichWechseln" data-id="'+a.id+'">Bereich</button>'+
       '<button class="klein gefahr" data-a="arbeitLoeschen" data-id="'+a.id+'">Löschen</button></div></div>';

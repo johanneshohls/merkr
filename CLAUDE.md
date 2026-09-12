@@ -59,7 +59,7 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Kürzel und checkr-Ausgabe | fertig, 7 Tests; ohne eigenes Kürzel gilt der selbr-Code, Ausgabe als Text (checkr 1 hat keinen Datei-Import) |
 | Anthropic-Schlüssel in den Schlüsselbund | am 19.08. wieder entfallen, siehe unten |
 | Stoffverteilung aus planr, automatisch | gebaut, gegen echte planr-Daten geprüft |
-| Ergebnisse aus checkr je Kürzel | gebaut, gegen zwei echte Korrekturaufträge geprüft; "Noten jetzt holen" nimmt alle Arbeiten auf einmal |
+| Ergebnisse aus checkr je Kürzel | gebaut, gegen zwei echte Korrekturaufträge geprüft; "Noten jetzt holen" nimmt alle Arbeiten auf einmal, Gruppen A/B bleiben eine Arbeit |
 | Rückmeldung an planr, was gewackelt hat | gebaut, Weg gegen planr geprüft, auf dem Gerät ungetestet |
 | Umbenennung auf merkr, auch auf dem Bildschirm | fertig |
 | Die drei Hebel aus dem Wendwerk-Review | umgesetzt, im Browser gemessen |
