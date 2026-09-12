@@ -440,6 +440,24 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrRueckAntwort(" + antwort + ")", false);
       } catch (e) { console.error("planr-Rückmeldung nicht zugestellt: " + e); }
+    } else if (msg.typ === "checkrListe") {
+      // Welche Arbeiten es drüben gibt. Ohne sie müsste man die Kennung aus
+      // dem Browser herüberkopieren - auf dem iPad heißt das: abtippen.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_CHECKR)) throw new Error("Kein checkr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine checkr-Adresse eingetragen.");
+        const req = new Request(basis + "/api/jobs/roster");
+        req.headers = { authorization: "Bearer " + Keychain.get(SCHLUESSEL_CHECKR) };
+        antwort = await req.loadString();
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_checkrListe(" + JSON.stringify(antwort) + ")", false);
+      } catch (e) { console.error("checkr-Liste nicht zugestellt: " + e); }
     } else if (msg.typ === "checkrAbruf") {
       // Punkte einer Arbeit je Kürzel. Der Weg ist derselbe wie bei planr, nur
       // ein anderes Wort und eine andere Adresse.

@@ -3348,14 +3348,36 @@ function checkrKennung(eingabe){
 }
 
 let checkrBericht = null;
+let checkrArbeiten = null;
 
 function checkrDialogHtml(){
-  return '<h2>Ergebnisse aus checkr</h2>'+
-    '<p class="hinweis">Kennung des Korrekturauftrags oder die ganze Adresse aus dem Browser.</p>'+
+  let html = '<h2>Ergebnisse aus checkr</h2>';
+
+  if (checkrArbeiten === null){
+    html += '<p class="hinweis">Arbeiten werden geladen …</p>';
+  } else if (checkrArbeiten.fehler){
+    html += '<p class="hinweis">Die Liste kam nicht: '+esc(checkrArbeiten.fehler)+'</p>';
+  } else if (!checkrArbeiten.length){
+    html += '<p class="hinweis">Drüben liegt noch keine korrigierte Arbeit.</p>';
+  } else {
+    html += '<table class="tab"><tr><th>Arbeit</th><th>Klasse</th><th>Datum</th><th></th></tr>';
+    for (const a of checkrArbeiten){
+      html += '<tr><td><b>'+esc(a.titel || a.fach || "Arbeit")+'</b></td>'+
+        '<td>'+esc(a.klasse||"")+'</td>'+
+        '<td class="hinweis">'+fmtDatum(a.datum)+' · '+(a.schueler||0)+'</td>'+
+        '<td><button data-a="checkrWaehlen" data-job="'+esc(a.job_id)+'">Holen</button></td></tr>';
+    }
+    html += '</table>';
+  }
+
+  /* Der Weg über die Adresse bleibt: eine Arbeit, die noch nicht in der Liste
+     steht, ist damit trotzdem erreichbar. */
+  html += '<p class="hinweis">Oder die Kennung des Korrekturauftrags, sonst die ganze Adresse aus dem Browser.</p>'+
     '<div class="feld"><input id="checkrJob" placeholder="https://check-r.org/app/review?job=…"></div>'+
     '<div class="zeile"><button class="primar" data-a="checkrHolen">Holen</button>'+
     '<button data-a="modalZu">Abbrechen</button>'+
     '<span id="checkrStatus" class="hinweis"></span></div>';
+  return html;
 }
 
 function checkrVorschauHtml(k){
@@ -3393,6 +3415,20 @@ function checkrVorschauHtml(k){
   return html;
 }
 
+window.__KB_checkrListe = function(text){
+  let daten = null;
+  try { daten = JSON.parse(text); } catch(e){ daten = null; }
+  if (!daten || daten.fehler || !Array.isArray(daten.arbeiten)){
+    checkrArbeiten = {fehler: (daten && daten.fehler) ? daten.fehler : "Antwort nicht lesbar."};
+  } else {
+    checkrArbeiten = daten.arbeiten;
+  }
+  /* Nur neu zeichnen, wenn der Dialog noch offen ist und noch keine Vorschau
+     darin steht - sonst überschriebe die Liste die Zuordnung. */
+  if (!checkrBericht && document.getElementById("checkrJob")) zeigeModal(checkrDialogHtml());
+  return "ok";
+};
+
 window.__KB_checkrAntwort = function(text){
   const status = document.getElementById("checkrStatus");
   let daten = null;
@@ -3416,7 +3452,19 @@ document.addEventListener("click", ev=>{
 
   if (a==="checkrDialog"){
     checkrBericht = null;
+    checkrArbeiten = null;
     zeigeModal(checkrDialogHtml());
+    if (KB_MODE==="scriptable" && checkrDa && checkrBasis())
+      sendeAnBridge({typ:"checkrListe", url: checkrBasis()});
+    else
+      checkrArbeiten = {fehler: "Adresse oder Wort fehlt (Einstellungen)."};
+  }
+  else if (a==="checkrWaehlen"){
+    const job = el.dataset.job || "";
+    if (!job) return;
+    const status = document.getElementById("checkrStatus");
+    if (status) status.textContent = "wird geholt …";
+    sendeAnBridge({typ:"checkrAbruf", url: checkrBasis(), job});
   }
   else if (a==="checkrHolen"){
     if (KB_MODE!=="scriptable") return alertBox("Der Abruf läuft nur in Scriptable.");
