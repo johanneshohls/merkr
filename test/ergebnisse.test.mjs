@@ -113,3 +113,22 @@ test("Ein selbr-Code, den zwei teilen, ordnet nichts zu", () => {
   assert.deepEqual(erg.treffer, []);
   assert.deepEqual(erg.ohneSchueler, ["UJGXP"]);
 });
+
+const kurse = () => ([
+  { id: "m8d", name: "Mathe 8d", fach: "Mathematik", planrName: "8d", planrFach: "Mathematik", schuljahrId: "sj" },
+  { id: "m9a", name: "Mathe 9a", fach: "Mathematik", planrName: "9a", planrFach: "Mathematik", schuljahrId: "sj" },
+  { id: "p9a", name: "Physik 9a", fach: "Physik", planrName: "9a", planrFach: "Physik", schuljahrId: "sj" }
+]);
+
+test("Der Bericht findet seinen Kurs über Klasse und Fach", () => {
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "8d", fach: "Mathematik" }, "sj").id, "m8d");
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "9a", fach: "Physik" }, "sj").id, "p9a");
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "8D" }, "sj").id, "m8d");
+});
+
+test("Bleibt die Klasse mehrdeutig, wird nichts zugeordnet", () => {
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "9a" }, "sj"), null);
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "9a", fach: "Chemie" }, "sj"), null);
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "7b", fach: "Mathematik" }, "sj"), null);
+  assert.equal(E.kursFuerBericht(kurse(), { klasse: "8d", fach: "Mathematik" }, "anderes"), null);
+});

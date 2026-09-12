@@ -145,8 +145,36 @@ const MerkrErgebnisse = (function () {
     return { ergebnisse, neu, behalten };
   }
 
+  /**
+   * Welcher Kurs zu einem Bericht aus checkr gehört.
+   *
+   * checkr nennt Klasse und Fach ("8d", "Mathematik") - dieselben Angaben, die
+   * auch aus planr kommen. Die Klasse allein reicht nicht: in der 9a wird Mathe
+   * und Physik unterrichtet, und eine Mathearbeit in der Physiknote ist kein
+   * Fehler, den man später noch sieht. Bleibt es mehrdeutig, kommt null zurück
+   * und der Abruf legt nichts an.
+   */
+  function kursFuerBericht(kurse, bericht, schuljahrId) {
+    const klasse = norm(bericht && bericht.klasse);
+    const fach = norm(bericht && bericht.fach);
+    if (!klasse) return null;
+
+    const passt = (kurse || []).filter((k) => {
+      if (schuljahrId != null && k.schuljahrId !== schuljahrId) return false;
+      return norm(k.planrName) === klasse || norm(k.name) === klasse;
+    });
+    if (passt.length === 1) return passt[0];
+    if (!fach) return null;
+
+    const mitFach = passt.filter(
+      (k) => norm(k.fach) === fach || norm(k.planrFach) === fach
+    );
+    return mitFach.length === 1 ? mitFach[0] : null;
+  }
+
   return {
     SCHLUESSEL: SCHLUESSEL,
+    kursFuerBericht: kursFuerBericht,
     noteAusProzent: noteAusProzent,
     punkteAusProzent: punkteAusProzent,
     wertAusProzent: wertAusProzent,

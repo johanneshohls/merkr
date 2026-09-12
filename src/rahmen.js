@@ -458,6 +458,45 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_checkrListe(" + JSON.stringify(antwort) + ")", false);
       } catch (e) { console.error("checkr-Liste nicht zugestellt: " + e); }
+    } else if (msg.typ === "checkrAlles") {
+      // Alles in einem Zug: die Liste der Arbeiten und zu jeder die Punkte.
+      // Der Weg über einzelne Nachrichten hätte für jede Arbeit eine Runde
+      // durch den WebView gebraucht - auf dem iPad sichtbar als Ruckeln, und
+      // eine abgebrochene Kette hinterlässt die Hälfte.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_CHECKR)) throw new Error("Kein checkr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine checkr-Adresse eingetragen.");
+        const kopf = { authorization: "Bearer " + Keychain.get(SCHLUESSEL_CHECKR) };
+
+        const liste = new Request(basis + "/api/jobs/roster");
+        liste.headers = kopf;
+        const roh = JSON.parse(await liste.loadString());
+        if (roh && roh.fehler) throw new Error(String(roh.fehler));
+        const arbeiten = Array.isArray(roh && roh.arbeiten) ? roh.arbeiten : [];
+
+        const berichte = [];
+        for (const a of arbeiten) {
+          const job = String((a && a.job_id) || "").trim();
+          if (!job) continue;
+          try {
+            const req = new Request(basis + "/api/jobs/" + encodeURIComponent(job) + "/scores-report");
+            req.headers = kopf;
+            const b = JSON.parse(await req.loadString());
+            if (b && Array.isArray(b.schueler)) berichte.push(b);
+          } catch (e) {
+            // Eine Arbeit, deren Punkte nicht kommen, hält die anderen nicht auf.
+            console.error("checkr: " + job + " ohne Punkte (" + e + ")");
+          }
+        }
+        antwort = JSON.stringify({ berichte: berichte, arbeiten: arbeiten.length });
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_checkrAlles(" + JSON.stringify(antwort) + ")", false);
+      } catch (e) { console.error("checkr-Noten nicht zugestellt: " + e); }
     } else if (msg.typ === "checkrAbruf") {
       // Punkte einer Arbeit je Kürzel. Der Weg ist derselbe wie bei planr, nur
       // ein anderes Wort und eine andere Adresse.

@@ -3444,6 +3444,82 @@ function checkrVorschauHtml(k){
   return html;
 }
 
+/* "Jetzt holen" für Noten - derselbe Griff wie bei planr: ein Knopf, kein
+   Suchen nach der richtigen Arbeit. Der Rahmen holt die Liste und zu jeder
+   Arbeit die Punkte, hier werden sie den Kursen zugeordnet und eingetragen.
+   Was schon eine Note trägt, bleibt stehen. */
+let checkrAllesStill = false;
+
+function checkrNotenHolen(still){
+  if (KB_MODE!=="scriptable"){ if (!still) alertBox("Der Abruf läuft nur in Scriptable."); return; }
+  if (!checkrDa){ if (!still) alertBox("Bitte zuerst das checkr-Wort in den Schlüsselbund legen (Einstellungen)."); return; }
+  if (!checkrBasis()){ if (!still) alertBox("Bitte zuerst die checkr-Adresse eintragen (Einstellungen)."); return; }
+  checkrAllesStill = !!still;
+  if (!still) toast("Noten werden aus checkr geholt …");
+  sendeAnBridge({typ:"checkrAlles", url: checkrBasis()});
+}
+
+window.__KB_checkrAlles = function(text){
+  let daten = null;
+  try { daten = JSON.parse(text); } catch(e){ daten = null; }
+  if (!daten || daten.fehler || !Array.isArray(daten.berichte)){
+    const grund = daten && daten.fehler ? daten.fehler : "Antwort nicht lesbar.";
+    if (!checkrAllesStill) alertBox("Noten aus checkr: "+grund);
+    return "fehler";
+  }
+
+  const sj = aktivesSchuljahr();
+  let neu = 0, behalten = 0, arbeiten = 0;
+  const ohneKurs = [], offeneCodes = [];
+
+  for (const b of daten.berichte){
+    const k = MerkrErgebnisse.kursFuerBericht(S.kurse, b, sj ? sj.id : null);
+    if (!k){ ohneKurs.push((b.klasse||"?")+(b.fach ? " "+b.fach : "")); continue; }
+
+    const erg = MerkrErgebnisse.zuordnen(kursSchueler(k.id), b.schueler, notensystem(k).typ);
+    if (!erg.treffer.length){
+      for (const c of erg.ohneSchueler) if (offeneCodes.indexOf(c) < 0) offeneCodes.push(c);
+      continue;
+    }
+
+    /* Dieselbe Arbeit zweimal zu holen darf keine zweite Zeile anlegen. */
+    let arb = S.arbeiten.find(x=>x.kursId===k.id && x.checkrJob===b.job_id);
+    if (!arb){
+      arb = {id:uid(), kursId:k.id, titel: b.titel || ((b.fach||"Arbeit")+" "+fmtDatum(b.datum)),
+        art:"Klassenarbeit", bereich:"arbeit", datum: b.datum || todayISO(), gewicht:1,
+        ergebnisse:{}, checkrJob: b.job_id};
+      S.arbeiten.push(arb);
+      arbeiten++;
+    }
+    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, erg.treffer);
+    arb.ergebnisse = zus.ergebnisse;
+    neu += zus.neu; behalten += zus.behalten;
+    for (const c of erg.ohneSchueler) if (offeneCodes.indexOf(c) < 0) offeneCodes.push(c);
+  }
+
+  S.einstellungen.checkrGeholt = new Date().toISOString();
+  speichern(); zeichne();
+
+  if (checkrAllesStill) return "ok";
+  if (!daten.berichte.length) { toast("In checkr liegt keine korrigierte Arbeit"); return "ok"; }
+  let satz = neu ? neu+(neu===1 ? " Note übernommen" : " Noten übernommen") : "Keine neue Note";
+  if (arbeiten) satz += ", "+arbeiten+(arbeiten===1 ? " Arbeit angelegt" : " Arbeiten angelegt");
+  if (behalten) satz += ", "+behalten+" vorhandene behalten";
+  toast(satz);
+  if (ohneKurs.length || offeneCodes.length){
+    let h = '<h2>Noten aus checkr</h2><p class="hinweis">'+esc(satz)+'.</p>';
+    if (ohneKurs.length)
+      h += '<p class="hinweis">Ohne Kurs in merkr: <b>'+esc(ohneKurs.join(", "))+'</b>. '+
+        'Die Klasse muss hier unter demselben Namen laufen, bei zwei Fächern entscheidet das Fach.</p>';
+    if (offeneCodes.length)
+      h += '<p class="hinweis" style="color:var(--rot)">Kein Schüler zu: <b>'+esc(offeneCodes.join(", "))+
+        '</b>. Diese Zeilen bleiben liegen - geraten wird nicht.</p>';
+    h += '<div class="zeile"><button class="primar" data-a="modalZu">Verstanden</button></div>';
+    zeigeModal(h);
+  }
+  return "ok";
+};
+
 window.__KB_checkrListe = function(text){
   let daten = null;
   try { daten = JSON.parse(text); } catch(e){ daten = null; }
@@ -3479,7 +3555,12 @@ document.addEventListener("click", ev=>{
   if (!el) return;
   const a = el.dataset.a;
 
-  if (a==="checkrDialog"){
+  if (a==="checkrJetzt"){
+    const feld = document.getElementById("checkrUrl");
+    if (feld){ S.einstellungen.checkrUrl = feld.value.trim().replace(/\/+$/,""); speichern(); }
+    checkrNotenHolen(false);
+  }
+  else if (a==="checkrDialog"){
     checkrBericht = null;
     checkrArbeiten = null;
     zeigeModal(checkrDialogHtml());
@@ -3571,8 +3652,14 @@ einstellungenZusatz = function(){
             '<button class="klein primar" data-a="checkrWortSetzen">In den Schlüsselbund</button></div>')+
         '</div>'
       : '<p class="hinweis">Der Abruf läuft nur in Scriptable.</p>')+
-    '<div class="zeile"><button data-a="checkrUrlSpeichern">Adresse speichern</button>'+
-    '<span class="hinweis">Geholt wird im Tab „Arbeiten" des Kurses.</span></div></div>';
+    '<div class="zeile"><button class="primar" data-a="checkrJetzt">Jetzt holen</button>'+
+    '<button data-a="checkrUrlSpeichern">Adresse speichern</button>'+
+    '<span class="hinweis">'+(S.einstellungen.checkrGeholt
+      ? "zuletzt "+fmtStandAlter(S.einstellungen.checkrGeholt)
+      : "noch nie abgerufen")+'</span></div>'+
+    '<p class="hinweis">„Jetzt holen" nimmt jede korrigierte Arbeit, ordnet sie über Klasse und '+
+    'Fach dem Kurs zu und trägt die Noten ein. Eine einzelne Arbeit holt der Tab „Arbeiten" des '+
+    'Kurses.</p></div>';
 };
 
 /* ================= Einrichten =================
@@ -3854,7 +3941,8 @@ viewArbeiten = function(k){
   let html = '<div class="zeile raum" style="margin-bottom:14px">'+
     '<div><h2 style="margin:0">Arbeiten und Tests</h2>'+
     '<div class="hinweis">'+esc(k.name)+' · '+(sys.typ==="punkte"?"0 bis 15 Punkte":"Noten 1 bis 6")+'</div></div>'+
-    '<div class="zeile"><button data-a="checkrDialog">Aus checkr holen</button>'+
+    '<div class="zeile"><button data-a="checkrJetzt">Noten jetzt holen</button>'+
+    '<button data-a="checkrDialog">Aus checkr holen</button>'+
     '<button class="primar" data-a="arbeitNeuDialog">Arbeit anlegen</button></div></div>';
 
   if (!arbeiten.length)
