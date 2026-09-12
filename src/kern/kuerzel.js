@@ -77,11 +77,22 @@ const MerkrKuerzel = (function () {
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
   }
 
+  /**
+   * Derselbe Bestand als Text, ein Kürzel je Zeile. checkr 1 hat keinen
+   * Datei-Import: in der Klassenansicht steht "Mehrere hinzufügen", und das
+   * Feld dort nimmt Namen zeilenweise. Der Weg über die Datei setzte einen
+   * Import voraus, den es nicht gibt.
+   */
+  function checkrZeilen(schueler) {
+    return checkrListe(schueler).map((e) => e.name).join("\n");
+  }
+
   return {
     normalisiert: normalisiert,
     vergeben: vergeben,
     doppelte: doppelte,
-    checkrListe: checkrListe
+    checkrListe: checkrListe,
+    checkrZeilen: checkrZeilen
   };
 })();
 

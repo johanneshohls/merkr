@@ -53,3 +53,15 @@ test("Die checkr-Liste trägt nur Kürzel, keine Namen", () => {
     if (s.vorname) assert.ok(!alsText.includes(s.vorname), "Vorname darf nicht mitgehen: " + s.vorname);
   }
 });
+
+test("Die checkr-Zeilen tragen ein Kürzel je Zeile, keine Namen", () => {
+  const sus = klasse();
+  sus[0].kuerzel = "9d-03";
+  sus[1].kuerzel = "9d-01";
+  const text = K.checkrZeilen(sus);
+  assert.equal(text, "9d-01\n9d-03");
+  for (const s of sus) {
+    if (s.name) assert.ok(!text.includes(s.name), "Nachname darf nicht mitgehen: " + s.name);
+    if (s.vorname) assert.ok(!text.includes(s.vorname), "Vorname darf nicht mitgehen: " + s.vorname);
+  }
+});

@@ -918,11 +918,22 @@ const MerkrKuerzel = (function () {
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
   }
 
+  /**
+   * Derselbe Bestand als Text, ein Kürzel je Zeile. checkr 1 hat keinen
+   * Datei-Import: in der Klassenansicht steht "Mehrere hinzufügen", und das
+   * Feld dort nimmt Namen zeilenweise. Der Weg über die Datei setzte einen
+   * Import voraus, den es nicht gibt.
+   */
+  function checkrZeilen(schueler) {
+    return checkrListe(schueler).map((e) => e.name).join("\n");
+  }
+
   return {
     normalisiert: normalisiert,
     vergeben: vergeben,
     doppelte: doppelte,
-    checkrListe: checkrListe
+    checkrListe: checkrListe,
+    checkrZeilen: checkrZeilen
   };
 })();
 
@@ -4497,7 +4508,7 @@ function kuerzelKarte(k){
     '<button data-a="kuerzelVergeben" data-id="'+k.id+'">Fehlende vergeben'+(ohne?' ('+ohne+')':'')+'</button>'+
     '<button data-a="kuerzelExport" data-id="'+k.id+'">Für checkr ausgeben</button>'+
     '<button data-a="kuerzelPdf" data-id="'+k.id+'">Kürzelliste als PDF</button></div>'+
-    '<p class="hinweis">In checkr: Klasse öffnen, Schülerliste ersetzen, Datei einspielen. '+
+    '<p class="hinweis">In checkr: Klasse öffnen, "Mehrere hinzufügen", die Kürzel einfügen. '+
     'Die Zuordnung läuft dort über den Code, deshalb muss er auf beiden Seiten gleich geschrieben sein.</p></div>';
   return html;
 }
@@ -4549,6 +4560,18 @@ function kuerzellistePdf(kursId){
     zeilen,
     "Der Code gehört auf das Deckblatt der Arbeit. Nur für den dienstlichen Gebrauch.");
 }
+
+/* Der Markieren-Knopf im Kürzel-Dialog. Eigener Zuhörer, weil der Block unten
+   nur Aktionen mit einem Kurs an der Hand bedient. */
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="kuerzelTextMarkieren"]');
+  if (!el) return;
+  const feld = document.getElementById("kuerzelText");
+  if (!feld) return;
+  feld.focus(); feld.select();
+  try { document.execCommand("copy"); toast("Kürzel in der Zwischenablage"); }
+  catch(e){ toast("Markiert - jetzt kopieren"); }
+});
 
 document.addEventListener("click", ev=>{
   const el = ev.target.closest("[data-a]");
@@ -4602,11 +4625,21 @@ document.addEventListener("click", ev=>{
     speichern(); zeichne(); toast(neu.length===1 ? "Ein Kürzel vergeben" : neu.length+" Kürzel vergeben");
   }
   else if (a==="kuerzelExport"){
-    const liste = MerkrKuerzel.checkrListe(schueler);
-    if (!liste.length) return alertBox("Noch kein Kürzel vergeben.");
-    textExportieren("checkr-"+kurs.name.replace(/\s+/g,"-")+"-"+todayISO()+".json",
-      JSON.stringify({students: liste}, null, 2), "application/json");
-    toast(liste.length+" Kürzel werden ausgegeben");
+    /* checkr 1 nimmt die Liste zeilenweise ("Mehrere hinzufügen"), nicht als
+       Datei. Deshalb steht der Text hier zum Kopieren, statt als Anhang zu
+       reisen, für den es drüben keinen Einlass gibt. */
+    const text = MerkrKuerzel.checkrZeilen(schueler);
+    if (!text) return alertBox("Noch kein Kürzel vergeben.");
+    const anzahl = text.split("\n").length;
+    zeigeModal('<h2>Kürzel für checkr</h2>'+
+      '<p class="hinweis">In checkr: Klasse öffnen, <b>Mehrere hinzufügen</b>, diese '+anzahl+
+      ' Zeilen einfügen, speichern.</p>'+
+      '<div class="feld"><textarea id="kuerzelText" rows="'+Math.min(anzahl+1,14)+
+      '" readonly>'+esc(text)+'</textarea></div>'+
+      '<div class="zeile"><button class="primar" data-a="kuerzelTextMarkieren">Alles markieren</button>'+
+      '<button data-a="modalZu">Fertig</button></div>');
+    const feld = document.getElementById("kuerzelText");
+    if (feld){ feld.focus(); feld.select(); }
   }
   else if (a==="kuerzelPdf"){
     try{
