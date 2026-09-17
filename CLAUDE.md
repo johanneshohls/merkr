@@ -79,6 +79,20 @@ Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Abl
 unbestätigt - er kopiert den Bestand aus `KursbuchDaten`, benennt die alte Datei um und löscht
 nichts.
 
+**Aktueller Fokus (Stand 2026-09-14, Sprint-Analyse KW38).** Seit dem 10.08. 87 Commits, zuletzt
+(12.09.) "Noten jetzt holen" für alle korrigierten Arbeiten aus checkr, Gruppen A/B als eine
+Arbeit, Test ist keine Klassenarbeit. Die Tabelle oben und der Satz darunter sagen weiterhin
+"erster Lauf auf dem iPad steht aus" - gleichzeitig wurde der Notenvorschlag am 25.08. an 71
+bestätigten Stundennoten kalibriert. Drei Wochen nach Schulstart muss diese Datei eindeutig sagen,
+ob merkr im Unterricht läuft. Offen zu klären, diese Woche (3 SP):
+
+- Läuft merkr auf dem iPad? Wenn nein: erster Lauf mit Parallelbetrieb zum alten Kursbuch, dabei
+  iCloud-Umzug, Selbstupdate und Rückmeldung an planr auf dem Gerät prüfen. Wenn ja: die Zeile
+  "Einrichten, Probelauf, Parallelbetrieb" und die drei "auf dem Gerät ungetestet" nachziehen.
+- "planr-Route erweitert, Deploy steht aus" (Regie, Stundenraster, Ziel/Verlauf): planr deployt
+  seit 27.08. bei jedem Push über die GitHub Action - vermutlich längst live. Ein Aufruf von
+  `/api/stoffverteilung` klärt es; dann hier richtigstellen.
+
 
 ## Was der Review am 19.08.2026 geändert hat
 
