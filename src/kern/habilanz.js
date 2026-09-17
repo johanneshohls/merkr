@@ -65,7 +65,9 @@ const MerkrHaBilanz = (function () {
       for (const e of h.schueler || []) {
         const id = nachCode[norm(e.code)];
         if (!id) continue;
-        stand[id] = Number(e.geschafft) || 0;
+        // Seit dem 17.09.2026 sagt planr, wie viel am Fälligkeitstag geschafft
+        // war. Damit stimmt die Spalte auch, wenn der Abruf erst später kommt.
+        stand[id] = Number(e.geschafftBisFaellig != null ? e.geschafftBisFaellig : e.geschafft) || 0;
         if (e.ziel != null) zielJe[id] = zielVon(e, h);
       }
       neu[ref] = {
@@ -186,7 +188,28 @@ const MerkrHaBilanz = (function () {
     return { spalten: spalten, zeilen: zeilen };
   }
 
-  return { festschreiben, tabelle, laufende, istHausaufgabe };
+  /**
+   * Festgehaltene Spalten freigeben, die planr noch mitliefert - einmalig.
+   *
+   * Bis zum 17.09.2026 fehlten in planrs Antwort alle richtigen Antworten über
+   * die ersten 1000 hinaus, und die Spalten wurden mit zu kleinen Zahlen
+   * festgehalten. Wer sie hier herausnimmt, lässt `festschreiben` sie beim
+   * selben Abruf neu anlegen, jetzt mit dem Stand bis zum Fälligkeitstag.
+   * Was planr nicht mehr liefert (älter als drei Wochen), bleibt stehen - es
+   * gäbe nichts, womit man es ersetzen könnte.
+   */
+  function nachziehen(bilanz, kursStand) {
+    const raus = Object.assign({}, bilanz || {});
+    if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return raus;
+    for (const h of kursStand.hausaufgaben) {
+      const ref = String(h.quelleRef || "");
+      const liefertBisFaellig = (h.schueler || []).some((e) => e.geschafftBisFaellig != null);
+      if (ref && liefertBisFaellig) delete raus[ref];
+    }
+    return raus;
+  }
+
+  return { festschreiben, tabelle, laufende, istHausaufgabe, nachziehen };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHaBilanz;

@@ -184,3 +184,26 @@ test("alte Einzelspalten je Kind verschwinden aus der Tabelle", () => {
   assert.equal(B.istHausaufgabe("12f51d72-d8fa-4223-90dc-1b83197dcd4f:AAA11"), false);
   assert.equal(B.istHausaufgabe("testfeedback|2026-09-17|Test Mathematik"), true);
 });
+
+test("festgehalten wird der Stand bis zum Fälligkeitstag", () => {
+  const h = stand("2026-09-01", [10, 3]);
+  h.hausaufgaben[0].schueler[1].geschafftBisFaellig = 2;   // Ben hat danach noch eine gerechnet
+  const neu = B.festschreiben({}, h, schueler(), "2026-09-05");
+  assert.equal(neu["12:2"].stand.b, 2);
+  assert.equal(neu["12:2"].stand.a, 10);   // ohne Angabe gilt der Gesamtstand
+});
+
+test("nachziehen gibt nur Spalten frei, die planr neu liefert", () => {
+  const bilanz = {
+    "12:2": { titel: "A", ziel: 10, faelligAm: "2026-09-01", festAm: "2026-09-01", stand: { a: 3 } },
+    "12:1": { titel: "alt", ziel: 10, faelligAm: "2026-08-20", festAm: "2026-08-20", stand: { a: 1 } }
+  };
+  const h = stand("2026-09-01", [10, 3]);
+  assert.deepEqual(Object.keys(B.nachziehen(bilanz, h)).sort(), ["12:1", "12:2"]);   // alter planr: nichts
+  h.hausaufgaben[0].schueler.forEach((e) => { e.geschafftBisFaellig = e.geschafft; });
+  const frei = B.nachziehen(bilanz, h);
+  assert.deepEqual(Object.keys(frei), ["12:1"]);
+  const neu = B.festschreiben(frei, h, schueler(), "2026-09-17");
+  assert.equal(neu["12:2"].stand.a, 10);
+  assert.equal(bilanz["12:2"].stand.a, 3);   // der Bestand selbst bleibt unangetastet
+});
