@@ -127,3 +127,14 @@ test("gestellte Aufgabe: ohne Stand nichts", () => {
   assert.deepEqual(H.gestellteFuerStunde(null, "2026-09-01"), []);
   assert.deepEqual(H.gestellteFuerStunde({ hausaufgaben: [] }, "2026-09-01"), []);
 });
+
+test("Testfeedbacks stehen nicht im Stundendialog", () => {
+  const H = require("../src/kern/hausaufgaben.js");
+  const kursStand = { hausaufgaben: [
+    { quelleRef: "Test Terme:AAA11", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-09-10",
+      faelligAm: "2026-09-17", schueler: [{ code: "AAA11", geschafft: 1, fertig: false }] }
+  ] };
+  const kinder = [{ id: "a", name: "Zander", vorname: "Ann", selbrCode: "AAA11" }];
+  assert.deepEqual(H.fuerStunde(kursStand, "2026-09-17", kinder), []);
+  assert.deepEqual(H.gestellteFuerStunde(kursStand, "2026-09-10"), []);
+});

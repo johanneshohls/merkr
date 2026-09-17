@@ -3146,6 +3146,10 @@ window.__KB_hausaufgabenAntwort = function(text){
   const heute = new Date().toLocaleDateString("sv-SE");
   S.hausaufgabenBilanz = S.hausaufgabenBilanz || {};
   for (const kurs of S.kurse){
+    /* Testfeedbacks je Kind, die vor dem 17.09.2026 mit festgehalten wurden,
+       fliegen hier aus dem Bestand - sie sind keine Hausaufgabe der Klasse. */
+    const alt = S.hausaufgabenBilanz[kurs.id];
+    if (alt) for (const ref of Object.keys(alt)) if (!MerkrHaBilanz.istHausaufgabe(ref)) delete alt[ref];
     const kursStand = MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, kurs);
     if (!kursStand) continue;
     const bestand = S.hausaufgabenBilanz[kurs.id] || {};

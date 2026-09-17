@@ -136,3 +136,23 @@ test("laufende Spalten stehen rechts", () => {
   const { spalten } = B.tabelle(fest, schueler(), l);
   assert.equal(spalten[spalten.length - 1].laeuft, true);
 });
+
+test("Testfeedbacks je Kind werden keine Spalte", () => {
+  const mitFeedback = {
+    hausaufgaben: [
+      ...stand("2026-09-01", [10, 3]).hausaufgaben,
+      { quelleRef: "Test Terme:AAA11", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-08-28",
+        faelligAm: "2026-09-01", schueler: [{ code: "AAA11", geschafft: 2, fertig: false }] },
+      { quelleRef: "Test Terme:BBB22", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-08-28",
+        faelligAm: "2026-09-20", schueler: [{ code: "BBB22", geschafft: 0, fertig: false }] }
+    ]
+  };
+  const neu = B.festschreiben({}, mitFeedback, schueler(), "2026-09-01");
+  assert.deepEqual(Object.keys(neu), ["12:2"]);
+  assert.equal(B.laufende(mitFeedback, "2026-09-01").length, 0);
+  // Was schon im Bestand liegt, verschwindet aus der Tabelle.
+  const altBestand = Object.assign({}, neu, {
+    "Test Terme:AAA11": { titel: "Test Terme", ziel: 6, faelligAm: "2026-09-01", festAm: "2026-09-01", stand: { a: 2 } }
+  });
+  assert.equal(B.tabelle(altBestand, schueler()).spalten.length, 1);
+});

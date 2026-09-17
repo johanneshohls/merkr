@@ -714,6 +714,21 @@ const MerkrHaBilanz = (function () {
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
   /**
+   * Ist das eine Hausaufgabe der Klasse und kein Testfeedback?
+   *
+   * Bis zum 17.09.2026 lieferte planr auch die Testfeedbacks aus selbr mit - je
+   * Kind ein Auftrag, Schlüssel "<Testtitel>:<Code>". Jeder wurde hier zu einer
+   * eigenen Spalte, bei einer Klasse also 20 und mehr. Sie gehören nicht in die
+   * Frage "wer hat die Hausaufgabe gemacht" und fallen auch aus dem schon
+   * gespeicherten Bestand heraus. planrs eigene Schlüssel sind "<Kurs>:<Stunde>",
+   * also Zahl vor dem Doppelpunkt; ein Testtitel ist keine Zahl.
+   */
+  function istHausaufgabe(ref) {
+    const r = String(ref == null ? "" : ref);
+    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+  }
+
+  /**
    * Fällige Aufgaben festschreiben, die noch keinen Eintrag haben.
    *
    * `bilanz` ist der bisherige Bestand (Objekt nach quelleRef), `kursStand` ein
@@ -733,7 +748,7 @@ const MerkrHaBilanz = (function () {
     const neu = {};
     for (const h of kursStand.hausaufgaben) {
       const ref = String(h.quelleRef || "");
-      if (!ref) continue;
+      if (!ref || !istHausaufgabe(ref)) continue;
       if (String(h.faelligAm) > String(heute)) continue;   // noch nicht fällig
       if (bilanz && bilanz[ref]) continue;                  // schon festgehalten
 
@@ -771,7 +786,7 @@ const MerkrHaBilanz = (function () {
   function laufende(kursStand, heute) {
     if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
     return kursStand.hausaufgaben
-      .filter((h) => String(h.faelligAm) > String(heute))
+      .filter((h) => istHausaufgabe(h.quelleRef) && String(h.faelligAm) > String(heute))
       .map((h) => ({
         ref: "laufend:" + String(h.quelleRef || ""),
         titel: String(h.titel || ""),
@@ -795,6 +810,7 @@ const MerkrHaBilanz = (function () {
       if (c) codeVon[s.id] = c;
     }
     const spalten = Object.keys(bilanz || {})
+      .filter(istHausaufgabe)
       .map((ref) => Object.assign({ ref: ref }, bilanz[ref]))
       .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)))
       .concat(laufend || []);
@@ -853,7 +869,7 @@ const MerkrHaBilanz = (function () {
     return { spalten: spalten, zeilen: zeilen };
   }
 
-  return { festschreiben, tabelle, laufende };
+  return { festschreiben, tabelle, laufende, istHausaufgabe };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHaBilanz;
@@ -872,6 +888,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = MerkrHaBil
 const MerkrHausaufgaben = (function () {
 
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
+
+  /** Keine Testfeedbacks je Kind ("<Testtitel>:<Code>") - siehe kern/habilanz.js. */
+  const istHausaufgabe = (h) => {
+    const r = String(h && h.quelleRef != null ? h.quelleRef : "");
+    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+  };
 
   /**
    * Die Aufträge eines Kurses, die an `datum` fällig sind, mit Namen statt Codes.
@@ -894,7 +916,7 @@ const MerkrHausaufgaben = (function () {
     const ohneCode = schueler.filter((s) => !norm(s.selbrCode));
 
     return kursStand.hausaufgaben
-      .filter((h) => String(h.faelligAm) === String(datum))
+      .filter((h) => istHausaufgabe(h) && String(h.faelligAm) === String(datum))
       .map((h) => {
         const erledigt = [];
         const offen = [];
@@ -938,7 +960,7 @@ const MerkrHausaufgaben = (function () {
   function gestellteFuerStunde(kursStand, datum) {
     if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
     return kursStand.hausaufgaben
-      .filter((h) => String(h.gestelltAm) === String(datum))
+      .filter((h) => istHausaufgabe(h) && String(h.gestelltAm) === String(datum))
       .map((h) => {
         const liste = h.schueler || [];
         return {
@@ -5062,6 +5084,10 @@ window.__KB_hausaufgabenAntwort = function(text){
   const heute = new Date().toLocaleDateString("sv-SE");
   S.hausaufgabenBilanz = S.hausaufgabenBilanz || {};
   for (const kurs of S.kurse){
+    /* Testfeedbacks je Kind, die vor dem 17.09.2026 mit festgehalten wurden,
+       fliegen hier aus dem Bestand - sie sind keine Hausaufgabe der Klasse. */
+    const alt = S.hausaufgabenBilanz[kurs.id];
+    if (alt) for (const ref of Object.keys(alt)) if (!MerkrHaBilanz.istHausaufgabe(ref)) delete alt[ref];
     const kursStand = MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, kurs);
     if (!kursStand) continue;
     const bestand = S.hausaufgabenBilanz[kurs.id] || {};

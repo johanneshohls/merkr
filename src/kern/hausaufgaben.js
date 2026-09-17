@@ -12,6 +12,12 @@ const MerkrHausaufgaben = (function () {
 
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
+  /** Keine Testfeedbacks je Kind ("<Testtitel>:<Code>") - siehe kern/habilanz.js. */
+  const istHausaufgabe = (h) => {
+    const r = String(h && h.quelleRef != null ? h.quelleRef : "");
+    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+  };
+
   /**
    * Die Aufträge eines Kurses, die an `datum` fällig sind, mit Namen statt Codes.
    *
@@ -33,7 +39,7 @@ const MerkrHausaufgaben = (function () {
     const ohneCode = schueler.filter((s) => !norm(s.selbrCode));
 
     return kursStand.hausaufgaben
-      .filter((h) => String(h.faelligAm) === String(datum))
+      .filter((h) => istHausaufgabe(h) && String(h.faelligAm) === String(datum))
       .map((h) => {
         const erledigt = [];
         const offen = [];
@@ -77,7 +83,7 @@ const MerkrHausaufgaben = (function () {
   function gestellteFuerStunde(kursStand, datum) {
     if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
     return kursStand.hausaufgaben
-      .filter((h) => String(h.gestelltAm) === String(datum))
+      .filter((h) => istHausaufgabe(h) && String(h.gestelltAm) === String(datum))
       .map((h) => {
         const liste = h.schueler || [];
         return {

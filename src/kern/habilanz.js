@@ -18,6 +18,21 @@ const MerkrHaBilanz = (function () {
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
   /**
+   * Ist das eine Hausaufgabe der Klasse und kein Testfeedback?
+   *
+   * Bis zum 17.09.2026 lieferte planr auch die Testfeedbacks aus selbr mit - je
+   * Kind ein Auftrag, Schlüssel "<Testtitel>:<Code>". Jeder wurde hier zu einer
+   * eigenen Spalte, bei einer Klasse also 20 und mehr. Sie gehören nicht in die
+   * Frage "wer hat die Hausaufgabe gemacht" und fallen auch aus dem schon
+   * gespeicherten Bestand heraus. planrs eigene Schlüssel sind "<Kurs>:<Stunde>",
+   * also Zahl vor dem Doppelpunkt; ein Testtitel ist keine Zahl.
+   */
+  function istHausaufgabe(ref) {
+    const r = String(ref == null ? "" : ref);
+    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+  }
+
+  /**
    * Fällige Aufgaben festschreiben, die noch keinen Eintrag haben.
    *
    * `bilanz` ist der bisherige Bestand (Objekt nach quelleRef), `kursStand` ein
@@ -37,7 +52,7 @@ const MerkrHaBilanz = (function () {
     const neu = {};
     for (const h of kursStand.hausaufgaben) {
       const ref = String(h.quelleRef || "");
-      if (!ref) continue;
+      if (!ref || !istHausaufgabe(ref)) continue;
       if (String(h.faelligAm) > String(heute)) continue;   // noch nicht fällig
       if (bilanz && bilanz[ref]) continue;                  // schon festgehalten
 
@@ -75,7 +90,7 @@ const MerkrHaBilanz = (function () {
   function laufende(kursStand, heute) {
     if (!kursStand || !Array.isArray(kursStand.hausaufgaben)) return [];
     return kursStand.hausaufgaben
-      .filter((h) => String(h.faelligAm) > String(heute))
+      .filter((h) => istHausaufgabe(h.quelleRef) && String(h.faelligAm) > String(heute))
       .map((h) => ({
         ref: "laufend:" + String(h.quelleRef || ""),
         titel: String(h.titel || ""),
@@ -99,6 +114,7 @@ const MerkrHaBilanz = (function () {
       if (c) codeVon[s.id] = c;
     }
     const spalten = Object.keys(bilanz || {})
+      .filter(istHausaufgabe)
       .map((ref) => Object.assign({ ref: ref }, bilanz[ref]))
       .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)))
       .concat(laufend || []);
@@ -157,7 +173,7 @@ const MerkrHaBilanz = (function () {
     return { spalten: spalten, zeilen: zeilen };
   }
 
-  return { festschreiben, tabelle, laufende };
+  return { festschreiben, tabelle, laufende, istHausaufgabe };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHaBilanz;
