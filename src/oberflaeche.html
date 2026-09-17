@@ -982,7 +982,10 @@ function viewHausaufgaben(k){
     html += '<th title="'+esc(sp.titel)+(sp.laeuft?" (laeuft noch)":"")+'" style="font-size:11px;font-weight:600;white-space:nowrap'+
       (sp.laeuft?';border-left:2px solid var(--linie)':'')+'">'+
       fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">'+
-      (sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
+      /* Ein Testfeedback hat kein gemeinsames Ziel - jedes Kind seine eigenen
+         Stationen. Das Ziel steht dann im Tooltip der Zelle. */
+      (sp.art==="testfeedback" ? (sp.laeuft ? 'läuft · ' : '')+'Testfeedback'
+        : sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
       /* Wie viele Kinder etwas gemacht haben, von den gewerteten - der Blick
          ueber die Klasse, ohne die Spalte hinunterzuzaehlen. */
       '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span></th>';
@@ -998,8 +1001,12 @@ function viewHausaufgaben(k){
       const farbe = f.zustand==="fertig" ? "var(--gruen)"
         : (f.zustand==="nichts" && !f.laeuft) ? "var(--rot)"
         : f.laeuft ? "var(--text2)" : "var(--text)";
-      const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>' : String(f.geschafft);
-      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code"
+      const tf = spalten[z.felder.indexOf(f)].art==="testfeedback";
+      /* Beim Testfeedback steht das eigene Ziel mit in der Zelle, weil es je Kind anders ist. */
+      const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>'
+        : tf ? f.geschafft+'<span class="hinweis" style="font-size:11px;font-weight:600">/'+f.ziel+'</span>'
+        : String(f.geschafft);
+      const titel = f.zustand==="unbekannt" ? (tf ? "kein Testfeedback bekommen oder ohne Code" : "damals noch nicht im Kurs oder ohne Code")
         : f.geschafft+" von "+f.ziel+(f.laeuft?" - läuft noch bis "+fmtDatum(spalten[z.felder.indexOf(f)].faelligAm):" gelöst");
       html += '<td style="text-align:center;color:'+farbe+';font-size:14px;font-weight:700'+
         (f.laeuft?';border-left:2px solid var(--linie)':'')+'" title="'+esc(titel)+'">'+inhalt+'</td>';
@@ -2148,16 +2155,18 @@ function hausaufgabenBlockHtml(st){
 
   let html = "";
   for (const g of gestellt){
-    html += '<div class="feld"><label>Aufgegeben in dieser Stunde: '+esc(g.titel)+'</label>'+
-      '<p style="margin:4px 0">'+g.ziel+' Aufgaben in selbr, bis '+esc(fmtDatum(g.faelligAm))+
+    const tf = g.art==="testfeedback";
+    html += '<div class="feld"><label>'+(tf?'Testfeedback: ':'Aufgegeben in dieser Stunde: ')+esc(g.titel)+'</label>'+
+      '<p style="margin:4px 0">'+(tf ? 'für '+g.gesamt+' Kinder, je eigene Stationen' : g.ziel+' Aufgaben')+' in selbr, bis '+esc(fmtDatum(g.faelligAm))+
       (g.hinweis ? ' · '+esc(g.hinweis) : '')+'</p>'+
       '<p class="hinweis" style="margin-top:0">'+g.angefangen+' von '+g.gesamt+' haben angefangen, '+
       g.fertig+' fertig · Stand '+frisch+'</p></div>';
   }
   for (const h of aufgaben){
     const gesamt = h.erledigt.length + h.offen.length;
-    html += '<div class="feld"><label>Hausaufgabe: '+esc(h.titel)+'</label>'+
-      '<p class="hinweis" style="margin-top:0">'+h.erledigt.length+' von '+gesamt+' fertig ('+h.ziel+' Aufgaben) · Stand '+frisch+'</p>';
+    const tf = h.art==="testfeedback";
+    html += '<div class="feld"><label>'+(tf?'Testfeedback: ':'Hausaufgabe: ')+esc(h.titel)+'</label>'+
+      '<p class="hinweis" style="margin-top:0">'+h.erledigt.length+' von '+gesamt+' fertig'+(tf?'':' ('+h.ziel+' Aufgaben)')+' · Stand '+frisch+'</p>';
     if (h.offen.length){
       html += '<p style="margin:4px 0"><b>Offen:</b> '+
         h.offen.map(x=>esc(x.vorname)+" "+esc(x.name)+' <span class="hinweis">'+x.geschafft+'/'+x.ziel+'</span>').join(", ")+'</p>';
@@ -2166,7 +2175,7 @@ function hausaufgabenBlockHtml(st){
       html += '<p style="margin:4px 0;color:var(--gruen)"><b>Fertig:</b> '+
         h.erledigt.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
     }
-    if (h.ohneCode.length){
+    if (h.ohneCode.length && !tf){
       html += '<p class="hinweis">Ohne selbr-Code, deshalb nicht gemessen: '+
         h.ohneCode.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
     }
@@ -3146,8 +3155,9 @@ window.__KB_hausaufgabenAntwort = function(text){
   const heute = new Date().toLocaleDateString("sv-SE");
   S.hausaufgabenBilanz = S.hausaufgabenBilanz || {};
   for (const kurs of S.kurse){
-    /* Testfeedbacks je Kind, die vor dem 17.09.2026 mit festgehalten wurden,
-       fliegen hier aus dem Bestand - sie sind keine Hausaufgabe der Klasse. */
+    /* Testfeedbacks, die vor dem 17.09.2026 je Kind als eigene Spalte
+       festgehalten wurden, fliegen hier aus dem Bestand - seitdem kommt je
+       Test eine Spalte. */
     const alt = S.hausaufgabenBilanz[kurs.id];
     if (alt) for (const ref of Object.keys(alt)) if (!MerkrHaBilanz.istHausaufgabe(ref)) delete alt[ref];
     const kursStand = MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, kurs);

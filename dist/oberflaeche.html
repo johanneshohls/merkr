@@ -714,18 +714,22 @@ const MerkrHaBilanz = (function () {
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
   /**
-   * Ist das eine Hausaufgabe der Klasse und kein Testfeedback?
+   * Wird der Eintrag eine Spalte?
    *
-   * Bis zum 17.09.2026 lieferte planr auch die Testfeedbacks aus selbr mit - je
-   * Kind ein Auftrag, Schlüssel "<Testtitel>:<Code>". Jeder wurde hier zu einer
-   * eigenen Spalte, bei einer Klasse also 20 und mehr. Sie gehören nicht in die
-   * Frage "wer hat die Hausaufgabe gemacht" und fallen auch aus dem schon
-   * gespeicherten Bestand heraus. planrs eigene Schlüssel sind "<Kurs>:<Stunde>",
-   * also Zahl vor dem Doppelpunkt; ein Testtitel ist keine Zahl.
+   * Bis zum 17.09.2026 lieferte planr die Testfeedbacks aus selbr einzeln - je
+   * Kind ein Auftrag, Schlüssel "<checkr-Auftrag>:<Code>". Jeder wurde hier zu
+   * einer eigenen Spalte, in der 8d 27 Stück. Seitdem kommt je Test ein Eintrag
+   * ("testfeedback|<fällig>|<Titel>"), und die alten Einzelspalten fallen aus
+   * dem gespeicherten Bestand heraus. Erkannt werden sie an der Kennung des
+   * checkr-Auftrags vorn.
    */
   function istHausaufgabe(ref) {
-    const r = String(ref == null ? "" : ref);
-    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+    return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(String(ref == null ? "" : ref));
+  }
+
+  /** Ziel eines Kindes: beim Testfeedback sein eigenes, sonst das der Aufgabe. */
+  function zielVon(e, h) {
+    return e && e.ziel != null ? Number(e.ziel) || 0 : Number(h.zielAufgaben) || 0;
   }
 
   /**
@@ -753,13 +757,18 @@ const MerkrHaBilanz = (function () {
       if (bilanz && bilanz[ref]) continue;                  // schon festgehalten
 
       const stand = {};
+      const zielJe = {};
       for (const e of h.schueler || []) {
         const id = nachCode[norm(e.code)];
-        if (id) stand[id] = Number(e.geschafft) || 0;
+        if (!id) continue;
+        stand[id] = Number(e.geschafft) || 0;
+        if (e.ziel != null) zielJe[id] = zielVon(e, h);
       }
       neu[ref] = {
         titel: String(h.titel || ""),
+        art: String(h.art || "hausaufgabe"),
         ziel: Number(h.zielAufgaben) || 0,
+        zielJe: zielJe,
         faelligAm: String(h.faelligAm),
         festAm: String(heute),
         stand: stand,
@@ -790,6 +799,7 @@ const MerkrHaBilanz = (function () {
       .map((h) => ({
         ref: "laufend:" + String(h.quelleRef || ""),
         titel: String(h.titel || ""),
+        art: String(h.art || "hausaufgabe"),
         ziel: Number(h.zielAufgaben) || 0,
         faelligAm: String(h.faelligAm),
         laeuft: true,
@@ -821,19 +831,22 @@ const MerkrHaBilanz = (function () {
       .map((s) => {
         const felder = spalten.map((sp) => {
           let wert;
+          let ziel = sp.ziel;
           if (sp.laeuft) {
             const code = codeVon[s.id];
             const treffer = code && (sp.codeStand || []).find((e) => norm(e.code) === code);
             wert = treffer ? Number(treffer.geschafft) || 0 : undefined;
+            if (treffer && treffer.ziel != null) ziel = Number(treffer.ziel) || 0;
           } else {
             wert = sp.stand ? sp.stand[s.id] : undefined;
+            if (sp.zielJe && sp.zielJe[s.id] != null) ziel = sp.zielJe[s.id];
           }
-          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: sp.ziel, laeuft: !!sp.laeuft };
-          const fertig = sp.ziel > 0 && wert >= sp.ziel;
+          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: ziel, laeuft: !!sp.laeuft };
+          const fertig = ziel > 0 && wert >= ziel;
           return {
             zustand: fertig ? "fertig" : wert > 0 ? "teils" : "nichts",
             geschafft: wert,
-            ziel: sp.ziel,
+            ziel: ziel,
             laeuft: !!sp.laeuft,
           };
         });
@@ -889,11 +902,9 @@ const MerkrHausaufgaben = (function () {
 
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
-  /** Keine Testfeedbacks je Kind ("<Testtitel>:<Code>") - siehe kern/habilanz.js. */
-  const istHausaufgabe = (h) => {
-    const r = String(h && h.quelleRef != null ? h.quelleRef : "");
-    return r.indexOf(":") < 0 || /^\d+:/.test(r);
-  };
+  /** Keine alten Einzel-Testfeedbacks ("<checkr-Auftrag>:<Code>") - siehe kern/habilanz.js. */
+  const istHausaufgabe = (h) =>
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(String(h && h.quelleRef != null ? h.quelleRef : ""));
 
   /**
    * Die Aufträge eines Kurses, die an `datum` fällig sind, mit Namen statt Codes.
@@ -928,7 +939,8 @@ const MerkrHausaufgaben = (function () {
             name: s.name,
             vorname: s.vorname,
             geschafft: Number(eintrag.geschafft) || 0,
-            ziel: Number(h.zielAufgaben) || 0,
+            // Beim Testfeedback hat jedes Kind sein eigenes Ziel.
+            ziel: eintrag.ziel != null ? Number(eintrag.ziel) || 0 : Number(h.zielAufgaben) || 0,
           };
           (eintrag.fertig ? erledigt : offen).push(zeile);
         }
@@ -936,6 +948,7 @@ const MerkrHausaufgaben = (function () {
           ((a.name || "") + " " + (a.vorname || "")).localeCompare((b.name || "") + " " + (b.vorname || ""), "de"));
         return {
           titel: h.titel,
+          art: h.art || "hausaufgabe",
           hinweis: h.hinweis || "",
           ziel: Number(h.zielAufgaben) || 0,
           gestelltAm: h.gestelltAm,
@@ -965,6 +978,7 @@ const MerkrHausaufgaben = (function () {
         const liste = h.schueler || [];
         return {
           titel: h.titel,
+          art: h.art || "hausaufgabe",
           hinweis: h.hinweis || "",
           ziel: Number(h.zielAufgaben) || 0,
           gestelltAm: h.gestelltAm,
@@ -2920,7 +2934,10 @@ function viewHausaufgaben(k){
     html += '<th title="'+esc(sp.titel)+(sp.laeuft?" (laeuft noch)":"")+'" style="font-size:11px;font-weight:600;white-space:nowrap'+
       (sp.laeuft?';border-left:2px solid var(--linie)':'')+'">'+
       fmtDatumKurz(sp.faelligAm)+'<br><span class="hinweis" style="font-weight:600">'+
-      (sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
+      /* Ein Testfeedback hat kein gemeinsames Ziel - jedes Kind seine eigenen
+         Stationen. Das Ziel steht dann im Tooltip der Zelle. */
+      (sp.art==="testfeedback" ? (sp.laeuft ? 'läuft · ' : '')+'Testfeedback'
+        : sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
       /* Wie viele Kinder etwas gemacht haben, von den gewerteten - der Blick
          ueber die Klasse, ohne die Spalte hinunterzuzaehlen. */
       '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span></th>';
@@ -2936,8 +2953,12 @@ function viewHausaufgaben(k){
       const farbe = f.zustand==="fertig" ? "var(--gruen)"
         : (f.zustand==="nichts" && !f.laeuft) ? "var(--rot)"
         : f.laeuft ? "var(--text2)" : "var(--text)";
-      const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>' : String(f.geschafft);
-      const titel = f.zustand==="unbekannt" ? "damals noch nicht im Kurs oder ohne Code"
+      const tf = spalten[z.felder.indexOf(f)].art==="testfeedback";
+      /* Beim Testfeedback steht das eigene Ziel mit in der Zelle, weil es je Kind anders ist. */
+      const inhalt = f.zustand==="unbekannt" ? '<span class="hinweis">·</span>'
+        : tf ? f.geschafft+'<span class="hinweis" style="font-size:11px;font-weight:600">/'+f.ziel+'</span>'
+        : String(f.geschafft);
+      const titel = f.zustand==="unbekannt" ? (tf ? "kein Testfeedback bekommen oder ohne Code" : "damals noch nicht im Kurs oder ohne Code")
         : f.geschafft+" von "+f.ziel+(f.laeuft?" - läuft noch bis "+fmtDatum(spalten[z.felder.indexOf(f)].faelligAm):" gelöst");
       html += '<td style="text-align:center;color:'+farbe+';font-size:14px;font-weight:700'+
         (f.laeuft?';border-left:2px solid var(--linie)':'')+'" title="'+esc(titel)+'">'+inhalt+'</td>';
@@ -4086,16 +4107,18 @@ function hausaufgabenBlockHtml(st){
 
   let html = "";
   for (const g of gestellt){
-    html += '<div class="feld"><label>Aufgegeben in dieser Stunde: '+esc(g.titel)+'</label>'+
-      '<p style="margin:4px 0">'+g.ziel+' Aufgaben in selbr, bis '+esc(fmtDatum(g.faelligAm))+
+    const tf = g.art==="testfeedback";
+    html += '<div class="feld"><label>'+(tf?'Testfeedback: ':'Aufgegeben in dieser Stunde: ')+esc(g.titel)+'</label>'+
+      '<p style="margin:4px 0">'+(tf ? 'für '+g.gesamt+' Kinder, je eigene Stationen' : g.ziel+' Aufgaben')+' in selbr, bis '+esc(fmtDatum(g.faelligAm))+
       (g.hinweis ? ' · '+esc(g.hinweis) : '')+'</p>'+
       '<p class="hinweis" style="margin-top:0">'+g.angefangen+' von '+g.gesamt+' haben angefangen, '+
       g.fertig+' fertig · Stand '+frisch+'</p></div>';
   }
   for (const h of aufgaben){
     const gesamt = h.erledigt.length + h.offen.length;
-    html += '<div class="feld"><label>Hausaufgabe: '+esc(h.titel)+'</label>'+
-      '<p class="hinweis" style="margin-top:0">'+h.erledigt.length+' von '+gesamt+' fertig ('+h.ziel+' Aufgaben) · Stand '+frisch+'</p>';
+    const tf = h.art==="testfeedback";
+    html += '<div class="feld"><label>'+(tf?'Testfeedback: ':'Hausaufgabe: ')+esc(h.titel)+'</label>'+
+      '<p class="hinweis" style="margin-top:0">'+h.erledigt.length+' von '+gesamt+' fertig'+(tf?'':' ('+h.ziel+' Aufgaben)')+' · Stand '+frisch+'</p>';
     if (h.offen.length){
       html += '<p style="margin:4px 0"><b>Offen:</b> '+
         h.offen.map(x=>esc(x.vorname)+" "+esc(x.name)+' <span class="hinweis">'+x.geschafft+'/'+x.ziel+'</span>').join(", ")+'</p>';
@@ -4104,7 +4127,7 @@ function hausaufgabenBlockHtml(st){
       html += '<p style="margin:4px 0;color:var(--gruen)"><b>Fertig:</b> '+
         h.erledigt.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
     }
-    if (h.ohneCode.length){
+    if (h.ohneCode.length && !tf){
       html += '<p class="hinweis">Ohne selbr-Code, deshalb nicht gemessen: '+
         h.ohneCode.map(x=>esc(x.vorname)+" "+esc(x.name)).join(", ")+'</p>';
     }
@@ -5084,8 +5107,9 @@ window.__KB_hausaufgabenAntwort = function(text){
   const heute = new Date().toLocaleDateString("sv-SE");
   S.hausaufgabenBilanz = S.hausaufgabenBilanz || {};
   for (const kurs of S.kurse){
-    /* Testfeedbacks je Kind, die vor dem 17.09.2026 mit festgehalten wurden,
-       fliegen hier aus dem Bestand - sie sind keine Hausaufgabe der Klasse. */
+    /* Testfeedbacks, die vor dem 17.09.2026 je Kind als eigene Spalte
+       festgehalten wurden, fliegen hier aus dem Bestand - seitdem kommt je
+       Test eine Spalte. */
     const alt = S.hausaufgabenBilanz[kurs.id];
     if (alt) for (const ref of Object.keys(alt)) if (!MerkrHaBilanz.istHausaufgabe(ref)) delete alt[ref];
     const kursStand = MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, kurs);

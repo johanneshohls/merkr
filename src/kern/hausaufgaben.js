@@ -12,11 +12,9 @@ const MerkrHausaufgaben = (function () {
 
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
-  /** Keine Testfeedbacks je Kind ("<Testtitel>:<Code>") - siehe kern/habilanz.js. */
-  const istHausaufgabe = (h) => {
-    const r = String(h && h.quelleRef != null ? h.quelleRef : "");
-    return r.indexOf(":") < 0 || /^\d+:/.test(r);
-  };
+  /** Keine alten Einzel-Testfeedbacks ("<checkr-Auftrag>:<Code>") - siehe kern/habilanz.js. */
+  const istHausaufgabe = (h) =>
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(String(h && h.quelleRef != null ? h.quelleRef : ""));
 
   /**
    * Die Aufträge eines Kurses, die an `datum` fällig sind, mit Namen statt Codes.
@@ -51,7 +49,8 @@ const MerkrHausaufgaben = (function () {
             name: s.name,
             vorname: s.vorname,
             geschafft: Number(eintrag.geschafft) || 0,
-            ziel: Number(h.zielAufgaben) || 0,
+            // Beim Testfeedback hat jedes Kind sein eigenes Ziel.
+            ziel: eintrag.ziel != null ? Number(eintrag.ziel) || 0 : Number(h.zielAufgaben) || 0,
           };
           (eintrag.fertig ? erledigt : offen).push(zeile);
         }
@@ -59,6 +58,7 @@ const MerkrHausaufgaben = (function () {
           ((a.name || "") + " " + (a.vorname || "")).localeCompare((b.name || "") + " " + (b.vorname || ""), "de"));
         return {
           titel: h.titel,
+          art: h.art || "hausaufgabe",
           hinweis: h.hinweis || "",
           ziel: Number(h.zielAufgaben) || 0,
           gestelltAm: h.gestelltAm,
@@ -88,6 +88,7 @@ const MerkrHausaufgaben = (function () {
         const liste = h.schueler || [];
         return {
           titel: h.titel,
+          art: h.art || "hausaufgabe",
           hinweis: h.hinweis || "",
           ziel: Number(h.zielAufgaben) || 0,
           gestelltAm: h.gestelltAm,

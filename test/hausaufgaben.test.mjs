@@ -128,13 +128,28 @@ test("gestellte Aufgabe: ohne Stand nichts", () => {
   assert.deepEqual(H.gestellteFuerStunde({ hausaufgaben: [] }, "2026-09-01"), []);
 });
 
-test("Testfeedbacks stehen nicht im Stundendialog", () => {
-  const H = require("../src/kern/hausaufgaben.js");
+test("Testfeedback im Stundendialog: je Kind das eigene Ziel", () => {
   const kursStand = { hausaufgaben: [
-    { quelleRef: "Test Terme:AAA11", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-09-10",
-      faelligAm: "2026-09-17", schueler: [{ code: "AAA11", geschafft: 1, fertig: false }] }
+    { quelleRef: "testfeedback|2026-09-17|Test Terme", art: "testfeedback", titel: "Test Terme",
+      zielAufgaben: 0, gestelltAm: "2026-09-10", faelligAm: "2026-09-17",
+      schueler: [
+        { code: "AAA11", geschafft: 1, fertig: false, ziel: 7 },
+        { code: "BBB22", geschafft: 3, fertig: true, ziel: 3 }
+      ] }
   ] };
-  const kinder = [{ id: "a", name: "Zander", vorname: "Ann", selbrCode: "AAA11" }];
-  assert.deepEqual(H.fuerStunde(kursStand, "2026-09-17", kinder), []);
-  assert.deepEqual(H.gestellteFuerStunde(kursStand, "2026-09-10"), []);
+  const r = H.fuerStunde(kursStand, "2026-09-17", schueler());
+  assert.equal(r.length, 1);
+  assert.equal(r[0].art, "testfeedback");
+  assert.equal(r[0].offen[0].ziel, 7);
+  assert.equal(r[0].erledigt[0].id, "b");
+  const g = H.gestellteFuerStunde(kursStand, "2026-09-10");
+  assert.equal(g[0].gesamt, 2);
+});
+
+test("alte Einzel-Testfeedbacks stehen nicht im Stundendialog", () => {
+  const kursStand = { hausaufgaben: [
+    { quelleRef: "12f51d72-d8fa-4223-90dc-1b83197dcd4f:AAA11", titel: "Test", zielAufgaben: 6,
+      gestelltAm: "2026-09-10", faelligAm: "2026-09-17", schueler: [{ code: "AAA11", geschafft: 1, fertig: false }] }
+  ] };
+  assert.deepEqual(H.fuerStunde(kursStand, "2026-09-17", schueler()), []);
 });

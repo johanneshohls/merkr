@@ -137,22 +137,50 @@ test("laufende Spalten stehen rechts", () => {
   assert.equal(spalten[spalten.length - 1].laeuft, true);
 });
 
-test("Testfeedbacks je Kind werden keine Spalte", () => {
+test("ein Testfeedback ist eine Spalte, jedes Kind mit eigenem Ziel", () => {
   const mitFeedback = {
     hausaufgaben: [
       ...stand("2026-09-01", [10, 3]).hausaufgaben,
-      { quelleRef: "Test Terme:AAA11", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-08-28",
-        faelligAm: "2026-09-01", schueler: [{ code: "AAA11", geschafft: 2, fertig: false }] },
-      { quelleRef: "Test Terme:BBB22", titel: "Test Terme", zielAufgaben: 6, gestelltAm: "2026-08-28",
-        faelligAm: "2026-09-20", schueler: [{ code: "BBB22", geschafft: 0, fertig: false }] }
+      { quelleRef: "testfeedback|2026-09-01|Test Terme", art: "testfeedback", titel: "Test Terme",
+        zielAufgaben: 0, gestelltAm: "2026-08-28", faelligAm: "2026-09-01",
+        schueler: [
+          { code: "AAA11", geschafft: 6, fertig: true, ziel: 6 },
+          { code: "BBB22", geschafft: 4, fertig: false, ziel: 12 }
+        ] }
     ]
   };
   const neu = B.festschreiben({}, mitFeedback, schueler(), "2026-09-01");
-  assert.deepEqual(Object.keys(neu), ["12:2"]);
-  assert.equal(B.laufende(mitFeedback, "2026-09-01").length, 0);
-  // Was schon im Bestand liegt, verschwindet aus der Tabelle.
-  const altBestand = Object.assign({}, neu, {
-    "Test Terme:AAA11": { titel: "Test Terme", ziel: 6, faelligAm: "2026-09-01", festAm: "2026-09-01", stand: { a: 2 } }
-  });
-  assert.equal(B.tabelle(altBestand, schueler()).spalten.length, 1);
+  assert.deepEqual(Object.keys(neu).sort(), ["12:2", "testfeedback|2026-09-01|Test Terme"]);
+  const { spalten, zeilen } = B.tabelle(neu, schueler());
+  assert.equal(spalten.length, 2);
+  const i = spalten.findIndex((sp) => sp.art === "testfeedback");
+  const ann = zeilen.find((z) => z.id === "a").felder[i];
+  const ben = zeilen.find((z) => z.id === "b").felder[i];
+  assert.equal(ann.zustand, "fertig");
+  assert.equal(ann.ziel, 6);
+  assert.equal(ben.zustand, "teils");
+  assert.equal(ben.ziel, 12);
+  // Cem hat kein Feedback bekommen - das zählt nicht gegen ihn.
+  assert.equal(zeilen.find((z) => z.id === "c").felder[i].zustand, "unbekannt");
+});
+
+test("laufendes Testfeedback nimmt das Ziel des Kindes", () => {
+  const laufend = B.laufende({ hausaufgaben: [
+    { quelleRef: "testfeedback|2026-09-20|Test Terme", art: "testfeedback", titel: "Test Terme",
+      zielAufgaben: 0, gestelltAm: "2026-09-12", faelligAm: "2026-09-20",
+      schueler: [{ code: "BBB22", geschafft: 9, fertig: true, ziel: 9 }] }
+  ] }, "2026-09-17");
+  const { spalten, zeilen } = B.tabelle({}, schueler(), laufend);
+  assert.equal(spalten.length, 1);
+  assert.equal(zeilen.find((z) => z.id === "b").felder[0].zustand, "fertig");
+});
+
+test("alte Einzelspalten je Kind verschwinden aus der Tabelle", () => {
+  const bilanz = {
+    "12:2": { titel: "A", ziel: 10, faelligAm: "2026-09-01", festAm: "2026-09-01", stand: { a: 10 } },
+    "12f51d72-d8fa-4223-90dc-1b83197dcd4f:AAA11": { titel: "Test", ziel: 6, faelligAm: "2026-09-01", festAm: "2026-09-01", stand: { a: 2 } }
+  };
+  assert.equal(B.tabelle(bilanz, schueler()).spalten.length, 1);
+  assert.equal(B.istHausaufgabe("12f51d72-d8fa-4223-90dc-1b83197dcd4f:AAA11"), false);
+  assert.equal(B.istHausaufgabe("testfeedback|2026-09-17|Test Mathematik"), true);
 });

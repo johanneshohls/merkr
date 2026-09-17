@@ -18,18 +18,22 @@ const MerkrHaBilanz = (function () {
   const norm = (x) => String(x == null ? "" : x).trim().toUpperCase();
 
   /**
-   * Ist das eine Hausaufgabe der Klasse und kein Testfeedback?
+   * Wird der Eintrag eine Spalte?
    *
-   * Bis zum 17.09.2026 lieferte planr auch die Testfeedbacks aus selbr mit - je
-   * Kind ein Auftrag, Schlüssel "<Testtitel>:<Code>". Jeder wurde hier zu einer
-   * eigenen Spalte, bei einer Klasse also 20 und mehr. Sie gehören nicht in die
-   * Frage "wer hat die Hausaufgabe gemacht" und fallen auch aus dem schon
-   * gespeicherten Bestand heraus. planrs eigene Schlüssel sind "<Kurs>:<Stunde>",
-   * also Zahl vor dem Doppelpunkt; ein Testtitel ist keine Zahl.
+   * Bis zum 17.09.2026 lieferte planr die Testfeedbacks aus selbr einzeln - je
+   * Kind ein Auftrag, Schlüssel "<checkr-Auftrag>:<Code>". Jeder wurde hier zu
+   * einer eigenen Spalte, in der 8d 27 Stück. Seitdem kommt je Test ein Eintrag
+   * ("testfeedback|<fällig>|<Titel>"), und die alten Einzelspalten fallen aus
+   * dem gespeicherten Bestand heraus. Erkannt werden sie an der Kennung des
+   * checkr-Auftrags vorn.
    */
   function istHausaufgabe(ref) {
-    const r = String(ref == null ? "" : ref);
-    return r.indexOf(":") < 0 || /^\d+:/.test(r);
+    return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i.test(String(ref == null ? "" : ref));
+  }
+
+  /** Ziel eines Kindes: beim Testfeedback sein eigenes, sonst das der Aufgabe. */
+  function zielVon(e, h) {
+    return e && e.ziel != null ? Number(e.ziel) || 0 : Number(h.zielAufgaben) || 0;
   }
 
   /**
@@ -57,13 +61,18 @@ const MerkrHaBilanz = (function () {
       if (bilanz && bilanz[ref]) continue;                  // schon festgehalten
 
       const stand = {};
+      const zielJe = {};
       for (const e of h.schueler || []) {
         const id = nachCode[norm(e.code)];
-        if (id) stand[id] = Number(e.geschafft) || 0;
+        if (!id) continue;
+        stand[id] = Number(e.geschafft) || 0;
+        if (e.ziel != null) zielJe[id] = zielVon(e, h);
       }
       neu[ref] = {
         titel: String(h.titel || ""),
+        art: String(h.art || "hausaufgabe"),
         ziel: Number(h.zielAufgaben) || 0,
+        zielJe: zielJe,
         faelligAm: String(h.faelligAm),
         festAm: String(heute),
         stand: stand,
@@ -94,6 +103,7 @@ const MerkrHaBilanz = (function () {
       .map((h) => ({
         ref: "laufend:" + String(h.quelleRef || ""),
         titel: String(h.titel || ""),
+        art: String(h.art || "hausaufgabe"),
         ziel: Number(h.zielAufgaben) || 0,
         faelligAm: String(h.faelligAm),
         laeuft: true,
@@ -125,19 +135,22 @@ const MerkrHaBilanz = (function () {
       .map((s) => {
         const felder = spalten.map((sp) => {
           let wert;
+          let ziel = sp.ziel;
           if (sp.laeuft) {
             const code = codeVon[s.id];
             const treffer = code && (sp.codeStand || []).find((e) => norm(e.code) === code);
             wert = treffer ? Number(treffer.geschafft) || 0 : undefined;
+            if (treffer && treffer.ziel != null) ziel = Number(treffer.ziel) || 0;
           } else {
             wert = sp.stand ? sp.stand[s.id] : undefined;
+            if (sp.zielJe && sp.zielJe[s.id] != null) ziel = sp.zielJe[s.id];
           }
-          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: sp.ziel, laeuft: !!sp.laeuft };
-          const fertig = sp.ziel > 0 && wert >= sp.ziel;
+          if (wert === undefined) return { zustand: "unbekannt", geschafft: null, ziel: ziel, laeuft: !!sp.laeuft };
+          const fertig = ziel > 0 && wert >= ziel;
           return {
             zustand: fertig ? "fertig" : wert > 0 ? "teils" : "nichts",
             geschafft: wert,
-            ziel: sp.ziel,
+            ziel: ziel,
             laeuft: !!sp.laeuft,
           };
         });
