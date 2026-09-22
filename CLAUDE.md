@@ -79,7 +79,23 @@ Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Abl
 unbestätigt - er kopiert den Bestand aus `KursbuchDaten`, benennt die alte Datei um und löscht
 nichts.
 
-**Aktueller Fokus (Stand 2026-09-14, Sprint-Analyse KW38).** Seit dem 10.08. 87 Commits, zuletzt
+**Aktueller Fokus (Stand 2026-09-21, Sprint-Analyse KW39).** Vier Commits seit 14.09.: Hausaufgaben-Reiter
+(Testfeedbacks sind keine Spalte, sondern eine Spalte je Test), Hausaufgaben-Bilanz mit Stand bis
+zur Fälligkeit, zu klein festgehaltene Spalten einmalig nachgezogen (17.09.). Der planr-Gegenpart
+(`Hausaufgabenstand`, seitenweise) ist am selben Tag gefallen. In dieser Datei sonst nicht
+beschrieben.
+
+**Die beiden KW38-Fragen sind unbeantwortet geblieben.** Die Tabelle oben sagt weiter "offen" und
+"auf dem Gerät ungetestet", obwohl die Datei selbst den Gegenbeweis enthält: 71 bestätigte
+Stundennoten am 25.08., ein Kollege mit installiertem merkr und verbundenem planr, TÜ-Lösungen
+seit 03.09. in der Regie-Karte sichtbar. Nach Aktenlage läuft merkr seit dem 24.08. im Unterricht
+und die Regie-Route ist live. Auftrag KW39 (0,5 SP, keine Entwicklung): Statustabelle durch einen
+Satz ersetzen — "läuft seit 24.08. auf dem iPad; ungeprüft sind: [konkrete Liste]" — und die drei
+"Deploy steht aus" nach einem `curl` gegen planr streichen. Was danach wirklich ungeprüft bleibt
+(iCloud-Umzug? Selbstupdate?), steht als Prüfauftrag, nicht als Tabellenzeile. Wird das eine dritte
+Woche nicht gemacht, wird die Tabelle beim nächsten Lauf ohne Rückfrage auf "läuft" gesetzt.
+
+Stand 2026-09-14 (Sprint-Analyse KW38): Seit dem 10.08. 87 Commits, zuletzt
 (12.09.) "Noten jetzt holen" für alle korrigierten Arbeiten aus checkr, Gruppen A/B als eine
 Arbeit, Test ist keine Klassenarbeit. Die Tabelle oben und der Satz darunter sagen weiterhin
 "erster Lauf auf dem iPad steht aus" - gleichzeitig wurde der Notenvorschlag am 25.08. an 71
