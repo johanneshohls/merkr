@@ -3142,11 +3142,27 @@ window.__KB_hausaufgabenAntwort = function(text){
   let daten = null;
   try { daten = JSON.parse(text); } catch(e){ daten = null; }
   if (!daten || daten.fehler || !Array.isArray(daten.kurse)){
-    /* Still bleiben: der Stand ist eine Zugabe zum Stoffplan. Wer ihn braucht,
-       sieht im Stundendialog, wie alt er ist. */
+    /* Beim stillen Abruf still bleiben: der Stand ist eine Zugabe zum
+       Stoffplan. Wer selbst auf "neu holen" getippt hat, soll wissen, dass die
+       Hausaufgaben nicht gekommen sind - sonst steht der alte Stand da, als
+       waere er frisch. */
+    if (!planrStill) toast("Hausaufgaben nicht geholt: "+((daten && daten.fehler) || "keine Antwort"));
     return "fehler";
   }
-  S.hausaufgabenStand = { geholtAm: new Date().toISOString(), kurse: daten.kurse };
+  /* Ein Kurs, fuer den planr selbr nicht erreicht hat (erreichbar: false),
+     behaelt seinen letzten Stand. Sonst kaeme er als leere Liste an und die
+     laufende Spalte verschwaende, als gaebe es keine Aufgabe. */
+  const vorher = (S.hausaufgabenStand && Array.isArray(S.hausaufgabenStand.kurse)) ? S.hausaufgabenStand.kurse : [];
+  const unerreicht = [];
+  const kurseNeu = daten.kurse.map(k => {
+    if (k && k.erreichbar === false){
+      unerreicht.push(k.kurs || k.klasse || "?");
+      const alt = vorher.find(v => v && v.kurs === k.kurs);
+      return alt ? Object.assign({}, alt, { erreichbar: false }) : k;
+    }
+    return k;
+  });
+  S.hausaufgabenStand = { geholtAm: new Date().toISOString(), kurse: kurseNeu };
 
   /* Was faellig geworden ist, wird jetzt festgehalten - einmal und nie wieder.
      Wer die Aufgabe nachmittags nachholt, steht im Stundendialog als fertig, in
@@ -3167,7 +3183,8 @@ window.__KB_hausaufgabenAntwort = function(text){
     const alt = S.hausaufgabenBilanz[kurs.id];
     if (alt) for (const ref of Object.keys(alt)) if (!MerkrHaBilanz.istHausaufgabe(ref)) delete alt[ref];
     const kursStand = MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, kurs);
-    if (!kursStand) continue;
+    /* Ein alter Stand wird nicht festgehalten - er sagt nichts ueber heute. */
+    if (!kursStand || kursStand.erreichbar === false) continue;
     if (nachzug && S.hausaufgabenBilanz[kurs.id])
       S.hausaufgabenBilanz[kurs.id] = MerkrHaBilanz.nachziehen(S.hausaufgabenBilanz[kurs.id], kursStand);
     const bestand = S.hausaufgabenBilanz[kurs.id] || {};
@@ -3178,6 +3195,13 @@ window.__KB_hausaufgabenAntwort = function(text){
   }
   if (nachzug) S.einstellungen.haBilanzNachgezogen = heute;
   speichern();
+  /* Die Antwort kommt nach der Stoffverteilung. Hat die nichts geaendert, wurde
+     bis zum 22.09.2026 gar nicht neu gezeichnet - der Reiter Hausaufgaben zeigte
+     nach "neu holen" weiter den alten selbr-Stand. */
+  zeichneWennFrei();
+  if (!planrStill)
+    toast(unerreicht.length ? "selbr nicht erreicht für "+unerreicht.join(", ")+" - dort gilt der letzte Stand"
+      : "Hausaufgaben aus selbr geholt");
   return "ok";
 };
 
