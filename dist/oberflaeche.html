@@ -3685,7 +3685,7 @@ function backupAlterTage(){
 
    Ohne gehaltene Stunde gibt es weiter keinen Vorschlag. Die Basis ist eine
    Aussage über einen stillen Schüler, keine über ein leeres Halbjahr. */
-function notenvorschlag(schuelerId, kursId){
+function notenvorschlag(schuelerId, kursId, spanne){
   const kurs = kursVon(kursId), sys = notensystem(kurs);
   const heute = todayISO();
   const evs = S.ereignisse.filter(e=>e.schuelerId===schuelerId && e.kursId===kursId);
@@ -3695,8 +3695,8 @@ function notenvorschlag(schuelerId, kursId){
     Object.assign({
       typ: sys.typ,
       jetzt: new Date(),
-      ab: MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), heute),
-      bis: heute
+      ab: spanne ? spanne.ab : MerkrNoten.halbjahrBeginn(aktivesSchuljahr(), heute),
+      bis: spanne && spanne.bis && spanne.bis < heute ? spanne.bis : heute
     }, S.einstellungen.mitarbeitKurve || {})
   );
   if (!erg || !erg.stunden) return null;
@@ -8050,7 +8050,7 @@ document.addEventListener("click", ev=>{
 const kopfzeileOhneAbschluss = kursKopfzeile;
 kursKopfzeile = function(k){
   const html = kopfzeileOhneAbschluss(k);
-  if (!html || !hatUnterricht(k.id, R.datum)) return html;
+  if (!html || !hatUnterricht(k.id, R.datum) || mitarbeitWeg(k) === "gespraech") return html;
   const st = stundeAm(k.id, R.datum, R.block);
   const fertig = st && st.mitarbeitBestaetigt;
   const knopf = '<button class="klein'+(fertig?'':' primar')+'" data-a="stundeAbschliessen">'+
@@ -8212,7 +8212,7 @@ schuelerNoten = function(schuelerId, kursId){
     .filter(n => !n.datum || imHalbjahr(n.datum, hj));
 
   const m = mitarbeitHalbjahr(schuelerId, kursId, hj);
-  if (m.wert != null)
+  if (m.wert != null && !gespraechsnoteVon(schuelerId, kursId, hj))
     liste.push({wert:m.wert, bereich:"muendlich", label:"Mitarbeit", gewicht:1,
       datum:todayISO(), ausMitarbeit:true});
 
@@ -8294,9 +8294,7 @@ function notenTabelle(k){
       '<td title="'+(tue.zaehlend.length ? tue.summe+' von '+tue.max+' Punkten' : 'noch nichts geschrieben')+'">'+
       (tue.wert==null ? '<span class="leer">–</span>' : tue.wert + (tue.vollstaendig ? '' : '*'))+'</td>';
 
-    html += '<td data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
-      (m.anzahl ? m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2) : 'noch keine abgeschlossene Stunde')+'">'+
-      (m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>';
+    html += mitarbeitZelle(k, s, hj, m);
 
     html += '<td class="stand">'+(stand.gesamt==null ? '<span class="leer">–</span>' : fmtZahl(stand.gesamt,1))+
       '</td></tr>';
@@ -8541,7 +8539,8 @@ viewArbeiten = function(k){
      Stunde fehlt in jeder Zahl darunter. */
   const offen = S.stunden.filter(st=>st.kursId===k.id && !st.ausfall && imHalbjahr(st.datum, hj) &&
     st.datum <= todayISO() && !st.mitarbeitBestaetigt);
-  if (offen.length)
+  html += mitarbeitWegZeile(k);
+  if (offen.length && mitarbeitWeg(k) !== "gespraech")
     html += '<p class="hinweis" style="margin:-4px 0 10px">'+offen.length+
       (offen.length===1 ? ' gehaltene Stunde ist noch nicht abgeschlossen' : ' gehaltene Stunden sind noch nicht abgeschlossen')+
       ' - zuletzt '+fmtDatum(offen[offen.length-1].datum)+'. '+
@@ -8982,9 +8981,7 @@ notenTabelle = function(k){
     html += '<td data-a="tueKlappen" style="cursor:pointer" title="'+
       (tue.wert==null ? 'noch nichts geschrieben' : 'Note '+tue.wert+(tue.vollstaendig?'':' (Zwischenstand)'))+'">'+
       (tue.zaehlend.length ? tue.summe+' / '+MerkrTue.MAX_GESAMT : '<span class="leer">–</span>')+'</td>';
-    html += '<td data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
-      (m.anzahl ? m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2) : 'noch keine abgeschlossene Stunde')+'">'+
-      (m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>';
+    html += mitarbeitZelle(k, s, hj, m);
     html += '<td class="stand">'+(stand.gesamt==null ? '<span class="leer">–</span>' : fmtZahl(stand.gesamt,1))+
       '</td></tr>';
   }
@@ -9134,6 +9131,191 @@ viewStunden = function(k){
    Er steht nicht mehr in LEISTE_KURS; die Funktionen dahinter sind mit ihm
    gegangen. Eine Umleitung braucht es nicht: R lebt nur zur Laufzeit, gespeichert
    wird allein S - ein alter Reiterzustand kann also nicht zurückkommen. */
+
+/* ================= Mitarbeit im Gespräch (seit 29.09.2026) =================
+   Nicht jede Lehrkraft schließt jede Stunde mit einer Note ab. Lutz notiert
+   während der Stunde und gibt die Mitarbeitsnote am Ende im Gespräch mit dem
+   Kind - die Notizen liegen dabei auf dem Tisch, die Note entsteht im Reden.
+
+   Der Weg gilt je Kurs (kurs.mitarbeitWeg). Die Note ist eine gewöhnliche
+   mündliche Note in S.noten, mit `gespraech` = Halbjahr. Steht sie, ersetzt sie
+   das Mittel der Stundennoten, statt daneben zu zählen. */
+
+function mitarbeitWeg(k){ return k && k.mitarbeitWeg === "gespraech" ? "gespraech" : "stunde"; }
+
+function gespraechsnoteVon(schuelerId, kursId, hj){
+  return S.noten.find(n=>n.gespraech===hj && n.schuelerId===schuelerId && n.kursId===kursId) || null;
+}
+
+function mitarbeitZelle(k, s, hj, m){
+  const gn = gespraechsnoteVon(s.id, k.id, hj);
+  if (gn || mitarbeitWeg(k) === "gespraech")
+    return '<td data-a="gespraechAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
+      (gn ? 'im Gespräch vergeben' : m.wert!=null ? 'noch nicht besprochen - bis dahin zählt das Mittel der Stundennoten'
+        : 'noch nicht besprochen')+'">'+
+      (gn ? gn.wert : m.wert!=null ? '<span class="leer">'+m.wert+'</span>' : '<span class="leer">–</span>')+'</td>';
+  return '<td data-a="mitarbeitAuf" data-id="'+s.id+'" style="cursor:pointer" title="'+
+    (m.anzahl ? m.anzahl+' Stunden, Mittel '+fmtZahl(m.mittel,2) : 'noch keine abgeschlossene Stunde')+'">'+
+    (m.wert==null ? '<span class="leer">–</span>' : m.wert)+'</td>';
+}
+
+function mitarbeitWegZeile(k){
+  const g = mitarbeitWeg(k) === "gespraech";
+  const knopf = (weg, text) => '<button data-a="mitarbeitWeg" data-weg="'+weg+'"'+
+    ((weg==="gespraech")===g ? ' class="gewaehlt"' : '')+'>'+text+'</button>';
+  let h = '<div class="zeile raum" style="margin:-4px 0 10px;gap:10px;flex-wrap:wrap">'+
+    '<div class="zeile" style="gap:8px"><span class="hinweis">Mitarbeitsnote</span>'+
+    '<div class="wertknoepfe">'+knopf("stunde","nach jeder Stunde")+knopf("gespraech","im Gespräch")+'</div></div>';
+  if (g){
+    const hj = notenHalbjahr();
+    const offen = kursSchueler(k.id).filter(s=>!gespraechsnoteVon(s.id, k.id, hj)).length;
+    h += '<button class="primar klein" data-a="gespraechStart">'+
+      (offen ? 'Gespräche führen · '+offen+' offen' : 'Gespräche ansehen')+'</button>';
+  }
+  return h + '</div>';
+}
+
+/** Die Notizen eines Halbjahres, nach Stunden gebündelt, neueste zuerst. */
+function notizenImHalbjahr(schuelerId, kursId, hj){
+  const tage = {};
+  for (const e of S.ereignisse){
+    if (e.schuelerId !== schuelerId || e.kursId !== kursId) continue;
+    const st = stundeVon(e.stundeId);
+    const datum = st ? st.datum : String(e.ts || "").slice(0,10);
+    if (!datum || !imHalbjahr(datum, hj)) continue;
+    const schluessel = st ? st.id : datum;
+    if (!tage[schluessel]) tage[schluessel] = {datum, thema: st ? (st.thema || st.geplant || "") : "", notizen: []};
+    tage[schluessel].notizen.push(e);
+  }
+  return Object.values(tage).sort((a,b)=>b.datum.localeCompare(a.datum));
+}
+
+function gespraechDialog(k, schuelerId){
+  const hj = notenHalbjahr();
+  const sys = notensystem(k);
+  const liste = kursSchueler(k.id);
+  const i = Math.max(0, liste.findIndex(x=>x.id===schuelerId));
+  const s = liste[i];
+  if (!s) return;
+  R.gespraech = s.id;
+  const gn = gespraechsnoteVon(s.id, k.id, hj);
+  const vs = notenvorschlag(s.id, k.id, halbjahrSpanne(hj));
+  const m = mitarbeitHalbjahr(s.id, k.id, hj);
+  const tage = notizenImHalbjahr(s.id, k.id, hj);
+  const besprochen = liste.filter(x=>gespraechsnoteVon(x.id, k.id, hj)).length;
+
+  let h = '<div class="zeile raum">'+
+    '<h2 style="margin:0">'+esc(s.vorname)+' '+esc(s.name)+'</h2>'+
+    '<div class="zeile" style="gap:6px"><span class="hinweis">'+(i+1)+' von '+liste.length+'</span>'+
+    '<button class="klein" data-a="gespraechNach" data-id="'+(liste[i-1]||{}).id+'"'+(i===0?' disabled':'')+'>‹</button>'+
+    '<button class="klein" data-a="gespraechNach" data-id="'+(liste[i+1]||{}).id+'"'+(i===liste.length-1?' disabled':'')+'>›</button>'+
+    '</div></div>'+
+    '<p class="hinweis" style="margin:4px 0 12px">Mitarbeit im '+hj+'. Halbjahr · '+besprochen+' von '+liste.length+' besprochen</p>';
+
+  /* Erst die Grundlage, dann die Entscheidung: im Gespräch wird über die
+     Notizen geredet, nicht über eine Zahl. */
+  h += '<div class="karte" style="margin:0 0 12px">';
+  if (vs){
+    h += '<div class="zeile raum"><span class="hinweis">Aus den Notizen ergäbe sich</span>'+
+      '<b style="font-size:26px">'+fmtZahl(vs.genau,1)+'</b></div>'+herkunftHtml(vs);
+  } else {
+    h += '<p class="hinweis" style="margin:0">In diesem Halbjahr hat noch keine Stunde stattgefunden, '+
+      'deshalb gibt es keinen Vorschlag.</p>';
+  }
+  if (m.anzahl)
+    h += '<p class="hinweis" style="margin:6px 0 0">Aus '+m.anzahl+' abgeschlossenen Stunden: Mittel '+
+      fmtZahl(m.mittel,2)+'. Die Note hier ersetzt diesen Wert.</p>';
+  h += '</div>';
+
+  h += '<div class="feld"><label>Mitarbeitsnote</label><div class="wertknoepfe">';
+  for (const w of sys.werte)
+    h += '<button data-a="gespraechWert" data-wert="'+w+'"'+(gn && Number(gn.wert)===w ? ' class="gewaehlt"' : '')+'>'+w+'</button>';
+  h += '<button data-a="gespraechWert" data-wert=""'+(gn ? '' : ' disabled')+' title="Note zurücknehmen">–</button></div></div>'+
+    '<div class="feld"><label>Absprache</label>'+
+    '<input id="gespraechBemerkung" value="'+esc(gn && gn.bemerkung || "")+'" placeholder="z. B. will sich in Geometrie öfter melden"></div>';
+
+  h += '<div style="margin-top:6px"><div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">'+
+    'Notizen im Halbjahr</div>';
+  if (!tage.length) h += '<p class="hinweis">Keine Notiz in diesem Halbjahr.</p>';
+  for (const tag of tage){
+    h += '<div style="padding:7px 0;border-bottom:1px solid var(--linie)">'+
+      '<div class="zeile raum"><b>'+esc(fmtDatum(tag.datum))+'</b>'+
+      '<span class="hinweis" style="font-size:12.5px">'+esc(tag.thema)+'</span></div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">';
+    for (const e of tag.notizen){
+      const si = e.stufe==null ? null : stufeInfo(e.stufe);
+      h += '<span style="font-size:13px;padding:2px 8px;border-radius:6px;border:1px solid var(--linie)'+
+        (si ? ';background:'+si.hex+';color:#fff;border-color:'+si.hex : '')+'">'+
+        esc(ereignisName(e))+(si ? ' '+si.label : '')+(e.text ? ': '+esc(e.text) : '')+'</span>';
+    }
+    h += '</div></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="zeile raum" style="margin-top:14px"><button data-a="gespraechZu">Fertig</button>'+
+    (i < liste.length-1 ? '<button class="primar" data-a="gespraechNach" data-id="'+liste[i+1].id+'">Weiter: '+
+      esc(liste[i+1].vorname)+' ›</button>' : '')+'</div>';
+  zeigeModal(h);
+}
+
+/** Das Absprachefeld wird beim Verlassen des Schülers übernommen, nicht je Taste. */
+function gespraechBemerkungSichern(k){
+  const feld = document.getElementById("gespraechBemerkung");
+  if (!feld || !R.gespraech) return;
+  const gn = gespraechsnoteVon(R.gespraech, k.id, notenHalbjahr());
+  const text = feld.value.trim();
+  if (gn && (gn.bemerkung || "") !== text){ gn.bemerkung = text; speichern(); }
+}
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest('[data-a="mitarbeitWeg"],[data-a="gespraechStart"],[data-a="gespraechAuf"],'+
+    '[data-a="gespraechNach"],[data-a="gespraechWert"],[data-a="gespraechZu"]');
+  if (!el || el.disabled) return;
+  const k = kursVon(R.kursId);
+  if (!k) return;
+  const a = el.dataset.a;
+  const hj = notenHalbjahr();
+
+  if (a === "mitarbeitWeg"){
+    k.mitarbeitWeg = el.dataset.weg === "gespraech" ? "gespraech" : undefined;
+    speichern(); zeichne();
+  }
+  else if (a === "gespraechStart"){
+    const liste = kursSchueler(k.id);
+    const erster = liste.find(s=>!gespraechsnoteVon(s.id, k.id, hj)) || liste[0];
+    if (erster) gespraechDialog(k, erster.id);
+  }
+  else if (a === "gespraechAuf") gespraechDialog(k, el.dataset.id);
+  else if (a === "gespraechNach"){
+    gespraechBemerkungSichern(k);
+    if (el.dataset.id) gespraechDialog(k, el.dataset.id);
+  }
+  else if (a === "gespraechWert"){
+    const s = schuelerVon(R.gespraech);
+    if (!s) return;
+    const feld = document.getElementById("gespraechBemerkung");
+    const bemerkung = feld ? feld.value.trim() : "";
+    let gn = gespraechsnoteVon(s.id, k.id, hj);
+    if (el.dataset.wert === ""){
+      S.noten = S.noten.filter(n=>n !== gn);
+    } else {
+      if (!gn){
+        const heute = todayISO();
+        gn = {id:uid(), schuelerId:s.id, kursId:k.id, bereich:"muendlich", label:"Mitarbeit (Gespräch)",
+          gewicht:1, gespraech:hj, datum: imHalbjahr(heute, hj) ? heute : halbjahrSpanne(hj).ab || heute};
+        S.noten.push(gn);
+      }
+      gn.wert = Number(el.dataset.wert);
+      gn.bemerkung = bemerkung;
+    }
+    speichern(); zeichne();
+    gespraechDialog(k, s.id);
+  }
+  else if (a === "gespraechZu"){
+    gespraechBemerkungSichern(k);
+    R.gespraech = null;
+    schliessePopover(); zeichne();
+  }
+});
 
 zeichne();
 
