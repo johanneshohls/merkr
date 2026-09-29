@@ -70,16 +70,24 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 | Der Tag aus planr, mit Vertretung | fertig, 7 Tests, im Browser geprüft |
 | Drei Sitzordnungen je Kurs | fertig, im Browser geprüft |
 | merkr aktualisiert sich selbst | gebaut, auf dem Gerät ungetestet |
-| Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy steht aus |
-| Stundenplan und A/B-Wochen aus planr | merkr fertig (8 Tests, im Browser geprüft); planr-Route erweitert, Deploy steht aus |
+| Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy vermutlich erfolgt (TÜ-Lösungen seit 03.09. in der Regie-Karte sichtbar), nicht per `curl` bestätigt |
+| Stundenplan und A/B-Wochen aus planr | merkr fertig (8 Tests, im Browser geprüft); planr-Route erweitert, Deploy vermutlich erfolgt, nicht bestätigt |
 | Termine mit eigenem Block aus planr | merkr fertig (1 Test, im Browser geprüft); planr-Route und Tagesplan erweitert |
-| Einrichten, Probelauf, Parallelbetrieb | offen |
+| Einrichten, Probelauf, Parallelbetrieb | läuft seit 24.08.2026 im Unterricht (nach Aktenlage: 71 bestätigte Stundennoten am 25.08., ein Kollege mit installiertem merkr) — am 28.09. von der Sprint-Analyse gesetzt, wie in KW39 angekündigt |
 
-Der erste Lauf auf dem iPad steht aus. Bis dahin ist besonders der Umzug der Ablage nach iCloud
-unbestätigt - er kopiert den Bestand aus `KursbuchDaten`, benennt die alte Datei um und löscht
-nichts.
+~~Der erste Lauf auf dem iPad steht aus.~~ (Überholt, siehe Tabelle.) Nicht ausdrücklich bestätigt ist
+weiterhin der Umzug der Ablage nach iCloud - er kopiert den Bestand aus `KursbuchDaten`, benennt die
+alte Datei um und löscht nichts - sowie das Selbstupdate und die Rückmeldung an planr auf dem Gerät.
+Das sind Prüfaufträge, keine Blocker.
 
-**Aktueller Fokus (Stand 2026-09-21, Sprint-Analyse KW39).** Vier Commits seit 14.09.: Hausaufgaben-Reiter
+**Aktueller Fokus (Stand 2026-09-28, Sprint-Analyse KW40).** Ein Commit seit 21.09.: Hausaufgaben
+werden nach dem Abruf aus selbr neu gezeichnet, Kurse ohne selbr-Antwort behalten ihren letzten Stand
+und melden den Ausfall (22.09.). Die Statustabelle wurde nach dritter Woche ohne Korrektur von der
+Analyse auf "läuft" gesetzt (KW39-Regel). Kein Sprint-Invest. Abhängigkeit, die diese Woche sichtbar
+wurde: planr war am 24.09. ab 20:46 nicht erreichbar (Neon-Kontingent) — ob merkr in der Zeit sauber auf
+den letzten Stand von Stoffverteilung und Tagesplan zurückfiel, steht nirgends; wäre eine Zeile wert. Zuletzt aktualisiert: 2026-09-28.
+
+**Aktueller Fokus davor (Stand 2026-09-21, Sprint-Analyse KW39).** Vier Commits seit 14.09.: Hausaufgaben-Reiter
 (Testfeedbacks sind keine Spalte, sondern eine Spalte je Test), Hausaufgaben-Bilanz mit Stand bis
 zur Fälligkeit, zu klein festgehaltene Spalten einmalig nachgezogen (17.09.). Der planr-Gegenpart
 (`Hausaufgabenstand`, seitenweise) ist am selben Tag gefallen. In dieser Datei sonst nicht
@@ -178,6 +186,23 @@ Dieselbe Stelle filtert seither **alle** Leistungen nach dem gewählten Halbjahr
 Arbeiten aus dem ersten Halbjahr im zweiten weiter, während die Mitarbeit dort neu ansetzte.
 
 Noch offen: die Auswertung führt einen eigenen Notenspiegel, der sich mit dem Notenbuch überschneidet.
+
+## Mitarbeit im Gespräch statt je Stunde (seit 29.09.2026)
+
+Lutz schließt nicht jede Stunde mit Noten ab. Er notiert in der Stunde und gibt die Mitarbeitsnote
+im Gespräch mit dem Kind, die Notizen auf dem Tisch. Dafür steht im Reiter Noten über dem Notenbuch
+ein Umschalter je Kurs: "nach jeder Stunde" (bisher) oder "im Gespräch" (`kurs.mitarbeitWeg`).
+
+Im Gesprächsweg öffnet "Gespräche führen" einen Dialog Schüler für Schüler: oben der Vorschlag aus
+den Notizen des Halbjahres (das alte Achsenmodell `MerkrMitarbeit.vorschlag`, mit Herkunft), darunter
+die Notenknöpfe, ein Feld für die Absprache und alle Notizen des Halbjahres nach Stunden. "Weiter"
+geht zum nächsten Namen. Der Knopf "Mitarbeit abschließen" in der Kopfzeile und der Hinweis auf
+offene Stunden entfallen in diesem Weg.
+
+Gespeichert wird eine gewöhnliche mündliche Note in `S.noten` mit `gespraech` = Halbjahr und
+`bemerkung`. Steht sie, ersetzt sie in `schuelerNoten` das Mittel der Stundennoten, statt daneben
+zu zählen - wer zwischendurch doch Stunden abgeschlossen hat, bekommt keine doppelte Mitarbeit.
+Solange sie fehlt, steht das Stundenmittel blass in der Spalte und zählt weiter. Im Browser geprüft.
 
 ## Die Stunden als Reihe (seit 2026-08-21)
 
