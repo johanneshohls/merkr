@@ -2619,7 +2619,7 @@ function pdfTabellenDokument(titel, untertitel, spalten, zeilen, fussnote){
 function notenlistePdf(kursId){
   const kurs = kursVon(kursId), sys = notensystem(kurs);
   const zeilen = kursSchueler(kursId).map(s=>{
-    const ns = notenstand(s.id, kursId), fz = fehlzeiten(s.id, kursId), vs = notenvorschlag(s.id, kursId);
+    const ns = notenstand(s.id, kursId), fz = fehlzeiten(s.id, kursId), vs = notenvorschlag(s.id, kursId, halbjahrSpanne(notenHalbjahr()));
     return [s.name+", "+s.vorname, fmtZahl(ns.arb), fmtZahl(ns.son), fmtZahl(ns.m), fmtZahl(ns.gesamt), vs?String(vs.wert):"–",
       fz.fehltGesamt+" ("+fz.unentschuldigt+" u.)"];
   });
