@@ -417,7 +417,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = MerkrBetei
  * Zwei Regeln stecken darin, beide aus dem gleichen Grund: eine Arbeit, deren
  * Punkte beim falschen Kind landen, merkt man erst im Elterngespräch.
  *   1. Nicht raten. Ein Code ohne passenden Schüler wird gemeldet, nicht verteilt.
- *   2. Nichts überschreiben. Was schon eingetragen ist, bleibt stehen.
+ *   2. Nichts von Hand Eingetragenes überschreiben. Was aus checkr kam, zieht
+ *      dagegen nach, wenn die Korrektur drüben geändert wurde.
  */
 const MerkrErgebnisse = (function () {
 
@@ -539,20 +540,48 @@ const MerkrErgebnisse = (function () {
   }
 
   /**
-   * Treffer in die Ergebnisse einer Arbeit schreiben, ohne Vorhandenes zu
-   * überschreiben. Von Hand nachgetragene Werte gewinnen gegen den Abruf - wer
-   * etwas eingetragen hat, hatte einen Grund.
+   * Treffer in die Ergebnisse einer Arbeit schreiben.
+   *
+   * `importiert` hält je Schüler den Wert, der zuletzt aus checkr kam. Steht im
+   * Notenbuch noch genau dieser Wert, hat ihn niemand angefasst - dann zieht er
+   * nach, wenn die Korrektur in checkr geändert wurde. Steht dort etwas anderes,
+   * hat es jemand von Hand eingetragen, und das gewinnt: wer etwas eingetragen
+   * hat, hatte einen Grund.
+   *
+   * Bis zum 29.09.2026 gab es kein `importiert`, und jeder vorhandene Wert galt
+   * als von Hand - eine Nachkorrektur in checkr kam damit nie an. Für Arbeiten
+   * aus dieser Zeit (`importiert` fehlt ganz) gilt der vorhandene Wert als aus
+   * checkr; die Meldung nach dem Abruf nennt jede geänderte Note einzeln.
+   *
+   * @returns {ergebnisse, importiert, neu, aktualisiert, behalten, aenderungen}
+   *   aenderungen - [{schuelerId, alt, neu}] für jede überschriebene Note
+   *   behalten    - von Hand abweichende Werte, die stehen bleiben
    */
-  function zusammenfuehren(vorhanden, treffer) {
+  function zusammenfuehren(vorhanden, treffer, importiert) {
     const ergebnisse = Object.assign({}, vorhanden || {});
-    let neu = 0, behalten = 0;
+    const altbestand = importiert == null;
+    const quelle = Object.assign({}, importiert || {});
+    const aenderungen = [];
+    let neu = 0, aktualisiert = 0, behalten = 0;
     for (const t of treffer || []) {
-      const alt = ergebnisse[t.schuelerId];
-      if (alt !== undefined && alt !== null && alt !== "") { behalten++; continue; }
-      ergebnisse[t.schuelerId] = t.wert;
-      neu++;
+      const id = t.schuelerId;
+      const alt = ergebnisse[id];
+      const leer = alt === undefined || alt === null || alt === "";
+      if (leer) {
+        ergebnisse[id] = t.wert;
+        quelle[id] = t.wert;
+        neu++;
+        continue;
+      }
+      if (Number(alt) === Number(t.wert)) { quelle[id] = t.wert; continue; }
+      const ausCheckr = altbestand || (id in quelle && Number(quelle[id]) === Number(alt));
+      if (!ausCheckr) { behalten++; continue; }
+      ergebnisse[id] = t.wert;
+      quelle[id] = t.wert;
+      aenderungen.push({ schuelerId: id, alt: alt, neu: t.wert });
+      aktualisiert++;
     }
-    return { ergebnisse, neu, behalten };
+    return { ergebnisse, importiert: quelle, neu, aktualisiert, behalten, aenderungen };
   }
 
   /**
@@ -670,6 +699,8 @@ const MerkrErgebnisse = (function () {
       delete alt.checkrJob;
       const ergebnisse = Object.assign({}, a.ergebnisse || {}, alt.ergebnisse || {});
       alt.ergebnisse = ergebnisse;
+      if (a.checkrWerte || alt.checkrWerte)
+        alt.checkrWerte = Object.assign({}, a.checkrWerte || {}, alt.checkrWerte || {});
       zusammengelegt++;
     }
     return { arbeiten: raus, zusammengelegt: zusammengelegt };
@@ -5507,8 +5538,8 @@ window.__KB_checkrAlles = function(text){
   }
 
   const sj = aktivesSchuljahr();
-  let neu = 0, behalten = 0, arbeiten = 0;
-  const ohneKurs = [], offeneCodes = [], angelegt = [];
+  let neu = 0, behalten = 0, arbeiten = 0, aktualisiert = 0;
+  const ohneKurs = [], offeneCodes = [], angelegt = [], geaendert = [];
 
   /* Was vor der Gruppenerkennung doppelt angelegt wurde, wird hier eine Arbeit. */
   const aufgeraeumt = MerkrErgebnisse.zusammenlegen(S.arbeiten);
@@ -5541,9 +5572,11 @@ window.__KB_checkrAlles = function(text){
       arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);
       delete arb.checkrJob;
     }
-    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, erg.treffer);
+    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, erg.treffer, arb.checkrWerte);
     arb.ergebnisse = zus.ergebnisse;
-    neu += zus.neu; behalten += zus.behalten;
+    arb.checkrWerte = zus.importiert;
+    neu += zus.neu; behalten += zus.behalten; aktualisiert += zus.aktualisiert;
+    for (const x of zus.aenderungen) geaendert.push({arbeit: arb.titel, schuelerId: x.schuelerId, alt: x.alt, neu: x.neu});
     for (const c of erg.ohneSchueler) if (offeneCodes.indexOf(c) < 0) offeneCodes.push(c);
   }
 
@@ -5553,13 +5586,24 @@ window.__KB_checkrAlles = function(text){
   if (checkrAllesStill) return "ok";
   if (!daten.berichte.length) { toast("In checkr liegt keine korrigierte Arbeit"); return "ok"; }
   let satz = neu ? neu+(neu===1 ? " Note übernommen" : " Noten übernommen") : "Keine neue Note";
+  if (aktualisiert) satz += ", "+aktualisiert+(aktualisiert===1 ? " Note aktualisiert" : " Noten aktualisiert");
   if (arbeiten) satz += ", "+arbeiten+(arbeiten===1 ? " Arbeit angelegt" : " Arbeiten angelegt");
   if (aufgeraeumt.zusammengelegt) satz += ", "+aufgeraeumt.zusammengelegt+
     (aufgeraeumt.zusammengelegt===1 ? " doppelte Arbeit zusammengelegt" : " doppelte Arbeiten zusammengelegt");
-  if (behalten) satz += ", "+behalten+" vorhandene behalten";
+  if (behalten) satz += ", "+behalten+" von Hand geänderte behalten";
   toast(satz);
-  if (ohneKurs.length || offeneCodes.length || angelegt.length){
+  if (ohneKurs.length || offeneCodes.length || angelegt.length || geaendert.length){
     let h = '<h2>Noten aus checkr</h2><p class="hinweis">'+esc(satz)+'.</p>';
+    if (geaendert.length){
+      h += '<table class="tab"><tr><th>Geändert</th><th>Arbeit</th><th>vorher</th><th>jetzt</th></tr>';
+      for (const g of geaendert){
+        const s = S.schueler.find(x=>x.id===g.schuelerId);
+        const wer = s ? (s.name ? s.name+", "+s.vorname : s.vorname) : g.schuelerId;
+        h += '<tr><td><b>'+esc(wer)+'</b></td><td class="hinweis">'+esc(g.arbeit)+'</td>'+
+          '<td>'+esc(String(g.alt))+'</td><td><b>'+esc(String(g.neu))+'</b></td></tr>';
+      }
+      h += '</table>';
+    }
     if (angelegt.length){
       h += '<table class="tab"><tr><th>Arbeit</th><th>Art</th><th>zählt zu</th></tr>';
       for (const a of angelegt)
@@ -5663,11 +5707,13 @@ document.addEventListener("click", ev=>{
       arb.checkrJobs = MerkrErgebnisse.jobsVon(arb).concat([String(b.job_id)]);
       delete arb.checkrJob;
     }
-    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, b.zuordnung.treffer);
+    const zus = MerkrErgebnisse.zusammenfuehren(arb.ergebnisse, b.zuordnung.treffer, arb.checkrWerte);
     arb.ergebnisse = zus.ergebnisse;
+    arb.checkrWerte = zus.importiert;
     speichern(); schliessePopover(); zeichne();
     toast(zus.neu+(zus.neu===1?" Ergebnis übernommen":" Ergebnisse übernommen")+
-      (zus.behalten ? ", "+zus.behalten+" vorhandene behalten" : ""));
+      (zus.aktualisiert ? ", "+zus.aktualisiert+" aktualisiert" : "")+
+      (zus.behalten ? ", "+zus.behalten+" von Hand geänderte behalten" : ""));
     checkrBericht = null;
   }
   else if (a==="checkrWortSetzen"){

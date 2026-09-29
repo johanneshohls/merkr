@@ -7,7 +7,8 @@
  * Zwei Regeln stecken darin, beide aus dem gleichen Grund: eine Arbeit, deren
  * Punkte beim falschen Kind landen, merkt man erst im Elterngespräch.
  *   1. Nicht raten. Ein Code ohne passenden Schüler wird gemeldet, nicht verteilt.
- *   2. Nichts überschreiben. Was schon eingetragen ist, bleibt stehen.
+ *   2. Nichts von Hand Eingetragenes überschreiben. Was aus checkr kam, zieht
+ *      dagegen nach, wenn die Korrektur drüben geändert wurde.
  */
 const MerkrErgebnisse = (function () {
 
@@ -129,20 +130,48 @@ const MerkrErgebnisse = (function () {
   }
 
   /**
-   * Treffer in die Ergebnisse einer Arbeit schreiben, ohne Vorhandenes zu
-   * überschreiben. Von Hand nachgetragene Werte gewinnen gegen den Abruf - wer
-   * etwas eingetragen hat, hatte einen Grund.
+   * Treffer in die Ergebnisse einer Arbeit schreiben.
+   *
+   * `importiert` hält je Schüler den Wert, der zuletzt aus checkr kam. Steht im
+   * Notenbuch noch genau dieser Wert, hat ihn niemand angefasst - dann zieht er
+   * nach, wenn die Korrektur in checkr geändert wurde. Steht dort etwas anderes,
+   * hat es jemand von Hand eingetragen, und das gewinnt: wer etwas eingetragen
+   * hat, hatte einen Grund.
+   *
+   * Bis zum 29.09.2026 gab es kein `importiert`, und jeder vorhandene Wert galt
+   * als von Hand - eine Nachkorrektur in checkr kam damit nie an. Für Arbeiten
+   * aus dieser Zeit (`importiert` fehlt ganz) gilt der vorhandene Wert als aus
+   * checkr; die Meldung nach dem Abruf nennt jede geänderte Note einzeln.
+   *
+   * @returns {ergebnisse, importiert, neu, aktualisiert, behalten, aenderungen}
+   *   aenderungen - [{schuelerId, alt, neu}] für jede überschriebene Note
+   *   behalten    - von Hand abweichende Werte, die stehen bleiben
    */
-  function zusammenfuehren(vorhanden, treffer) {
+  function zusammenfuehren(vorhanden, treffer, importiert) {
     const ergebnisse = Object.assign({}, vorhanden || {});
-    let neu = 0, behalten = 0;
+    const altbestand = importiert == null;
+    const quelle = Object.assign({}, importiert || {});
+    const aenderungen = [];
+    let neu = 0, aktualisiert = 0, behalten = 0;
     for (const t of treffer || []) {
-      const alt = ergebnisse[t.schuelerId];
-      if (alt !== undefined && alt !== null && alt !== "") { behalten++; continue; }
-      ergebnisse[t.schuelerId] = t.wert;
-      neu++;
+      const id = t.schuelerId;
+      const alt = ergebnisse[id];
+      const leer = alt === undefined || alt === null || alt === "";
+      if (leer) {
+        ergebnisse[id] = t.wert;
+        quelle[id] = t.wert;
+        neu++;
+        continue;
+      }
+      if (Number(alt) === Number(t.wert)) { quelle[id] = t.wert; continue; }
+      const ausCheckr = altbestand || (id in quelle && Number(quelle[id]) === Number(alt));
+      if (!ausCheckr) { behalten++; continue; }
+      ergebnisse[id] = t.wert;
+      quelle[id] = t.wert;
+      aenderungen.push({ schuelerId: id, alt: alt, neu: t.wert });
+      aktualisiert++;
     }
-    return { ergebnisse, neu, behalten };
+    return { ergebnisse, importiert: quelle, neu, aktualisiert, behalten, aenderungen };
   }
 
   /**
@@ -260,6 +289,8 @@ const MerkrErgebnisse = (function () {
       delete alt.checkrJob;
       const ergebnisse = Object.assign({}, a.ergebnisse || {}, alt.ergebnisse || {});
       alt.ergebnisse = ergebnisse;
+      if (a.checkrWerte || alt.checkrWerte)
+        alt.checkrWerte = Object.assign({}, a.checkrWerte || {}, alt.checkrWerte || {});
       zusammengelegt++;
     }
     return { arbeiten: raus, zusammengelegt: zusammengelegt };

@@ -67,11 +67,38 @@ test("Vorhandene Werte werden nicht überschrieben", () => {
     { schuelerId: "a", wert: 2 },
     { schuelerId: "b", wert: 4 }
   ];
-  const erg = E.zusammenfuehren({ a: 3 }, treffer);
+  const erg = E.zusammenfuehren({ a: 3 }, treffer, {});
   assert.equal(erg.ergebnisse.a, 3, "von Hand eingetragen gewinnt");
   assert.equal(erg.ergebnisse.b, 4);
   assert.equal(erg.neu, 1);
   assert.equal(erg.behalten, 1);
+  assert.deepEqual(erg.importiert, { b: 4 });
+});
+
+test("Eine Nachkorrektur in checkr zieht nach, Handeinträge nicht", () => {
+  // a und b kamen beim ersten Abruf aus checkr, bei b hat jemand von Hand 2 eingetragen
+  const erg = E.zusammenfuehren({ a: 3, b: 2 }, [
+    { schuelerId: "a", wert: 2 },
+    { schuelerId: "b", wert: 4 }
+  ], { a: 3, b: 3 });
+  assert.equal(erg.ergebnisse.a, 2, "aus checkr, also aktualisiert");
+  assert.equal(erg.ergebnisse.b, 2, "von Hand geändert, also behalten");
+  assert.equal(erg.aktualisiert, 1);
+  assert.equal(erg.behalten, 1);
+  assert.deepEqual(erg.aenderungen, [{ schuelerId: "a", alt: 3, neu: 2 }]);
+  assert.deepEqual(erg.importiert, { a: 2, b: 3 });
+});
+
+test("Altbestand ohne Herkunft gilt als aus checkr", () => {
+  const erg = E.zusammenfuehren({ a: 3 }, [{ schuelerId: "a", wert: 2 }], undefined);
+  assert.equal(erg.ergebnisse.a, 2);
+  assert.equal(erg.aktualisiert, 1);
+  assert.deepEqual(erg.importiert, { a: 2 });
+});
+
+test("Unveränderte Werte zählen weder als neu noch als geändert", () => {
+  const erg = E.zusammenfuehren({ a: 3 }, [{ schuelerId: "a", wert: 3 }], { a: 3 });
+  assert.equal(erg.neu + erg.aktualisiert + erg.behalten, 0);
 });
 
 test("Oberstufe rechnet in Punkten", () => {
