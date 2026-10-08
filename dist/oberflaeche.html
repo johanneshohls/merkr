@@ -4066,7 +4066,7 @@ function profilPdfErzeugen(schuelerId, kursId){
     pdfText(p, L+300, y, "Bereich", 9, true, "#777777"); pdfText(p, L+380, y, "Wert", 9, true, "#777777");
     pdfText(p, L+440, y, "Gewicht", 9, true, "#777777");
     y += 5; pdfLinie(p, L, y, Rr, y); y += 13;
-    const maxNoten = 8;
+    const maxNoten = 14;
     for (const n of noten.slice(0, maxNoten)){
       pdfText(p, L, y, fmtDatum(n.datum), 10);
       pdfText(p, L+80, y, (n.label||(n.ausArbeit?"Arbeit":"Note")).slice(0,42), 10);
@@ -4626,15 +4626,20 @@ function notenlistePdf(kursId){
   const kurs = kursVon(kursId), sys = notensystem(kurs);
   const zeilen = kursSchueler(kursId).map(s=>{
     const ns = notenstand(s.id, kursId), fz = fehlzeiten(s.id, kursId), vs = notenvorschlag(s.id, kursId, halbjahrSpanne(notenHalbjahr()));
+    /* Zwischenstände zählen nicht, gehören aber auf die Liste - dafür trägt
+       man sie ein. */
+    const zw = schuelerNoten(s.id, kursId).filter(n=>n.id && gew(n.gewicht)===0)
+      .sort((a,b)=>(a.datum||"").localeCompare(b.datum||"")).map(n=>n.wert).join(", ");
     return [s.name+", "+s.vorname, fmtZahl(ns.arb), fmtZahl(ns.son), fmtZahl(ns.m), fmtZahl(ns.gesamt), vs?String(vs.wert):"–",
-      fz.fehltGesamt+" ("+fz.unentschuldigt+" u.)"];
+      zw||"–", fz.fehltGesamt+" ("+fz.unentschuldigt+" u.)"];
   });
   return pdfTabellenDokument(
     "Notenliste "+kurs.name,
     (kurs.fach||"")+" · Jahrgang "+kurs.jahrgang+" · "+(sys.typ==="punkte"?"Punkte 0–15":"Noten 1–6")+
       " · "+gewichtungsText(kurs),
-    [{titel:"Schüler", breite:138, fett:true, maxZeichen:28},{titel:"Klassenarb.", breite:66},{titel:"sonstige", breite:60},
-     {titel:"davon mdl.", breite:62},{titel:"Gesamt", breite:58, fett:true},{titel:"Vorschl. mdl.", breite:62},{titel:"Fehlz.", breite:52}],
+    [{titel:"Schüler", breite:128, fett:true, maxZeichen:26},{titel:"Klassenarb.", breite:58},{titel:"sonstige", breite:50},
+     {titel:"davon mdl.", breite:52},{titel:"Gesamt", breite:46, fett:true},{titel:"Vorschl. mdl.", breite:60},
+     {titel:"Zwischenst.", breite:62, maxZeichen:12},{titel:"Fehlz.", breite:43}],
     zeilen,
     "Gewichtete Mittel; Vorschlag aus Mitarbeits-Stufen. Nur für den dienstlichen Gebrauch.");
 }
@@ -6014,6 +6019,26 @@ viewProfil = function(){
     '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(ns.son)+'</div><div class="hinweis">sonstige</div></div>'+
     '<div><div style="font-size:22px;font-weight:800">'+fmtZahl(ns.m)+'</div><div class="hinweis">davon mündlich</div></div></div>'+
     '<p class="hinweis" style="margin-top:10px">'+esc(gewichtungsText(k))+'</p></div>';
+
+  /* Die einzelnen Noten hinter dem Stand. Eingetragen wird über den Knopf am
+     Vorschlag; ohne diese Liste verschwand jede Note dort, auch ein
+     Zwischenstand, der ausdrücklich nur zum Festhalten da ist. */
+  const noten = schuelerNoten(s.id, k.id).sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
+  html += '<div class="karte"><div class="zeile raum">'+
+    '<div class="hinweis" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Noten in diesem Halbjahr</div>'+
+    '<button class="klein" data-a="noteDialog" data-id="'+s.id+'">Note eintragen</button></div>';
+  if (!noten.length) html += '<p class="hinweis" style="margin-top:8px">Noch keine Note.</p>';
+  else {
+    html += '<table class="tab" style="margin-top:8px"><tr><th>Datum</th><th>Art</th><th>Bereich</th><th>Wert</th><th>Gewicht</th><th></th></tr>';
+    for (const n of noten)
+      html += '<tr><td>'+(n.ausMitarbeit||n.ausTue ? 'laufend' : fmtDatum(n.datum))+'</td>'+
+        '<td>'+esc(n.label||(n.ausArbeit?"Arbeit":"Note"))+'</td>'+
+        '<td>'+bereichKurz(n.bereich)+'</td><td><b>'+n.wert+'</b></td><td>'+gewText(n.gewicht)+'</td>'+
+        '<td>'+(n.id ? '<button class="klein gefahr" data-a="noteLoeschen" data-id="'+n.id+'">×</button>'
+          : '<span class="hinweis">'+(n.ausArbeit?'aus Arbeit':'berechnet')+'</span>')+'</td></tr>';
+    html += '</table>';
+  }
+  html += '</div>';
 
   /* Die Notizen, aus denen die Zahlen kommen */
   html += '<div class="karte"><div class="zeile raum">'+
