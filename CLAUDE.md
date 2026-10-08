@@ -51,6 +51,10 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 
 ## Stand
 
+Stand 2026-10-05 (Sprint-Analyse KW41): checkr-Abruf zieht nachkorrigierte Noten nach (29.09.) — vorher wurde jede Note nach dem ersten Abruf als Handeintrag behandelt, eine Nachkorrektur in checkr kam nie an. Jetzt merkt sich jede Arbeit in `checkrWerte`, was zuletzt aus checkr kam; nur Abweichungen gelten als Handeintrag, geänderte Noten stehen einzeln in der Meldung. Wichtig für die 9a (Job `b7fdb1f5`, 13 von 18 in 1a zu hoch, am 27.09. nachkorrigiert): einmal neu abrufen und prüfen, ob Noten springen. Außerdem Mitarbeit im Gespräch je Kurs (29.09.). Offen: Versuchsnoten 8e/8c/9a vom 01./02.10. eingetragen?
+
+08.10.: Das Schülerprofil zeigt wieder eine Liste der Noten des Halbjahres. Sie war beim Umbau des Profils entfallen, Noten aus dem Dialog am Notenvorschlag (auch Zwischenstände mit Gewicht 0) waren gespeichert, aber unsichtbar. Die Notenliste als PDF hat eine Spalte Zwischenstände.
+
 | Etappe | Stand |
 |---|---|
 | Repo mit Build statt String-Patch | fertig |
