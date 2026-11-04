@@ -1071,6 +1071,222 @@ const MerkrHausaufgaben = (function () {
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrHausaufgaben;
 
+/* --- kern/iserv.js --- */
+/**
+ * Abwesenheiten aus iServ, für die Anwesenheitsliste.
+ *
+ * Die Schule erwartet, dass vor der Stunde im iServ-Modul "Abwesenheiten"
+ * nachgesehen wird, wer abgemeldet ist. Das wurde regelmäßig vergessen. merkr
+ * holt die Einträge deshalb selbst, direkt vom iPad - die Namen gehen über
+ * keinen anderen Rechner, planr bekommt sie nie.
+ *
+ * Drei Regeln aus der Datenschutz-Prüfung (Dieter, 04.11.2026):
+ * - Gefiltert wird in der Anfrage, nicht danach: iServ liefert nur die
+ *   Kursgruppe und nur den einen Tag. Das Konto sieht alle Klassen, das gibt
+ *   aber kein Recht, alle abzurufen.
+ * - Was iServ sagt, wird angezeigt, nicht gespeichert. Es lebt im
+ *   Arbeitsspeicher der Seite; in die Datendatei kommt nur, was die Lehrkraft
+ *   selbst einträgt ("fehlt").
+ * - Gründe werden nie gelesen. Der Export hat keine Spalte dafür, und dabei
+ *   bleibt es.
+ *
+ * Diese Datei läuft zweimal: im WebView (Auswertung) und im Scriptable-Rahmen
+ * (der Abruf, `abrufen`). bau.mjs setzt sie an beiden Stellen ein.
+ */
+const MerkrIServ = (function () {
+
+  /* EBG-Raster, geprüft am ICS-Vertretungsplan 2026/27. Doppelstunde =
+     Anfangsstunde und die folgende. */
+  const RASTER = {
+    1: ["07:40", "08:25"], 2: ["08:25", "09:10"],
+    3: ["09:40", "10:25"], 4: ["10:25", "11:10"],
+    5: ["11:40", "12:25"], 6: ["12:25", "13:10"],
+    7: ["13:40", "14:25"], 8: ["14:25", "15:10"],
+  };
+
+  /** Zeitspanne einer Doppelstunde, die bei `stunde` beginnt. */
+  function stundenZeit(stunde) {
+    const a = RASTER[Number(stunde)];
+    if (!a) return null;
+    const b = RASTER[Number(stunde) + 1] || a;
+    return { von: a[0], bis: b[1] };
+  }
+
+  /** Eine CSV-Zeile mit Anführungszeichen zerlegen. */
+  function zeileZerlegen(zeile, trenner) {
+    const felder = [];
+    let feld = "", inAnf = false;
+    for (let i = 0; i < zeile.length; i++) {
+      const c = zeile[i];
+      if (inAnf) {
+        if (c === '"' && zeile[i + 1] === '"') { feld += '"'; i++; }
+        else if (c === '"') inAnf = false;
+        else feld += c;
+      } else if (c === '"') inAnf = true;
+      else if (c === trenner) { felder.push(feld); feld = ""; }
+      else feld += c;
+    }
+    felder.push(feld);
+    return felder;
+  }
+
+  /**
+   * Der CSV-Export des Moduls.
+   * Spalten: Abwesenheitszeit; Dauer; Name; Klasse/Information; Status; Aktualisiert am
+   * @returns [{zeit, name, status}] oder wirft, wenn das keine iServ-Liste ist
+   */
+  function csvLesen(text) {
+    const zeilen = String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/).filter(function (z) { return z.trim(); });
+    if (!zeilen.length) throw new Error("Leere Antwort von iServ");
+    const trenner = zeilen[0].indexOf(";") >= 0 ? ";" : ",";
+    const kopf = zeileZerlegen(zeilen[0], trenner);
+    if (kopf[0] !== "Abwesenheitszeit") throw new Error("iServ hat keine Abwesenheitsliste geschickt");
+    const iName = kopf.indexOf("Name"), iStatus = kopf.indexOf("Status");
+    return zeilen.slice(1).map(function (z) {
+      const f = zeileZerlegen(z, trenner);
+      return { zeit: (f[0] || "").trim(), name: (f[iName] || "").trim(), status: (f[iStatus] || "").trim() };
+    }).filter(function (e) { return e.name; });
+  }
+
+  function isoVonDeutsch(d) {
+    const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(d);
+    return m ? m[3] + "-" + m[2] + "-" + m[1] : null;
+  }
+
+  /**
+   * Betrifft ein Eintrag den Tag `iso` und - wenn bekannt - die Stunde von/bis?
+   * Formate: "04.11.2026", "02.11.2026 - 06.11.2026", "04.11.2026 (09:40 - 13:10)".
+   * Unbekanntes Format zählt mit: lieber einmal zu viel nachsehen.
+   */
+  function betrifft(zeit, iso, von, bis) {
+    const teil = /^(\d\d\.\d\d\.\d{4}) \((\d\d:\d\d) - (\d\d:\d\d)\)$/.exec(String(zeit).trim());
+    if (teil) {
+      if (isoVonDeutsch(teil[1]) !== iso) return false;
+      if (!von || !bis) return true;
+      return teil[2] < bis && teil[3] > von;
+    }
+    const daten = (String(zeit).match(/\d\d\.\d\d\.\d{4}/g) || []).map(isoVonDeutsch);
+    if (!daten.length) return true;
+    return daten[0] <= iso && iso <= daten[daten.length - 1];
+  }
+
+  /** Teilzeit "09:40 - 13:10" aus dem Eintrag, sonst null. */
+  function teilzeit(zeit) {
+    const m = /\((\d\d:\d\d - \d\d:\d\d)\)/.exec(String(zeit));
+    return m ? m[1] : null;
+  }
+
+  function norm(s) {
+    return String(s || "").normalize("NFC").toLowerCase().replace(/[-‐]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  /**
+   * iServ-Namen ("Vorname Nachname", gern mit zweitem Vornamen) den Schülern
+   * des Kurses zuordnen. Erst genau, dann: alle Teile des merkr-Namens kommen
+   * im iServ-Namen vor - aber nur, wenn das genau einen Schüler trifft.
+   * @param eintraege [{zeit, name, status}] - schon auf den Tag gefiltert
+   * @param schueler [{id, vorname, name}]
+   * @returns {treffer: {schuelerId: {entschuldigt, teilzeit}}, unbekannt: [name]}
+   */
+  function zuordnen(eintraege, schueler) {
+    const liste = (schueler || []).map(function (s) {
+      const voll = norm((s.vorname || "") + " " + (s.name || ""));
+      return { id: s.id, voll: voll, teile: voll.split(" ").filter(Boolean) };
+    });
+    const treffer = {}, unbekannt = [];
+    for (const e of eintraege || []) {
+      const n = norm(e.name);
+      const nTeile = n.split(" ");
+      let wer = liste.filter(function (s) { return s.voll === n; });
+      if (wer.length !== 1) {
+        wer = liste.filter(function (s) {
+          return s.teile.length && s.teile.every(function (t) { return nTeile.indexOf(t) >= 0; });
+        });
+      }
+      if (wer.length !== 1) { if (unbekannt.indexOf(e.name) < 0) unbekannt.push(e.name); continue; }
+      const id = wer[0].id;
+      const ent = e.status === "entschuldigt";
+      const bisher = treffer[id];
+      const tz = teilzeit(e.zeit);
+      /* Zwei Einträge für dieselbe Person: entschuldigt schlägt unentschuldigt,
+         ein ganzer Tag schlägt die Teilzeit. */
+      if (!bisher) { treffer[id] = { entschuldigt: ent, teilzeit: tz }; continue; }
+      bisher.entschuldigt = bisher.entschuldigt || ent;
+      bisher.teilzeit = bisher.teilzeit && tz ? bisher.teilzeit + ", " + tz : null;
+    }
+    return { treffer: treffer, unbekannt: unbekannt };
+  }
+
+  /* ---------- Abruf (läuft im Scriptable-Rahmen) ----------
+     `http(url, {method, body, cookies})` liefert {status, text, location, cookies}
+     und folgt Weiterleitungen NICHT selbst - die Anmeldung setzt unterwegs
+     Cookies, und die müssen mit. So läuft derselbe Ablauf unter node (fetch)
+     und in Scriptable (Request). */
+
+  function cookieKopf(dose) {
+    return Object.keys(dose).map(function (k) { return k + "=" + dose[k]; }).join("; ");
+  }
+
+  async function holen(http, dose, url, opt) {
+    let ziel = url, methode = (opt && opt.method) || "GET", body = opt && opt.body;
+    for (let i = 0; i < 12; i++) {
+      const r = await http(ziel, { method: methode, body: body, cookie: cookieKopf(dose) });
+      for (const c of r.cookies || []) dose[c.name] = c.value;
+      if (r.status >= 300 && r.status < 400 && r.location) {
+        ziel = new URL(r.location, ziel).toString(); methode = "GET"; body = undefined; continue;
+      }
+      const refresh = /http-equiv="refresh" content="0;url=([^"]+)"/.exec(r.text || "");
+      if (refresh) {
+        ziel = new URL(refresh[1].replace(/&amp;/g, "&"), ziel).toString(); methode = "GET"; body = undefined; continue;
+      }
+      return r;
+    }
+    throw new Error("iServ leitet endlos weiter");
+  }
+
+  function formular(daten) {
+    return Object.keys(daten).map(function (k) {
+      const w = daten[k];
+      return (Array.isArray(w) ? w : [w]).map(function (x) {
+        return encodeURIComponent(k) + "=" + encodeURIComponent(x);
+      }).join("&");
+    }).join("&");
+  }
+
+  /**
+   * Anmelden, Gruppe suchen, Tagesliste holen.
+   * @returns [{zeit, name, status}] der Gruppe an `iso`
+   */
+  async function abrufen(http, zugang, gruppe, iso) {
+    const host = String(zugang.host || "").replace(/\/+$/, "");
+    if (!host || !zugang.benutzer || !zugang.passwort) throw new Error("iServ-Zugang unvollständig");
+    if (!gruppe) throw new Error("Für diesen Kurs ist keine iServ-Gruppe eingetragen");
+    const dose = {};
+    await holen(http, dose, host + "/iserv/auth/login");
+    await holen(http, dose, host + "/iserv/auth/login", {
+      method: "POST", body: formular({ _username: zugang.benutzer, _password: zugang.passwort }),
+    });
+    const seite = await holen(http, dose, host + "/iserv/absence/");
+    if ((seite.text || "").indexOf("filter[groups][]") < 0) throw new Error("Anmeldung bei iServ fehlgeschlagen");
+    const gesucht = norm(gruppe);
+    let uid = null;
+    const re = /<option value="([0-9a-f-]{36})" >([^<]+)/g;
+    let m;
+    while ((m = re.exec(seite.text))) if (norm(m[2]) === gesucht) { uid = m[1]; break; }
+    if (!uid) throw new Error("iServ-Gruppe \"" + gruppe + "\" nicht gefunden");
+    const d = iso.slice(8, 10) + "." + iso.slice(5, 7) + "." + iso.slice(0, 4);
+    const csv = await holen(http, dose, host + "/iserv/absence/.csv?" + formular({
+      "filter[groups][]": uid, "filter[from]": d, "filter[to]": d,
+      "filter[status][]": ["excused", "unexcused"],
+    }));
+    return csvLesen(csv.text);
+  }
+
+  return { stundenZeit: stundenZeit, csvLesen: csvLesen, betrifft: betrifft, zuordnen: zuordnen, abrufen: abrufen };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = MerkrIServ;
+
 /* --- kern/kuerzel.js --- */
 /**
  * Kürzel: der Schlüssel zwischen merkr und checkr.
@@ -2258,6 +2474,8 @@ const MERKR_FASSUNG = /*__KURSBUCH_FASSUNG__*/"";
 let planrDa = /*__KURSBUCH_PLANR__*/false;
 /* Ob ein checkr-Wort im Schlüsselbund liegt. */
 let checkrDa = /*__KURSBUCH_CHECKR__*/false;
+/* Ob ein iServ-Zugang im Schlüsselbund liegt. */
+let iservDa = /*__KURSBUCH_ISERV__*/false;
 /* Rückfall für den Browser, der keinen Keychain hat: nur im Arbeitsspeicher, nie gespeichert. */
 let browserSchluessel = "";
 const KB_INJECTED = /*__KURSBUCH_DATA__*/null;
@@ -9339,6 +9557,207 @@ document.addEventListener("click", ev=>{
     gespraechBemerkungSichern(k);
     R.gespraech = null;
     schliessePopover(); zeichne();
+  }
+});
+
+/* ================= Abwesenheiten aus iServ =================
+   Vor der Stunde im iServ-Modul "Abwesenheiten" nachsehen - das ist Pflicht
+   und wurde regelmäßig vergessen. Jetzt fragt merkr selbst, sobald die
+   Anwesenheit eines Kurses aufgeht, und zeigt, wer abgemeldet ist und wie
+   viele vor einem sitzen sollten.
+
+   Was iServ sagt, lebt nur hier im Arbeitsspeicher (ISERV_STAND), nie in S:
+   der Status gehört der Klassenleitung, gespeichert wird nur, was die
+   Lehrkraft selbst einträgt. Gefiltert wird in der Anfrage (Kursgruppe, Tag),
+   siehe src/kern/iserv.js. */
+
+const ISERV_STAND = {};          // "kursId|datum" -> {zeit, eintraege} | {zeit, fehler} | {laedt}
+const ISERV_FRISCH_MS = 10*60*1000;
+const ISERV_STANDARD = "https://edu.ebg-schoenberg.com";
+
+function iservBasis(){ return String(S.einstellungen.iservUrl || ISERV_STANDARD).trim().replace(/\/+$/,""); }
+function iservGruppe(k){ return String(k && k.iservGruppe || "").trim(); }
+function iservSchluessel(k, iso){ return k.id+"|"+iso; }
+
+function iservHolen(k, iso){
+  if (KB_MODE!=="scriptable" || !iservDa || !iservGruppe(k)) return;
+  ISERV_STAND[iservSchluessel(k, iso)] = {laedt:true, zeit:Date.now()};
+  sendeAnBridge({typ:"iservAbruf", kursId:k.id, gruppe:iservGruppe(k), datum:iso, url:iservBasis()});
+}
+
+window.__KB_iservAntwort = function(text){
+  let d = null;
+  try { d = JSON.parse(text); } catch(e){ d = null; }
+  if (!d || !d.kursId) return "fehler";
+  ISERV_STAND[d.kursId+"|"+d.datum] = d.fehler
+    ? {zeit:Date.now(), fehler:String(d.fehler)}
+    : {zeit:Date.now(), eintraege:Array.isArray(d.eintraege) ? d.eintraege : []};
+  if (R.view==="kurs" && R.tab==="anwesenheit" && R.kursId===d.kursId) zeichneWennFrei();
+  return "ok";
+};
+
+/* Die Doppelstunde dieses Kurses am eingestellten Tag, als Uhrzeit. Ohne sie
+   zählt eine Teilabwesenheit am Tag mit - lieber einmal zu viel nachsehen. */
+function iservStundenZeit(k){
+  if (R.block) return MerkrIServ.stundenZeit(Number(R.block)*2-1);
+  const e = (kurseAmTag(R.datum)||[]).find(x=>x && x.kurs && x.kurs.id===k.id);
+  return e ? MerkrIServ.stundenZeit(e.stunde) : null;
+}
+
+/* Wer laut iServ in dieser Stunde fehlt: {treffer, unbekannt} oder null. */
+function iservAuswertung(k){
+  const stand = ISERV_STAND[iservSchluessel(k, R.datum)];
+  if (!stand || !stand.eintraege) return null;
+  const zeit = iservStundenZeit(k);
+  const heute = stand.eintraege.filter(e=>MerkrIServ.betrifft(e.zeit, R.datum, zeit && zeit.von, zeit && zeit.bis));
+  return MerkrIServ.zuordnen(heute, kursSchueler(k.id));
+}
+
+function iservKarteAnwesenheit(k, st){
+  if (KB_MODE!=="scriptable")
+    return '<p class="hinweis">Der Abgleich mit iServ läuft nur in Scriptable.</p>';
+  if (!iservDa || !iservGruppe(k))
+    return '<p class="hinweis">Abwesenheiten aus iServ: '+
+      (!iservDa ? 'Zugang in den Einstellungen eintragen' : 'iServ-Gruppe in den Kurseinstellungen eintragen')+
+      '. <button class="klein" data-a="tab" data-id="kurscfg">Kurseinstellungen</button></p>';
+  const stand = ISERV_STAND[iservSchluessel(k, R.datum)];
+  const neu = '<button class="klein" data-a="iservNeu" data-id="'+k.id+'">Neu abfragen</button>';
+  if (!stand || stand.laedt)
+    return '<div class="karte" style="padding:10px 14px;margin-bottom:12px"><span class="hinweis">iServ wird gefragt …</span></div>';
+  if (stand.fehler)
+    return '<div class="karte" style="padding:10px 14px;margin-bottom:12px;border-left:4px solid var(--rot)">'+
+      '<b>iServ nicht erreicht</b> <span class="hinweis">'+esc(stand.fehler)+'</span> '+neu+'</div>';
+
+  const aus = iservAuswertung(k);
+  const ids = Object.keys(aus.treffer);
+  const alle = kursSchueler(k.id).length;
+  const uhr = new Date(stand.zeit);
+  const zeitText = String(uhr.getHours()).padStart(2,"0")+":"+String(uhr.getMinutes()).padStart(2,"0");
+  let html = '<div class="karte" style="padding:12px 14px;margin-bottom:12px">'+
+    '<div class="zeile raum"><div><b style="font-size:20px">'+(alle-ids.length)+'</b> <span class="hinweis">von '+alle+
+    ' sollten vor dir sitzen · laut iServ abgemeldet: '+ids.length+'</span></div>'+
+    '<div><span class="hinweis">Stand '+zeitText+'</span> '+neu+'</div></div>';
+  if (ids.length){
+    const namen = ids.map(id=>schuelerVon(id)).filter(Boolean)
+      .sort((a,b)=>((a.name||"")+(a.vorname||"")).localeCompare((b.name||"")+(b.vorname||""),"de"));
+    html += '<div style="margin-top:6px">'+namen.map(s=>{
+      const t = aus.treffer[s.id];
+      return '<div>'+esc(s.vorname)+' '+esc(s.name)+' <span class="hinweis">'+
+        (t.entschuldigt ? 'entschuldigt' : 'unentschuldigt')+(t.teilzeit ? ' · '+esc(t.teilzeit) : '')+'</span></div>';
+    }).join("")+'</div>';
+    const offen = namen.filter(s=>!anwesenheitVon(s.id, st.id));
+    if (offen.length)
+      html += '<div class="zeile" style="margin-top:8px"><button class="klein primar" data-a="iservFehltEintragen" data-id="'+k.id+
+        '" data-stunde="'+st.id+'">'+(offen.length===1 ? 'Als fehlt eintragen' : 'Alle '+offen.length+' als fehlt eintragen')+'</button></div>';
+  }
+  if (aus.unbekannt.length)
+    html += '<p class="hinweis" style="margin:8px 0 0">In iServ abgemeldet, in diesem Kurs nicht gefunden: '+
+      esc(aus.unbekannt.join(", "))+'</p>';
+  return html+'</div>';
+}
+
+const anwesenheitOhneIserv = anwesenheitDialogHtml;
+anwesenheitDialogHtml = function(k, alsTab){
+  let html = anwesenheitOhneIserv(k, alsTab);
+  if (!hatUnterricht(k.id, R.datum)) return html;
+  const stand = ISERV_STAND[iservSchluessel(k, R.datum)];
+  if (!stand || (!stand.laedt && Date.now()-stand.zeit > ISERV_FRISCH_MS)) iservHolen(k, R.datum);
+  const st = ensureStunde(k.id, R.datum, R.block);
+
+  /* In der Zeile steht es auch: wer abgemeldet ist, sieht man beim Durchgehen
+     der Namen, ohne nach oben zu schauen. */
+  const aus = iservAuswertung(k);
+  if (aus) for (const id of Object.keys(aus.treffer)){
+    const s = schuelerVon(id); if (!s) continue;
+    const t = aus.treffer[id];
+    const marke = '<b>'+esc(s.name)+', '+esc(s.vorname)+'</b>';
+    html = html.replace(marke, ()=> marke+'<div class="hinweis" style="color:var(--rot)">laut iServ abgemeldet · '+
+      (t.entschuldigt ? 'entschuldigt' : 'unentschuldigt')+(t.teilzeit ? ' · '+esc(t.teilzeit) : '')+'</div>');
+  }
+
+  const zaehlerMarke = '<div class="karte" style="padding:10px 14px;margin-bottom:12px;display:flex;gap:22px">';
+  const i = html.indexOf(zaehlerMarke);
+  const karte = iservKarteAnwesenheit(k, st);
+  return i < 0 ? html + karte : html.slice(0, i) + karte + html.slice(i);
+};
+
+function iservKarteKurs(k){
+  return '<div class="karte"><h2>Verbindung zu iServ</h2>'+
+    '<p class="hinweis">Die Gruppe, deren Abwesenheiten vor der Stunde angezeigt werden - so geschrieben wie in iServ, '+
+    'z. B. „Mathe 9D" oder „Klasse 9A".</p>'+
+    '<div class="zeile"><div class="feld" style="flex:1"><label>iServ-Gruppe</label>'+
+    '<input id="iservGruppe" value="'+esc(k.iservGruppe||"")+'" placeholder="Mathe 9D"></div>'+
+    '<button class="primar" data-a="iservGruppeSpeichern" data-id="'+k.id+'">Speichern</button></div></div>';
+}
+const kurscfgOhneIserv = viewKursCfg;
+viewKursCfg = function(k){
+  const html = kurscfgOhneIserv(k);
+  const planr = planrKarte(k);
+  return html.indexOf(planr) >= 0 ? html.replace(planr, ()=> planr + iservKarteKurs(k)) : html + iservKarteKurs(k);
+};
+
+const einstellungenOhneIserv = viewEinstellungen;
+viewEinstellungen = function(){
+  return einstellungenOhneIserv() +
+    '<div class="karte"><h2>Verbindung zu iServ</h2>'+
+    '<p class="hinweis">merkr fragt beim Öffnen der Anwesenheit, wer im Kurs abgemeldet ist. Gefragt wird vom iPad aus, '+
+    'nur nach der Kursgruppe und dem einen Tag. Angezeigt wird, gespeichert nicht.</p>'+
+    '<div class="feld"><label>Adresse</label><input id="iservUrl" value="'+esc(iservBasis())+'"></div>'+
+    (KB_MODE==="scriptable"
+      ? (iservDa
+          ? '<p class="hinweis">Zugang liegt im Schlüsselbund des Geräts. '+
+            '<button class="klein gefahr" data-a="iservZugangEntfernen">Entfernen</button></p>'
+          : '<div class="zeile"><input id="iservBenutzer" placeholder="Benutzername, z. B. vorname.nachname" autocapitalize="off" autocorrect="off">'+
+            '<input type="password" id="iservPasswort" placeholder="Passwort">'+
+            '<button class="klein primar" data-a="iservZugangSetzen">In den Schlüsselbund</button></div>')
+      : '<p class="hinweis">Der Abruf läuft nur in Scriptable.</p>')+
+    '<div class="zeile"><button data-a="iservUrlSpeichern">Adresse speichern</button></div></div>';
+};
+
+document.addEventListener("click", ev=>{
+  const el = ev.target.closest("[data-a]");
+  if (!el) return;
+  const a = el.dataset.a;
+  if (a==="iservNeu"){
+    const k = kursVon(el.dataset.id); if (!k) return;
+    iservHolen(k, R.datum); zeichne();
+  }
+  else if (a==="iservFehltEintragen"){
+    const k = kursVon(el.dataset.id); if (!k) return;
+    const aus = iservAuswertung(k); if (!aus) return;
+    let n = 0;
+    for (const id of Object.keys(aus.treffer))
+      if (!anwesenheitVon(id, el.dataset.stunde)){ setzeAnwesenheit(id, el.dataset.stunde, "fehlt"); n++; }
+    speichern(); anwesenheitAuffrischen(k);
+    toast(n===1 ? "1 als fehlend eingetragen" : n+" als fehlend eingetragen");
+  }
+  else if (a==="iservGruppeSpeichern"){
+    const k = kursVon(el.dataset.id); const feld = document.getElementById("iservGruppe");
+    if (!k || !feld) return;
+    k.iservGruppe = feld.value.trim();
+    for (const s of Object.keys(ISERV_STAND)) if (s.indexOf(k.id+"|")===0) delete ISERV_STAND[s];
+    speichern(); zeichne(); toast(k.iservGruppe ? "iServ-Gruppe gesetzt" : "Zuordnung entfernt");
+  }
+  else if (a==="iservUrlSpeichern"){
+    const feld = document.getElementById("iservUrl"); if (!feld) return;
+    S.einstellungen.iservUrl = feld.value.trim().replace(/\/+$/,"");
+    speichern(); zeichne(); toast("Adresse gespeichert");
+  }
+  else if (a==="iservZugangSetzen"){
+    const b = (document.getElementById("iservBenutzer")||{}).value || "";
+    const p = (document.getElementById("iservPasswort")||{}).value || "";
+    if (!b.trim() || !p) return alertBox("Bitte Benutzername und Passwort eintragen.");
+    const urlFeld = document.getElementById("iservUrl");
+    if (urlFeld) S.einstellungen.iservUrl = urlFeld.value.trim().replace(/\/+$/,"");
+    sendeAnBridge({typ:"schluesselSetzen", name:"iserv", key: JSON.stringify({benutzer:b.trim(), passwort:p})});
+    iservDa = true;
+    speichern(); zeichne(); toast("Zugang im Schlüsselbund abgelegt");
+  }
+  else if (a==="iservZugangEntfernen"){
+    sendeAnBridge({typ:"schluesselEntfernen", name:"iserv"});
+    iservDa = false;
+    for (const s of Object.keys(ISERV_STAND)) delete ISERV_STAND[s];
+    zeichne(); toast("Zugang entfernt");
   }
 });
 

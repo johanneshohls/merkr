@@ -72,6 +72,17 @@ if (!rahmen.includes(PLATZHALTER)) {
 // Ersatz als Funktion: sonst deutet String.replace $-Zeichen im HTML als Rückverweis.
 let ergebnis = rahmen.replace(PLATZHALTER, () => JSON.stringify(html));
 
+// Der iServ-Abruf läuft im Rahmen, nicht in der Seite (die darf wegen CORS
+// nicht zu iServ). Derselbe Kernteil wie in der Oberfläche, damit der Ablauf
+// unter node geprüft werden kann.
+const ISERV_PLATZHALTER = "/*__ISERV__*/";
+if (!ergebnis.includes(ISERV_PLATZHALTER)) {
+  console.error("Platzhalter " + ISERV_PLATZHALTER + " fehlt in src/rahmen.js.");
+  process.exit(1);
+}
+ergebnis = ergebnis.replace(ISERV_PLATZHALTER, () => fs.readFileSync(path.join(hier, "src/kern/iserv.js"), "utf8")
+  .replace(/\nif \(typeof module[^\n]*\n?$/, "\n"));
+
 // Fassung: Datum und Uhrzeit des Baus, damit auf dem Gerät ablesbar ist,
 // welcher Stand läuft.
 const jetzt = new Date();

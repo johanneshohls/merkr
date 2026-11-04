@@ -36,6 +36,10 @@ const SCHLUESSEL_PLANR = "merkr.planr";
 // (CHECKR_ROSTER_TOKEN).
 const SCHLUESSEL_CHECKR = "merkr.checkr";
 
+// Der eigene iServ-Zugang (Benutzer und Passwort als JSON), für die
+// Abwesenheiten vor der Stunde. Er verlässt das Gerät nur in Richtung iServ.
+const SCHLUESSEL_ISERV = "merkr.iserv";
+
 // Woher merkr seine eigenen Aktualisierungen holt.
 //
 // Der Quellzweig auf GitHub, roh. Zwei Adressen statt einer: die kleine sagt,
@@ -49,6 +53,7 @@ const QUELLE_SKRIPT = QUELLE_BASIS + "/merkr.js";
 function schluesselName(name) {
   if (name === "planr") return SCHLUESSEL_PLANR;
   if (name === "checkr") return SCHLUESSEL_CHECKR;
+  if (name === "iserv") return SCHLUESSEL_ISERV;
   return SCHLUESSEL_NAME;
 }
 
@@ -193,6 +198,35 @@ try {
 const schluesselDa = Keychain.contains(SCHLUESSEL_NAME);
 const planrDa = Keychain.contains(SCHLUESSEL_PLANR);
 const checkrDa = Keychain.contains(SCHLUESSEL_CHECKR);
+const iservDa = Keychain.contains(SCHLUESSEL_ISERV);
+
+// Der iServ-Abruf. Derselbe Ablauf wie unter node (src/kern/iserv.js, von
+// bau.mjs hier eingesetzt), nur mit Scriptables Request. Weiterleitungen folgt
+// der Ablauf selbst, weil die Anmeldung unterwegs Cookies setzt.
+/*__ISERV__*/
+async function iservHttp(url, opt) {
+  const req = new Request(url);
+  req.method = opt.method || "GET";
+  req.headers = opt.cookie ? { cookie: opt.cookie } : {};
+  if (opt.body) {
+    req.body = opt.body;
+    req.headers["content-type"] = "application/x-www-form-urlencoded";
+  }
+  req.onRedirect = function () { return null; };
+  let text = "";
+  try { text = await req.loadString(); } catch (e) { text = ""; }
+  const res = req.response || {};
+  const kopf = res.headers || {};
+  let cookies = (res.cookies || []).map(function (c) { return { name: c.name, value: c.value }; });
+  if (!cookies.length) {
+    const roh = kopf["Set-Cookie"] || kopf["set-cookie"] || "";
+    cookies = String(roh).split(/,(?=\s*[^;,=\s]+=)/).map(function (c) {
+      const nv = c.split(";")[0].trim(); const i = nv.indexOf("=");
+      return i > 0 ? { name: nv.slice(0, i), value: nv.slice(i + 1) } : null;
+    }).filter(Boolean);
+  }
+  return { status: res.statusCode || 0, location: kopf.Location || kopf.location || null, cookies: cookies, text: text };
+}
 
 // Daten als Zeichenkette uebergeben und in der Seite parsen: so kann weder ein
 // </script> noch ein Zeilentrenner in einem Namen die Seite zerlegen.
@@ -207,6 +241,7 @@ function baueHtml(datenText) {
     .replace('/*__KURSBUCH_SCHLUESSEL__*/false', function () { return schluesselDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_PLANR__*/false', function () { return planrDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_CHECKR__*/false', function () { return checkrDa ? "true" : "false"; })
+    .replace('/*__KURSBUCH_ISERV__*/false', function () { return iservDa ? "true" : "false"; })
     .replace('/*__KURSBUCH_DATA__*/null', function () { return "JSON.parse(" + literal + ")"; });
 }
 
@@ -533,6 +568,22 @@ async function bruecke() {
       } catch (e) {
         await wv.evaluateJavaScript("window.__KB_kiAntwort(" + JSON.stringify(JSON.stringify({ fehler: String(e) })) + ")", false);
       }
+    } else if (msg.typ === "iservAbruf") {
+      // Wer ist heute in diesem Kurs abgemeldet? Gefiltert wird in der Anfrage
+      // (Gruppe und Tag), die Antwort geht nur in die Seite, nicht in die Datei.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_ISERV)) throw new Error("Kein iServ-Zugang im Schlüsselbund.");
+        const zugang = JSON.parse(Keychain.get(SCHLUESSEL_ISERV));
+        zugang.host = String(msg.url || "").trim();
+        const eintraege = await MerkrIServ.abrufen(iservHttp, zugang, msg.gruppe, msg.datum);
+        antwort = { kursId: msg.kursId, datum: msg.datum, eintraege: eintraege };
+      } catch (e) {
+        antwort = { kursId: msg.kursId, datum: msg.datum, fehler: String(e && e.message || e) };
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_iservAntwort(" + JSON.stringify(JSON.stringify(antwort)) + ")", false);
+      } catch (e) { console.error("iServ-Antwort nicht zugestellt: " + e); }
     } else if (msg.typ === "export") {
       try {
         const exportPfad = fm.joinPath(DATEN_ORDNER, "merkr-sicherung-" + zeitstempel() + ".json");

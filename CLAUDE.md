@@ -85,6 +85,7 @@ Stand 2026-10-05 (Sprint-Analyse KW41): checkr-Abruf zieht nachkorrigierte Noten
 | Reiter Regie, Notizen für den Lehrertisch aus planr | gebaut, im Browser geprüft; planr-Feld liegt in der Datenbank, Deploy vermutlich erfolgt (TÜ-Lösungen seit 03.09. in der Regie-Karte sichtbar), nicht per `curl` bestätigt |
 | Stundenplan und A/B-Wochen aus planr | merkr fertig (8 Tests, im Browser geprüft); planr-Route erweitert, Deploy vermutlich erfolgt, nicht bestätigt |
 | Termine mit eigenem Block aus planr | merkr fertig (1 Test, im Browser geprüft); planr-Route und Tagesplan erweitert |
+| Abwesenheiten aus iServ in der Anwesenheit | gebaut, 9 Tests, Abruf unter node gegen echtes iServ geprüft, Anzeige im Browser geprüft; Scriptable-Request (Weiterleitung, Cookies) auf dem Gerät ungetestet |
 | Einrichten, Probelauf, Parallelbetrieb | läuft seit 24.08.2026 im Unterricht (nach Aktenlage: 71 bestätigte Stundennoten am 25.08., ein Kollege mit installiertem merkr) — am 28.09. von der Sprint-Analyse gesetzt, wie in KW39 angekündigt |
 
 ~~Der erste Lauf auf dem iPad steht aus.~~ (Überholt, siehe Tabelle.) Nicht ausdrücklich bestätigt ist
@@ -129,6 +130,35 @@ ob merkr im Unterricht läuft. Offen zu klären, diese Woche (3 SP):
   seit 27.08. bei jedem Push über die GitHub Action - vermutlich längst live. Ein Aufruf von
   `/api/stoffverteilung` klärt es; dann hier richtigstellen.
 
+
+## Abwesenheiten aus iServ (seit 04.11.2026)
+
+Vor der Stunde soll im iServ-Modul "Abwesenheiten" nachgesehen werden, wer abgemeldet ist. Das wurde
+vergessen. Jetzt fragt merkr selbst, sobald der Reiter Anwesend aufgeht, und zeigt oben eine Karte:
+wie viele vor einem sitzen sollten, wer abgemeldet ist (entschuldigt/unentschuldigt, bei Teilzeit
+die Uhrzeit), wer in iServ steht, aber im Kurs nicht gefunden wurde. In der Namenszeile steht es
+noch einmal. Ein Knopf trägt die Abgemeldeten als "fehlt" ein - mit `entschuldigt: null`.
+
+**Der Abruf läuft im Rahmen, nicht in der Seite** (CORS), und direkt vom iPad zu iServ. Die Namen
+gehen über keinen anderen Rechner. Der Ablauf (Anmeldung, OIDC-Weiterleitungen mit
+Meta-Refresh, Cookies von Hand, Gruppensuche, CSV-Export mit `filter[groups][]`, `filter[from]`,
+`filter[to]`) steht in `src/kern/iserv.js` als `MerkrIServ.abrufen(http, ...)`; bau.mjs setzt die
+Datei zusätzlich an `/*__ISERV__*/` in den Rahmen. So lief derselbe Code unter node gegen das echte
+iServ, bevor er aufs Gerät geht. Der ungefilterte Export ist auf 5000 Zeilen gekappt und lässt
+Einträge weg - nie ohne Filter abrufen.
+
+Drei Regeln aus der Datenschutz-Prüfung (Dieter, 04.11.2026): gefiltert wird in der Anfrage
+(Kursgruppe, ein Tag), nicht danach; der iServ-Status wird angezeigt, nie gespeichert
+(`ISERV_STAND` lebt nur im Arbeitsspeicher, `S` bekommt ihn nicht); Gründe werden nicht gelesen.
+Status in iServ ändern tut merkr nicht - das ist Sache der Klassenleitung.
+
+Zugang: Benutzer und Passwort als JSON im Schlüsselbund (`merkr.iserv`), Adresse in
+`S.einstellungen.iservUrl` (Vorgabe EBG). Je Kurs `kurs.iservGruppe`, so geschrieben wie in iServ -
+die Namen dort sind uneinheitlich ("Mathe 9D", "Mathematik 8D"; Physik 9A hat keine Gruppe, dann
+"Klasse 9A"). Teilabwesenheiten zählen nur, wenn sie die Doppelstunde schneiden (EBG-Raster im Kern).
+
+Ungetestet auf dem Gerät: ob Scriptables `Request` mit `onRedirect = () => null` den 302 samt
+`response.cookies` liefert. Fällt das aus, zeigt die Karte "iServ nicht erreicht" mit dem Grund.
 
 ## Was der Review am 19.08.2026 geändert hat
 
