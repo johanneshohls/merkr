@@ -153,21 +153,46 @@ const MerkrIServ = (function () {
     return Object.keys(dose).map(function (k) { return k + "=" + dose[k]; }).join("; ");
   }
 
+  /* Eine Weiterleitung gegen die bisherige Adresse auflösen. Von Hand, weil
+     Scriptables JavaScript-Umgebung kein `URL` kennt - unter node gibt es es,
+     deshalb lief der Test durch und das iPad nicht (04.11.2026). */
+  function aufloesen(ziel, basis) {
+    ziel = String(ziel).trim();
+    if (/^https?:\/\//i.test(ziel)) return ziel;
+    const m = /^(https?:)\/\/([^\/?#]+)([^?#]*)/i.exec(basis);
+    if (!m) throw new Error("Unlesbare Adresse: " + basis);
+    if (ziel.indexOf("//") === 0) return m[1] + ziel;
+    if (ziel.charAt(0) === "/") return m[1] + "//" + m[2] + ziel;
+    if (ziel.charAt(0) === "?") return m[1] + "//" + m[2] + (m[3] || "/") + ziel;
+    const ordner = (m[3] || "/").replace(/[^\/]*$/, "");
+    return m[1] + "//" + m[2] + ordner + ziel;
+  }
+
+  /* Pfad ohne Abfrage, für Fehlermeldungen: sagt, wo es hing, ohne Codes
+     oder Tokens aus der Adresse zu zeigen. */
+  function pfad(url) { return String(url).replace(/^https?:\/\/[^\/]+/i, "").replace(/[?#].*$/, ""); }
+
   async function holen(http, dose, url, opt) {
     let ziel = url, methode = (opt && opt.method) || "GET", body = opt && opt.body;
     for (let i = 0; i < 12; i++) {
-      const r = await http(ziel, { method: methode, body: body, cookie: cookieKopf(dose) });
+      let r;
+      try {
+        r = await http(ziel, { method: methode, body: body, cookie: cookieKopf(dose) });
+      } catch (e) {
+        throw new Error(pfad(ziel) + ": " + (e && e.message || e));
+      }
       for (const c of r.cookies || []) dose[c.name] = c.value;
       if (r.status >= 300 && r.status < 400 && r.location) {
-        ziel = new URL(r.location, ziel).toString(); methode = "GET"; body = undefined; continue;
+        ziel = aufloesen(r.location, ziel); methode = "GET"; body = undefined; continue;
       }
       const refresh = /http-equiv="refresh" content="0;url=([^"]+)"/.exec(r.text || "");
       if (refresh) {
-        ziel = new URL(refresh[1].replace(/&amp;/g, "&"), ziel).toString(); methode = "GET"; body = undefined; continue;
+        ziel = aufloesen(refresh[1].replace(/&amp;/g, "&"), ziel); methode = "GET"; body = undefined; continue;
       }
+      r.pfad = pfad(ziel);
       return r;
     }
-    throw new Error("iServ leitet endlos weiter");
+    throw new Error("iServ leitet endlos weiter (" + pfad(ziel) + ")");
   }
 
   function formular(daten) {
@@ -193,7 +218,9 @@ const MerkrIServ = (function () {
       method: "POST", body: formular({ _username: zugang.benutzer, _password: zugang.passwort }),
     });
     const seite = await holen(http, dose, host + "/iserv/absence/");
-    if ((seite.text || "").indexOf("filter[groups][]") < 0) throw new Error("Anmeldung bei iServ fehlgeschlagen");
+    if ((seite.text || "").indexOf("filter[groups][]") < 0)
+      throw new Error("Anmeldung bei iServ fehlgeschlagen (" + seite.status + " " + seite.pfad + ", " +
+        Object.keys(dose).length + " Cookies" + (/Passwort|_password/.test(seite.text || "") ? ", Anmeldeseite" : "") + ")");
     const gesucht = norm(gruppe);
     let uid = null;
     const re = /<option value="([0-9a-f-]{36})" >([^<]+)/g;
@@ -208,7 +235,7 @@ const MerkrIServ = (function () {
     return csvLesen(csv.text);
   }
 
-  return { stundenZeit: stundenZeit, csvLesen: csvLesen, betrifft: betrifft, zuordnen: zuordnen, abrufen: abrufen };
+  return { aufloesen: aufloesen, stundenZeit: stundenZeit, csvLesen: csvLesen, betrifft: betrifft, zuordnen: zuordnen, abrufen: abrufen };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = MerkrIServ;

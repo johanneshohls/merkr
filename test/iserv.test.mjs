@@ -102,3 +102,27 @@ test("unbekannte Gruppe wird gemeldet", async () => {
   const http = async (url) => ({ status: 200, text: url.endsWith("/absence/") ? 'filter[groups][]' : "" });
   await assert.rejects(I.abrufen(http, { host: "https://iserv.test", benutzer: "u", passwort: "p" }, "Physik 9A", "2026-11-04"), /nicht gefunden/);
 });
+
+test("Weiterleitungen werden ohne URL aufgelöst", () => {
+  const b = "https://edu.ebg-schoenberg.com/iserv/auth/login?x=1";
+  assert.equal(I.aufloesen("/iserv/auth/home", b), "https://edu.ebg-schoenberg.com/iserv/auth/home");
+  assert.equal(I.aufloesen("https://andere.de/a", b), "https://andere.de/a");
+  assert.equal(I.aufloesen("home", b), "https://edu.ebg-schoenberg.com/iserv/auth/home");
+  assert.equal(I.aufloesen("?y=2", b), "https://edu.ebg-schoenberg.com/iserv/auth/login?y=2");
+  assert.equal(I.aufloesen("//cdn.de/z", b), "https://cdn.de/z");
+});
+
+test("Abruf kommt ohne globales URL aus (wie in Scriptable)", async () => {
+  const echt = globalThis.URL;
+  globalThis.URL = undefined;
+  try {
+    const http = async (url, opt) => {
+      if (opt.method === "POST") return { status: 302, location: "/iserv/auth/home", cookies: [{ name: "s", value: "1" }] };
+      if (url.endsWith("/iserv/absence/")) return { status: 200, text: '<option value="11111111-2222-3333-4444-555555555555" >Mathe 9D</option> filter[groups][]' };
+      if (url.includes(".csv")) return { status: 200, text: KOPF };
+      return { status: 200, text: "" };
+    };
+    const e = await I.abrufen(http, { host: "https://iserv.test", benutzer: "u", passwort: "p" }, "Mathe 9D", "2026-11-04");
+    assert.deepEqual(e, []);
+  } finally { globalThis.URL = echt; }
+});

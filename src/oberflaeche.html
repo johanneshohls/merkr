@@ -7361,7 +7361,10 @@ function iservHolen(k, iso){
   if (KB_MODE!=="scriptable" || !iservDa || !iservGruppe(k)) return;
   ISERV_STAND[iservSchluessel(k, iso)] = {laedt:true, zeit:Date.now()};
   sendeAnBridge({typ:"iservAbruf", kursId:k.id, gruppe:iservGruppe(k), datum:iso, url:iservBasis()});
+  /* Kommt nichts zurück, soll die Karte das sagen, statt ewig zu warten. */
+  setTimeout(()=>{ if (R.view==="kurs" && R.tab==="anwesenheit") zeichneWennFrei(); }, ISERV_WARTEN_MS+500);
 }
+const ISERV_WARTEN_MS = 45*1000;
 
 window.__KB_iservAntwort = function(text){
   let d = null;
@@ -7400,6 +7403,9 @@ function iservKarteAnwesenheit(k, st){
       '. <button class="klein" data-a="tab" data-id="kurscfg">Kurseinstellungen</button></p>';
   const stand = ISERV_STAND[iservSchluessel(k, R.datum)];
   const neu = '<button class="klein" data-a="iservNeu" data-id="'+k.id+'">Neu abfragen</button>';
+  if (stand && stand.laedt && Date.now()-stand.zeit > ISERV_WARTEN_MS)
+    return '<div class="karte" style="padding:10px 14px;margin-bottom:12px;border-left:4px solid var(--rot)">'+
+      '<b>iServ antwortet nicht</b> <span class="hinweis">seit 45 Sekunden keine Antwort</span> '+neu+'</div>';
   if (!stand || stand.laedt)
     return '<div class="karte" style="padding:10px 14px;margin-bottom:12px"><span class="hinweis">iServ wird gefragt …</span></div>';
   if (stand.fehler)
