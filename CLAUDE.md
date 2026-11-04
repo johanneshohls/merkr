@@ -51,6 +51,14 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 
 ## Stand
 
+Stand 2026-11-02 (Sprint-Analyse KW45): Letzter Commit weiter 08.10. (25 Tage). **Weiter ohne Nachweis:** 'Noten jetzt holen' für die 9a und Abgleich der KA-Terme-8d-Note (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums) mit checkr. Frist Fr 06.11., eine Zeile hier, wie es lief; sonst streichen. Der 8d-Mittwoch in planr `class_slots` trifft den Tagesplan weiter (Frist 04.11., siehe planr).
+
+Stand 2026-10-26 (Sprint-Analyse KW44, Schulstart): Letzter Commit weiter 08.10., kein Commit seit 18 Tagen. **Weiter ohne Nachweis:** 'Noten jetzt holen' für die 9a und Abgleich der KA-Terme-8d-Note (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums) mit dem Zettel aus checkr, bevor die KA zurückgegeben wird. Der 8d-Mittwoch in planr `class_slots` (5./6. statt 3./4.) betrifft den Tagesplan hier am 28.10. erneut. Stand dieser Datei: 2026-10-26.
+
+Stand 2026-10-19 (Sprint-Analyse KW43): Letzter Commit weiter 08.10. **Weiter ohne Nachweis:** 9a-Noten aus checkr neu abrufen ("Noten jetzt holen") und die Meldung zu geänderten Noten lesen — Zettel-Tag Mo 19.10. Die KA Terme 8d wurde am 14.10. in checkr benotet (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums); beim ersten Abruf prüfen, dass die Note in merkr mit dem Zettel aus checkr übereinstimmt.
+
+Stand 2026-10-12 (Sprint-Analyse KW42): Letzter Commit 08.10. (Notenliste im Profil). **Weiter ohne Nachweis:** 9a-Noten aus checkr neu abrufen und prüfen, ob sich Noten ändern (checkr-Job `b7fdb1f5`, 13 von 18 in 1a waren zu hoch, am 27.09. nachkorrigiert; der Fix vom 29.09. zieht Nachkorrekturen nach). Einmal "Noten jetzt holen" auslösen und die Meldung zu geänderten Noten lesen — Ferien-Zettel Mo 19.10.
+
 Stand 2026-10-05 (Sprint-Analyse KW41): checkr-Abruf zieht nachkorrigierte Noten nach (29.09.) — vorher wurde jede Note nach dem ersten Abruf als Handeintrag behandelt, eine Nachkorrektur in checkr kam nie an. Jetzt merkt sich jede Arbeit in `checkrWerte`, was zuletzt aus checkr kam; nur Abweichungen gelten als Handeintrag, geänderte Noten stehen einzeln in der Meldung. Wichtig für die 9a (Job `b7fdb1f5`, 13 von 18 in 1a zu hoch, am 27.09. nachkorrigiert): einmal neu abrufen und prüfen, ob Noten springen. Außerdem Mitarbeit im Gespräch je Kurs (29.09.). Offen: Versuchsnoten 8e/8c/9a vom 01./02.10. eingetragen?
 
 08.10.: Das Schülerprofil zeigt wieder eine Liste der Noten des Halbjahres. Sie war beim Umbau des Profils entfallen, Noten aus dem Dialog am Notenvorschlag (auch Zwischenstände mit Gewicht 0) waren gespeichert, aber unsichtbar. Die Notenliste als PDF hat eine Spalte Zwischenstände.
