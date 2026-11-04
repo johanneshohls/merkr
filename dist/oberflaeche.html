@@ -9640,7 +9640,9 @@ function iservAuswertung(k){
   if (!stand || !stand.eintraege) return null;
   const zeit = iservStundenZeit(k);
   const heute = stand.eintraege.filter(e=>MerkrIServ.betrifft(e.zeit, R.datum, zeit && zeit.von, zeit && zeit.bis));
-  return MerkrIServ.zuordnen(heute, kursSchueler(k.id));
+  const aus = MerkrIServ.zuordnen(heute, kursSchueler(k.id));
+  aus.anzahl = heute.length;
+  return aus;
 }
 
 function iservKarteAnwesenheit(k, st){
@@ -9686,6 +9688,12 @@ function iservKarteAnwesenheit(k, st){
   if (aus.unbekannt.length)
     html += '<p class="hinweis" style="margin:8px 0 0">In iServ abgemeldet, in diesem Kurs nicht gefunden: '+
       esc(aus.unbekannt.join(", "))+'</p>';
+  /* Woher die Zahl kommt - damit "keiner abgemeldet" von "nichts angekommen"
+     zu unterscheiden ist, ohne dass jemand iServ daneben öffnen muss. */
+  const zeit = iservStundenZeit(k);
+  html += '<p class="hinweis" style="margin:8px 0 0;font-size:12px">iServ-Gruppe „'+esc(iservGruppe(k))+'", '+
+    fmtDatum(R.datum)+': '+stand.eintraege.length+(stand.eintraege.length===1?' Eintrag':' Einträge')+
+    ', davon '+aus.anzahl+' in dieser Stunde'+(zeit ? ' ('+zeit.von+'-'+zeit.bis+')' : ' (Uhrzeit unbekannt)')+'.</p>';
   return html+'</div>';
 }
 
