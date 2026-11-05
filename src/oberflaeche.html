@@ -964,14 +964,19 @@ function viewHausaufgaben(k){
   const heute = new Date().toLocaleDateString("sv-SE");
   const laufend = MerkrHaBilanz.laufende(
     MerkrHausaufgaben.kursStandVon(S.hausaufgabenStand, k), heute);
-  const { spalten, zeilen } = MerkrHaBilanz.tabelle(bilanz, schueler, laufend);
+  const ausgeblendet = Array.isArray(k.haAusgeblendet) ? k.haAusgeblendet : [];
+  const { spalten, zeilen } = MerkrHaBilanz.tabelle(bilanz, schueler, laufend, ausgeblendet);
 
   let html = '<div class="zeile raum" style="margin-bottom:12px"><h2>Hausaufgaben</h2>'+
     (S.hausaufgabenStand ? '<span class="hinweis">Stand '+fmtStandAlter(S.hausaufgabenStand.geholtAm)+
       ' <button class="klein" data-a="planrJetzt">neu holen</button></span>' : '')+'</div>';
 
+  const einblenden = ausgeblendet.length
+    ? '<p class="hinweis">'+ausgeblendet.length+(ausgeblendet.length===1?' Spalte':' Spalten')+
+      ' ausgeblendet, zählen nicht in die Quote. <button class="klein" data-a="haEinblenden">wieder einblenden</button></p>'
+    : '';
   if (!spalten.length)
-    return html + leer(
+    return html + einblenden + leer(
       "Noch keine Hausaufgabe gestellt oder fällig. Sobald eine läuft, steht hier der Zwischenstand; "+
       "am Fälligkeitstag wird er festgehalten.", "Stand aus planr holen", "planrJetzt");
 
@@ -990,7 +995,10 @@ function viewHausaufgaben(k){
         : sp.laeuft ? 'läuft · von '+sp.ziel : 'von '+sp.ziel)+'</span>'+
       /* Wie viele Kinder etwas gemacht haben, von den gewerteten - der Blick
          ueber die Klasse, ohne die Spalte hinunterzuzaehlen. */
-      '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span></th>';
+      '<br><span class="hinweis">'+sp.gemacht+'/'+sp.gewertet+' gemacht</span>'+
+      /* Nicht richtig angekuendigt? Dann raus aus Tabelle und Quote. */
+      '<br><button class="klein" style="font-size:10px;padding:1px 6px;margin-top:3px" data-a="haAusblenden" data-id="'+
+      esc(String(sp.ref).replace(/^laufend:/,""))+'">ausblenden</button></th>';
   html += '<th style="font-size:11px">Quote</th></tr>';
 
   for (const z of zeilen){
@@ -1016,7 +1024,7 @@ function viewHausaufgaben(k){
     html += '<td style="text-align:center;font-size:12px;font-weight:700">'+
       (z.quote===null ? '<span class="hinweis">–</span>' : z.fertig+"/"+z.von)+'</td></tr>';
   }
-  html += '</table></div>';
+  html += '</table></div>' + einblenden;
 
   html += '<p class="hinweis">Die Zahl ist, wie viele Aufgaben gelöst waren - grün heißt fertig, '+
     'rot nichts angefangen, · nicht gewertet. Abgeschlossene Spalten zeigen den Stand vom Fälligkeitstag; '+
@@ -3306,6 +3314,20 @@ document.addEventListener("click", ev=>{
     sendeAnBridge({typ:"schluesselEntfernen", name:"planr"});
     planrDa = false;
     zeichne(); toast("Wort entfernt");
+  }
+  else if (a==="haAusblenden"){
+    const k = kursVon(R.kursId);
+    if (!k) return;
+    k.haAusgeblendet = Array.isArray(k.haAusgeblendet) ? k.haAusgeblendet : [];
+    const ref = el.dataset.id;
+    if (ref && k.haAusgeblendet.indexOf(ref) < 0) k.haAusgeblendet.push(ref);
+    speichern(); zeichne(); toast("Spalte ausgeblendet");
+  }
+  else if (a==="haEinblenden"){
+    const k = kursVon(R.kursId);
+    if (!k) return;
+    k.haAusgeblendet = [];
+    speichern(); zeichne(); toast("Alle Spalten wieder eingeblendet");
   }
   else if (a==="planrJetzt"){
     const feld = document.getElementById("planrUrl");

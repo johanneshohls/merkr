@@ -118,18 +118,23 @@ const MerkrHaBilanz = (function () {
   /**
    * `laufend` sind die Spalten aus `laufende()`; sie stehen rechts und zaehlen
    * in der Quote nicht mit. Ohne sie verhaelt sich alles wie vorher.
+   * `ausgeblendet` ist die Liste der quelleRefs, die der Kurs nicht zeigen soll.
    */
-  function tabelle(bilanz, schueler, laufend) {
+  function tabelle(bilanz, schueler, laufend, ausgeblendet) {
+    // Ausgeblendete Spalten (quelleRef) fallen ganz heraus, auch aus der Quote:
+    // eine Aufgabe, die nicht richtig angekuendigt war, sagt nichts ueber das Kind.
+    const weg = new Set((ausgeblendet || []).map(String));
+    const sichtbar = (ref) => !weg.has(String(ref).replace(/^laufend:/, ""));
     const codeVon = Object.create(null);
     for (const s of schueler) {
       const c = norm(s.selbrCode);
       if (c) codeVon[s.id] = c;
     }
     const spalten = Object.keys(bilanz || {})
-      .filter(istHausaufgabe)
+      .filter((ref) => istHausaufgabe(ref) && sichtbar(ref))
       .map((ref) => Object.assign({ ref: ref }, bilanz[ref]))
       .sort((a, b) => String(a.faelligAm).localeCompare(String(b.faelligAm)))
-      .concat(laufend || []);
+      .concat((laufend || []).filter((sp) => sichtbar(sp.ref)));
 
     const zeilen = schueler.slice()
       .sort((a, b) => ((a.name || "") + " " + (a.vorname || ""))

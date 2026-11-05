@@ -207,3 +207,16 @@ test("nachziehen gibt nur Spalten frei, die planr neu liefert", () => {
   assert.equal(neu["12:2"].stand.a, 10);
   assert.equal(bilanz["12:2"].stand.a, 3);   // der Bestand selbst bleibt unangetastet
 });
+
+test("ausgeblendete Spalten fallen aus Tabelle und Quote", () => {
+  const bilanz = {
+    "12:2": { titel: "A", ziel: 10, faelligAm: "2026-09-01", stand: { a: 10, b: 0 } },
+    "testfeedback|2026-09-22|T": { titel: "T", art: "testfeedback", ziel: 0, zielJe: { a: 3, b: 3 }, faelligAm: "2026-09-22", stand: { a: 0, b: 0 } }
+  };
+  const laufend = [{ ref: "laufend:12:9", titel: "L", ziel: 5, faelligAm: "2026-12-01", laeuft: true, codeStand: [] }];
+  const t = B.tabelle(bilanz, schueler(), laufend, ["testfeedback|2026-09-22|T", "12:9"]);
+  assert.deepEqual(t.spalten.map((s) => s.ref), ["12:2"]);
+  const ann = t.zeilen.find((z) => z.id === "a");
+  assert.equal(ann.von, 1);
+  assert.equal(ann.fertig, 1);
+});
