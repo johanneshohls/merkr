@@ -77,7 +77,53 @@ const MerkrTue = (function () {
     };
   }
 
+  /**
+   * Ein Blatt "zur Bewertung" aus checkr in die TÜ-Felder eines Kindes legen.
+   *
+   * Welche TÜ es ist, sagt die Reihenfolge der Abgaben: das erste freie Feld.
+   * `herkunft` merkt sich je checkr-Lauf das Feld und den übernommenen Wert,
+   * damit ein zweiter Abruf kein zweites Feld belegt. Steht im Feld noch genau
+   * dieser Wert, zieht eine geänderte Durchsicht nach; steht dort etwas anderes,
+   * hat es jemand von Hand eingetragen, und das gewinnt.
+   *
+   * @param punkte   [p1..p5] wie gespeichert
+   * @param herkunft {lauf: {nr, wert}} dieses Kindes
+   * @param lauf     Kennung des checkr-Laufs, z. B. "2026-11-10-9a"
+   * @param erreicht Punkte laut checkr
+   * @param maximal  mögliche Punkte laut checkr - umgerechnet auf zehn
+   * @returns {punkte, herkunft, ergebnis, nr} - ergebnis ist neu, aktualisiert,
+   *          unveraendert, behalten (von Hand geändert) oder voll
+   */
+  function einsortieren(punkte, herkunft, lauf, erreicht, maximal) {
+    const liste = (Array.isArray(punkte) ? punkte.slice(0, ANZAHL) : []).map(alsZahl);
+    while (liste.length < ANZAHL) liste.push(null);
+    const h = Object.assign({}, herkunft || {});
+    const max = Number(maximal) > 0 ? Number(maximal) : MAX_JE;
+    const wert = Math.max(0, Math.min(MAX_JE, Math.round((Number(erreicht) || 0) / max * MAX_JE * 2) / 2));
+
+    const alt = h[lauf];
+    if (alt && alt.nr >= 1 && alt.nr <= ANZAHL) {
+      const steht = liste[alt.nr - 1];
+      if (steht === wert) {
+        h[lauf] = { nr: alt.nr, wert: wert };
+        return { punkte: liste, herkunft: h, ergebnis: "unveraendert", nr: alt.nr };
+      }
+      if (steht === null || steht === alsZahl(alt.wert)) {
+        liste[alt.nr - 1] = wert;
+        h[lauf] = { nr: alt.nr, wert: wert };
+        return { punkte: liste, herkunft: h, ergebnis: steht === null ? "neu" : "aktualisiert", nr: alt.nr };
+      }
+      return { punkte: liste, herkunft: h, ergebnis: "behalten", nr: alt.nr };
+    }
+    const frei = liste.indexOf(null);
+    if (frei < 0) return { punkte: liste, herkunft: h, ergebnis: "voll", nr: null };
+    liste[frei] = wert;
+    h[lauf] = { nr: frei + 1, wert: wert };
+    return { punkte: liste, herkunft: h, ergebnis: "neu", nr: frei + 1 };
+  }
+
   return {
+    einsortieren: einsortieren,
     ZAEHLEN: ZAEHLEN,
     MAX_JE: MAX_JE,
     ANZAHL: ANZAHL,

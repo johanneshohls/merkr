@@ -79,3 +79,40 @@ test("die Prozentzahl trifft den MV-Schlüssel", () => {
   assert.equal(E.noteAusProzent(T.auswertung([10, 10, 10, null, null], 0).prozent), 1);
   assert.equal(E.noteAusProzent(T.auswertung([5, 5, 5, null, null], 0).prozent), 4);
 });
+
+test("checkr-Blatt landet im ersten freien Feld", () => {
+  const r = T.einsortieren([7, null, null, null, null], {}, "2026-11-10-9a", 8, 10);
+  assert.equal(r.ergebnis, "neu");
+  assert.equal(r.nr, 2);
+  assert.deepEqual(r.punkte, [7, 8, null, null, null]);
+  assert.deepEqual(r.herkunft, { "2026-11-10-9a": { nr: 2, wert: 8 } });
+});
+
+test("derselbe Lauf belegt beim zweiten Abruf kein zweites Feld", () => {
+  const a = T.einsortieren([], {}, "L1", 6, 10);
+  const b = T.einsortieren(a.punkte, a.herkunft, "L1", 6, 10);
+  assert.equal(b.ergebnis, "unveraendert");
+  assert.deepEqual(b.punkte, [6, null, null, null, null]);
+});
+
+test("geänderte Durchsicht zieht nach, Handeintrag gewinnt", () => {
+  const a = T.einsortieren([], {}, "L1", 6, 10);
+  const b = T.einsortieren(a.punkte, a.herkunft, "L1", 7.5, 10);
+  assert.equal(b.ergebnis, "aktualisiert");
+  assert.equal(b.punkte[0], 7.5);
+  const hand = b.punkte.slice(); hand[0] = 9;
+  const c = T.einsortieren(hand, b.herkunft, "L1", 5, 10);
+  assert.equal(c.ergebnis, "behalten");
+  assert.equal(c.punkte[0], 9);
+});
+
+test("auf zehn umgerechnet, auf halbe Punkte gerundet", () => {
+  assert.equal(T.einsortieren([], {}, "L", 7, 8).punkte[0], 9);
+  assert.equal(T.einsortieren([], {}, "L", 5.5, 10).punkte[0], 5.5);
+});
+
+test("alle fünf Felder belegt: nichts überschrieben", () => {
+  const r = T.einsortieren([1, 2, 3, 4, 5], {}, "L", 8, 10);
+  assert.equal(r.ergebnis, "voll");
+  assert.deepEqual(r.punkte, [1, 2, 3, 4, 5]);
+});

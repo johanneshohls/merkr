@@ -2484,7 +2484,53 @@ const MerkrTue = (function () {
     };
   }
 
+  /**
+   * Ein Blatt "zur Bewertung" aus checkr in die TÜ-Felder eines Kindes legen.
+   *
+   * Welche TÜ es ist, sagt die Reihenfolge der Abgaben: das erste freie Feld.
+   * `herkunft` merkt sich je checkr-Lauf das Feld und den übernommenen Wert,
+   * damit ein zweiter Abruf kein zweites Feld belegt. Steht im Feld noch genau
+   * dieser Wert, zieht eine geänderte Durchsicht nach; steht dort etwas anderes,
+   * hat es jemand von Hand eingetragen, und das gewinnt.
+   *
+   * @param punkte   [p1..p5] wie gespeichert
+   * @param herkunft {lauf: {nr, wert}} dieses Kindes
+   * @param lauf     Kennung des checkr-Laufs, z. B. "2026-11-10-9a"
+   * @param erreicht Punkte laut checkr
+   * @param maximal  mögliche Punkte laut checkr - umgerechnet auf zehn
+   * @returns {punkte, herkunft, ergebnis, nr} - ergebnis ist neu, aktualisiert,
+   *          unveraendert, behalten (von Hand geändert) oder voll
+   */
+  function einsortieren(punkte, herkunft, lauf, erreicht, maximal) {
+    const liste = (Array.isArray(punkte) ? punkte.slice(0, ANZAHL) : []).map(alsZahl);
+    while (liste.length < ANZAHL) liste.push(null);
+    const h = Object.assign({}, herkunft || {});
+    const max = Number(maximal) > 0 ? Number(maximal) : MAX_JE;
+    const wert = Math.max(0, Math.min(MAX_JE, Math.round((Number(erreicht) || 0) / max * MAX_JE * 2) / 2));
+
+    const alt = h[lauf];
+    if (alt && alt.nr >= 1 && alt.nr <= ANZAHL) {
+      const steht = liste[alt.nr - 1];
+      if (steht === wert) {
+        h[lauf] = { nr: alt.nr, wert: wert };
+        return { punkte: liste, herkunft: h, ergebnis: "unveraendert", nr: alt.nr };
+      }
+      if (steht === null || steht === alsZahl(alt.wert)) {
+        liste[alt.nr - 1] = wert;
+        h[lauf] = { nr: alt.nr, wert: wert };
+        return { punkte: liste, herkunft: h, ergebnis: steht === null ? "neu" : "aktualisiert", nr: alt.nr };
+      }
+      return { punkte: liste, herkunft: h, ergebnis: "behalten", nr: alt.nr };
+    }
+    const frei = liste.indexOf(null);
+    if (frei < 0) return { punkte: liste, herkunft: h, ergebnis: "voll", nr: null };
+    liste[frei] = wert;
+    h[lauf] = { nr: frei + 1, wert: wert };
+    return { punkte: liste, herkunft: h, ergebnis: "neu", nr: frei + 1 };
+  }
+
   return {
+    einsortieren: einsortieren,
     ZAEHLEN: ZAEHLEN,
     MAX_JE: MAX_JE,
     ANZAHL: ANZAHL,
@@ -5857,20 +5903,28 @@ window.__KB_checkrAlles = function(text){
     for (const c of erg.ohneSchueler) if (offeneCodes.indexOf(c) < 0) offeneCodes.push(c);
   }
 
+  const tue = checkrTueEintragen(Array.isArray(daten.tue) ? daten.tue : [], sj);
+
   S.einstellungen.checkrGeholt = new Date().toISOString();
   speichern(); zeichne();
 
   if (checkrAllesStill) return "ok";
-  if (!daten.berichte.length) { toast("In checkr liegt keine korrigierte Arbeit"); return "ok"; }
+  if (!daten.berichte.length && !tue.zeilen.length && !tue.offen.length){
+    toast("In checkr liegt keine korrigierte Arbeit"); return "ok";
+  }
   let satz = neu ? neu+(neu===1 ? " Note übernommen" : " Noten übernommen") : "Keine neue Note";
+  if (tue.neu) satz += ", "+tue.neu+(tue.neu===1 ? " TÜ eingetragen" : " TÜs eingetragen");
+  if (tue.aktualisiert) satz += ", "+tue.aktualisiert+" TÜ-Punkte aktualisiert";
   if (aktualisiert) satz += ", "+aktualisiert+(aktualisiert===1 ? " Note aktualisiert" : " Noten aktualisiert");
   if (arbeiten) satz += ", "+arbeiten+(arbeiten===1 ? " Arbeit angelegt" : " Arbeiten angelegt");
   if (aufgeraeumt.zusammengelegt) satz += ", "+aufgeraeumt.zusammengelegt+
     (aufgeraeumt.zusammengelegt===1 ? " doppelte Arbeit zusammengelegt" : " doppelte Arbeiten zusammengelegt");
   if (behalten) satz += ", "+behalten+" von Hand geänderte behalten";
   toast(satz);
-  if (ohneKurs.length || offeneCodes.length || angelegt.length || geaendert.length){
+  if (ohneKurs.length || offeneCodes.length || angelegt.length || geaendert.length ||
+      tue.zeilen.length || tue.offen.length || tue.voll.length || daten.tueFehler){
     let h = '<h2>Noten aus checkr</h2><p class="hinweis">'+esc(satz)+'.</p>';
+    h += checkrTueHtml(tue, daten.tueFehler);
     if (geaendert.length){
       h += '<table class="tab"><tr><th>Geändert</th><th>Arbeit</th><th>vorher</th><th>jetzt</th></tr>';
       for (const g of geaendert){
@@ -8438,6 +8492,70 @@ document.addEventListener("click", ev=>{
   R.notenHj = Number(el.dataset.hj);
   zeichne();
 });
+
+/* ---------- TÜ aus checkr ----------
+   Blätter, die das Kind "zur Bewertung" angekreuzt hat, wandern ins nächste
+   freie TÜ-Feld seines Halbjahres (MerkrTue.einsortieren). Übernommen wird nur,
+   was in checkr durchgesehen ist; der Rest steht in der Meldung. */
+const CHECKR_TUE_AB = "2026-11-10";
+function checkrTueEintragen(laeufe, sj){
+  const st = {neu:0, aktualisiert:0, behalten:0, zeilen:[], offen:[], voll:[], ohneKurs:[], ohneSchueler:[]};
+  const sortiert = laeufe.slice().sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
+  /* Was vor diesem Tag lag, stand schon von Hand im Notenbuch - es noch einmal
+     einzusortieren belegte ein zweites Feld mit derselben Übung. */
+  const ab = S.einstellungen.checkrTueAb || CHECKR_TUE_AB;
+  for (const l of sortiert){
+    if (l.datum && l.datum < ab) continue;
+    if (sj && l.datum && (l.datum < sj.beginn || l.datum > sj.ende)) continue;
+    const k = MerkrErgebnisse.kursFuerBericht(S.kurse, l, sj ? sj.id : null);
+    if (!k){ if (st.ohneKurs.indexOf(l.klasse) < 0) st.ohneKurs.push(l.klasse); continue; }
+    const fertig = (l.blaetter||[]).filter(b=>b.fertig);
+    for (const b of (l.blaetter||[])) if (!b.fertig) st.offen.push({klasse:l.klasse, datum:l.datum, code:b.code||"ohne Code"});
+    const erg = MerkrErgebnisse.zuordnen(kursSchueler(k.id),
+      fertig.map(b=>({code:b.code, erreicht:b.erreicht, maximal:b.maximal, prozent:0})), notensystem(k).typ);
+    for (const c of erg.ohneSchueler) st.ohneSchueler.push(l.klasse+" "+c);
+    const hj = halbjahrNr(l.datum || todayISO());
+    const t = tueTopf(k, hj);
+    if (!t.checkr || typeof t.checkr !== "object") t.checkr = {};
+    for (const x of erg.treffer){
+      const r = MerkrTue.einsortieren(t.punkte[x.schuelerId], t.checkr[x.schuelerId], l.lauf, x.erreicht, x.maximal);
+      t.punkte[x.schuelerId] = r.punkte;
+      t.checkr[x.schuelerId] = r.herkunft;
+      const s = S.schueler.find(y=>y.id===x.schuelerId);
+      const wer = s ? (s.name ? s.name+", "+s.vorname : s.vorname) : x.code;
+      if (r.ergebnis === "voll"){ st.voll.push(wer+" ("+l.klasse+")"); continue; }
+      if (r.ergebnis === "neu") st.neu++;
+      if (r.ergebnis === "aktualisiert") st.aktualisiert++;
+      if (r.ergebnis === "behalten") st.behalten++;
+      if (r.ergebnis !== "unveraendert")
+        st.zeilen.push({wer:wer, klasse:l.klasse, datum:l.datum, nr:r.nr, wert:r.punkte[r.nr-1], ergebnis:r.ergebnis});
+    }
+  }
+  return st;
+}
+function checkrTueHtml(st, fehler){
+  let h = '';
+  if (st.zeilen.length){
+    h += '<table class="tab"><tr><th>TÜ zur Bewertung</th><th>Feld</th><th>Punkte</th></tr>';
+    for (const z of st.zeilen)
+      h += '<tr><td><b>'+esc(z.wer)+'</b><div class="hinweis">'+esc(z.klasse)+' · TÜ vom '+fmtDatum(z.datum)+'</div></td>'+
+        '<td>TÜ'+z.nr+'</td><td><b>'+esc(String(z.wert).replace(".", ","))+'</b>'+
+        (z.ergebnis==="behalten" ? ' <span class="hinweis">von Hand geändert, behalten</span>' :
+         z.ergebnis==="aktualisiert" ? ' <span class="hinweis">aktualisiert</span>' : '')+'</td></tr>';
+    h += '</table>';
+  }
+  if (st.offen.length)
+    h += '<p class="hinweis">In checkr noch nicht durchgesehen, kommt beim nächsten Abruf: <b>'+
+      esc(st.offen.map(o=>o.klasse+" "+o.code).join(", "))+'</b>.</p>';
+  if (st.voll.length)
+    h += '<p class="hinweis" style="color:var(--rot)">Alle fünf TÜ-Felder belegt, nichts eingetragen: <b>'+esc(st.voll.join(", "))+'</b>.</p>';
+  if (st.ohneSchueler.length)
+    h += '<p class="hinweis" style="color:var(--rot)">TÜ ohne Schüler in merkr: <b>'+esc(st.ohneSchueler.join(", "))+'</b>.</p>';
+  if (st.ohneKurs.length)
+    h += '<p class="hinweis">TÜ ohne Kurs in merkr: <b>'+esc(st.ohneKurs.join(", "))+'</b>.</p>';
+  if (fehler) h += '<p class="hinweis">TÜ aus checkr nicht geholt: '+esc(fehler)+'</p>';
+  return h;
+}
 
 /* ---------- TÜ-Punkte ---------- */
 

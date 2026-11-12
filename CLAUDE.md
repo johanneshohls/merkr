@@ -231,6 +231,18 @@ Arbeiten aus dem ersten Halbjahr im zweiten weiter, während die Mitarbeit dort 
 
 Noch offen: die Auswertung führt einen eigenen Notenspiegel, der sich mit dem Notenbuch überschneidet.
 
+## TÜ zur Bewertung aus checkr (seit 12.11.2026)
+
+"Jetzt holen" bei den Noten holt neben den Arbeiten auch `GET /api/tue-bewertungen` (checkr,
+`CHECKR_ROSTER_TOKEN`): je TÜ-Lauf die Blätter mit Kreuz "zur Bewertung". Übernommen wird nur, was
+in checkr durchgesehen ist. `MerkrTue.einsortieren` legt die Punkte (auf zehn umgerechnet, halbe
+Punkte) ins erste freie TÜ-Feld des Halbjahres; `k.tue.hjN.checkr[schuelerId][lauf]` merkt sich Feld
+und Wert, damit ein zweiter Abruf kein zweites Feld belegt. Geänderte Durchsicht zieht nach, ein
+Handeintrag gewinnt, fünf belegte Felder werden gemeldet statt überschrieben. Läufe vor
+`CHECKR_TUE_AB` (2026-11-10, überschreibbar mit `S.einstellungen.checkrTueAb`) bleiben draußen: die
+standen schon von Hand im Notenbuch. Im Browser mit pseudonymisierten Kursdaten geprüft, auf dem
+iPad nicht.
+
 ## Mitarbeit im Gespräch statt je Stunde (seit 29.09.2026)
 
 Lutz schließt nicht jede Stunde mit Noten ab. Er notiert in der Stunde und gibt die Mitarbeitsnote

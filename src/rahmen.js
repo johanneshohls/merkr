@@ -525,7 +525,17 @@ async function bruecke() {
             console.error("checkr: " + job + " ohne Punkte (" + e + ")");
           }
         }
-        antwort = JSON.stringify({ berichte: berichte, arbeiten: arbeiten.length });
+        // TÜ-Blätter "zur Bewertung": eigener Weg, und ein Fehler dort kostet
+        // die Noten der Arbeiten nicht.
+        let tue = [], tueFehler = null;
+        try {
+          const req = new Request(basis + "/api/tue-bewertungen");
+          req.headers = kopf;
+          const t = JSON.parse(await req.loadString());
+          if (t && Array.isArray(t.laeufe)) tue = t.laeufe;
+          else tueFehler = String((t && (t.detail || t.fehler)) || "Antwort nicht lesbar.");
+        } catch (e) { tueFehler = String(e); }
+        antwort = JSON.stringify({ berichte: berichte, arbeiten: arbeiten.length, tue: tue, tueFehler: tueFehler });
       } catch (e) {
         antwort = JSON.stringify({ fehler: String(e) });
       }
