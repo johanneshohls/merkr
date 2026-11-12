@@ -51,6 +51,8 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 
 ## Stand
 
+Stand 2026-11-09 (Sprint-Analyse KW46): Fünf Commits seit 02.11. (Abwesenheiten aus iServ vor der Stunde, Herkunftszeile der iServ-Karte, Hausaufgaben-Spalten je Kurs ausblendbar, Weiterleitungen ohne URL). **Weiter ohne Nachweis:** 'Noten jetzt holen' für 9a und 8d. Nach dem checkr-Befund zur Bewertungskonsistenz (KA 0140 Terme 8d, 03.11.) gilt der Abgleich nicht mehr als Komfort: Wenn Punkte nachgezogen werden, müssen die Noten in merkr folgen. Frist Fr 13.11., eine Zeile hier. Der 8d-Mittwoch in planr `class_slots` ist als 'bewusst so' festgehalten. Zuletzt aktualisiert: 2026-11-09.
+
 Stand 2026-11-02 (Sprint-Analyse KW45): Letzter Commit weiter 08.10. (25 Tage). **Weiter ohne Nachweis:** 'Noten jetzt holen' für die 9a und Abgleich der KA-Terme-8d-Note (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums) mit checkr. Frist Fr 06.11., eine Zeile hier, wie es lief; sonst streichen. Der 8d-Mittwoch in planr `class_slots` trifft den Tagesplan weiter (Frist 04.11., siehe planr).
 
 Stand 2026-10-26 (Sprint-Analyse KW44, Schulstart): Letzter Commit weiter 08.10., kein Commit seit 18 Tagen. **Weiter ohne Nachweis:** 'Noten jetzt holen' für die 9a und Abgleich der KA-Terme-8d-Note (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums) mit dem Zettel aus checkr, bevor die KA zurückgegeben wird. Der 8d-Mittwoch in planr `class_slots` (5./6. statt 3./4.) betrifft den Tagesplan hier am 28.10. erneut. Stand dieser Datei: 2026-10-26.
