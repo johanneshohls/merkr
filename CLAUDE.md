@@ -239,7 +239,7 @@ in checkr durchgesehen ist. `MerkrTue.einsortieren` legt die Punkte (auf zehn um
 Punkte) ins erste freie TÜ-Feld des Halbjahres; `k.tue.hjN.checkr[schuelerId][lauf]` merkt sich Feld
 und Wert, damit ein zweiter Abruf kein zweites Feld belegt. Geänderte Durchsicht zieht nach, ein
 Handeintrag gewinnt, fünf belegte Felder werden gemeldet statt überschrieben. Läufe vor
-`CHECKR_TUE_AB` (2026-11-10, überschreibbar mit `S.einstellungen.checkrTueAb`) bleiben draußen: die
+`CHECKR_TUE_AB` (2026-10-27, erster TÜ-Stapel über checkr; überschreibbar mit `S.einstellungen.checkrTueAb`) bleiben draußen: die
 standen schon von Hand im Notenbuch. Im Browser mit pseudonymisierten Kursdaten geprüft, auf dem
 iPad nicht.
 

@@ -6197,7 +6197,7 @@ document.addEventListener("click", ev=>{
    Blätter, die das Kind "zur Bewertung" angekreuzt hat, wandern ins nächste
    freie TÜ-Feld seines Halbjahres (MerkrTue.einsortieren). Übernommen wird nur,
    was in checkr durchgesehen ist; der Rest steht in der Meldung. */
-const CHECKR_TUE_AB = "2026-11-10";
+const CHECKR_TUE_AB = "2026-10-27";
 function checkrTueEintragen(laeufe, sj){
   const st = {neu:0, aktualisiert:0, behalten:0, zeilen:[], offen:[], voll:[], ohneKurs:[], ohneSchueler:[]};
   const sortiert = laeufe.slice().sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
