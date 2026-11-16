@@ -122,8 +122,50 @@ const MerkrTue = (function () {
     return { punkte: liste, herkunft: h, ergebnis: "neu", nr: frei + 1 };
   }
 
+  /**
+   * Die Meldung eines Kurses nach selbr (über planr, POST /api/selbr-tue-noten).
+   *
+   * Nur Kinder mit selbr-Code, und nur der Code - der Name bleibt hier. Wer noch
+   * kein einziges TÜ-Feld und kein Recht hat, geht trotzdem mit: so sieht das
+   * Kind in selbr seine Rückkaufrechte, bevor die erste TÜ eingetragen ist, und
+   * ein gelöschter Eintrag wird drüben auch leer.
+   *
+   * @param schueler [{id, selbrCode}]
+   * @param topf     {punkte: {id: [p1..p5]}, rechte: {id: r}}
+   * @returns {fach, schuljahr, halbjahr, notensystem, eintraege} oder null ohne Codes oder ganz ohne Einträge
+   */
+  function selbrMeldung(schueler, topf, schuljahr, halbjahr, notensystem, fach) {
+    const eintraege = [];
+    const t = topf || {};
+    for (const s of schueler || []) {
+      const code = String((s && s.selbrCode) || "").trim().toUpperCase();
+      if (!code) continue;
+      const roh = Array.isArray((t.punkte || {})[s.id]) ? t.punkte[s.id] : [];
+      const punkte = [];
+      for (let i = 0; i < ANZAHL; i++) {
+        const p = alsZahl(roh[i]);
+        punkte.push(p === null ? null : Math.max(0, Math.min(MAX_JE, p)));
+      }
+      const r = Math.max(0, Math.min(ANZAHL - ZAEHLEN, Number((t.rechte || {})[s.id]) || 0));
+      eintraege.push({ code: code, punkte: punkte, rueckkauf: r });
+    }
+    if (!eintraege.length) return null;
+    /* Ein Kurs ganz ohne Punkte und Rechte meldet nichts: sonst bekäme jedes Kind
+       der Physik 9a eine leere TÜ-Karte neben der aus Mathematik. */
+    const etwas = eintraege.some(function (e) { return e.rueckkauf > 0 || e.punkte.some(function (p) { return p !== null; }); });
+    if (!etwas) return null;
+    return {
+      fach: String(fach || "mathematik").trim().toLowerCase().split(/\s+/)[0] || "mathematik",
+      schuljahr: Number(schuljahr),
+      halbjahr: halbjahr === 2 ? 2 : 1,
+      notensystem: notensystem === "punkte" ? "punkte" : "noten",
+      eintraege: eintraege
+    };
+  }
+
   return {
     einsortieren: einsortieren,
+    selbrMeldung: selbrMeldung,
     ZAEHLEN: ZAEHLEN,
     MAX_JE: MAX_JE,
     ANZAHL: ANZAHL,

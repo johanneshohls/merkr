@@ -51,6 +51,8 @@ Bestand, unverändert - jede spätere Änderung steht im Diff.
 
 ## Stand
 
+Stand 2026-11-16 (Sprint-Analyse KW47): Drei Commits seit 09.11.: 'Jetzt holen' übernimmt TÜ-Blätter 'zur Bewertung' aus checkr ins nächste freie TÜ-Feld, auch die vom 27./28.10. Im Browser mit pseudonymisierten Daten geprüft, **auf dem iPad nicht**. Damit schreibt zum ersten Mal eine automatische Strecke Teilnoten ins Notenbuch. **Sprint KW47:** einmal auf dem iPad 'Jetzt holen', für zwei Kinder der 9d das TÜ-Feld gegen das Papierblatt lesen (Umrechnung auf zehn, halbe Punkte), eine Zeile hier. Nach dem Test Gleichungen 0214 der 8d denselben Abruf für die Note. **Frist Fr 13.11. für den Abgleich 9a/8d verstrichen:** der alte Punkt ist gestrichen und geht in diesem auf. Zuletzt aktualisiert: 2026-11-16.
+
 Stand 2026-11-09 (Sprint-Analyse KW46): Fünf Commits seit 02.11. (Abwesenheiten aus iServ vor der Stunde, Herkunftszeile der iServ-Karte, Hausaufgaben-Spalten je Kurs ausblendbar, Weiterleitungen ohne URL). **Weiter ohne Nachweis:** 'Noten jetzt holen' für 9a und 8d. Nach dem checkr-Befund zur Bewertungskonsistenz (KA 0140 Terme 8d, 03.11.) gilt der Abgleich nicht mehr als Komfort: Wenn Punkte nachgezogen werden, müssen die Noten in merkr folgen. Frist Fr 13.11., eine Zeile hier. Der 8d-Mittwoch in planr `class_slots` ist als 'bewusst so' festgehalten. Zuletzt aktualisiert: 2026-11-09.
 
 Stand 2026-11-02 (Sprint-Analyse KW45): Letzter Commit weiter 08.10. (25 Tage). **Weiter ohne Nachweis:** 'Noten jetzt holen' für die 9a und Abgleich der KA-Terme-8d-Note (ungerundeter Prozentwert, Zusatzpunkte außerhalb des Maximums) mit checkr. Frist Fr 06.11., eine Zeile hier, wie es lief; sonst streichen. Der 8d-Mittwoch in planr `class_slots` trifft den Tagesplan weiter (Frist 04.11., siehe planr).
@@ -230,6 +232,19 @@ Dieselbe Stelle filtert seither **alle** Leistungen nach dem gewählten Halbjahr
 Arbeiten aus dem ersten Halbjahr im zweiten weiter, während die Mitarbeit dort neu ansetzte.
 
 Noch offen: die Auswertung führt einen eigenen Notenspiegel, der sich mit dem Notenbuch überschneidet.
+
+## TÜ-Punkte gehen nach selbr (seit 16.11.2026)
+
+Kind und Eltern sehen in selbr die TÜ-Felder des Halbjahres, die Rückkaufrechte und welche Note mit
+der nächsten TÜ noch drin ist. merkr meldet von selbst: nach jeder Änderung eines TÜ-Felds, nach
+jedem Tipp auf "Rück", nach einer Übernahme aus checkr und nach "Jetzt holen" für alle Kurse des
+Schuljahres (`tueNachSelbr`, je Kurs und Halbjahr nach 1,5 s Ruhe). Die Meldung baut
+`MerkrTue.selbrMeldung` (nur Kinder mit selbr-Code, nur der Code, Fach als erstes Wort von
+`k.fach`; ein Kurs ganz ohne Eintrag meldet nichts). Den Weg geht der Rahmen als `selbrTueMelden`
+an planr (`POST /api/selbr-tue-noten`, planr-Wort aus dem Schlüsselbund); merkr hat keinen
+selbr-Schlüssel. Fehler und unbekannte Codes erscheinen als Hinweis, Erfolg bleibt still. Die Note
+rechnet selbr selbst nach derselben Regel (`selbr/src/lib/tueNote.ts`) - wer `tue.js` ändert,
+ändert dort mit. Auf dem iPad nicht geprüft.
 
 ## TÜ zur Bewertung aus checkr (seit 12.11.2026)
 

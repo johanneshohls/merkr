@@ -475,6 +475,31 @@ async function bruecke() {
       try {
         await wv.evaluateJavaScript("window.__KB_planrRueckAntwort(" + antwort + ")", false);
       } catch (e) { console.error("planr-Rückmeldung nicht zugestellt: " + e); }
+    } else if (msg.typ === "selbrTueMelden") {
+      // Die TÜ-Punkte eines Kurses nach selbr. merkr hat keinen selbr-Schlüssel,
+      // planr hat einen: es reicht durch und hält nichts (planr
+      // lib/selbr-tue-noten.ts). Hinaus gehen nur selbr-Codes, nie Namen.
+      let antwort;
+      try {
+        if (!Keychain.contains(SCHLUESSEL_PLANR)) throw new Error("Kein planr-Wort im Schlüsselbund.");
+        const basis = String(msg.url || "").trim().replace(/\/+$/, "");
+        if (!basis) throw new Error("Keine planr-Adresse eingetragen.");
+        if (!msg.meldung) throw new Error("Nichts zu melden.");
+        const req = new Request(basis + "/api/selbr-tue-noten");
+        req.method = "POST";
+        req.headers = {
+          authorization: "Bearer " + Keychain.get(SCHLUESSEL_PLANR),
+          "content-type": "application/json",
+        };
+        req.body = JSON.stringify(msg.meldung);
+        antwort = await req.loadString();
+        JSON.parse(antwort);
+      } catch (e) {
+        antwort = JSON.stringify({ fehler: String(e) });
+      }
+      try {
+        await wv.evaluateJavaScript("window.__KB_selbrTueAntwort(" + antwort + ")", false);
+      } catch (e) { console.error("selbr-TÜ-Antwort nicht zugestellt: " + e); }
     } else if (msg.typ === "checkrListe") {
       // Welche Arbeiten es drüben gibt. Ohne sie müsste man die Kennung aus
       // dem Browser herüberkopieren - auf dem iPad heißt das: abtippen.

@@ -116,3 +116,29 @@ test("alle fünf Felder belegt: nichts überschrieben", () => {
   assert.equal(r.ergebnis, "voll");
   assert.deepEqual(r.punkte, [1, 2, 3, 4, 5]);
 });
+
+test("selbr-Meldung: nur Kinder mit Code, nur der Code, fünf Felder", () => {
+  const schueler = [
+    { id: "a", vorname: "Anna", name: "Müller", selbrCode: " saza3 " },
+    { id: "b", vorname: "Ben", name: "Schmidt", selbrCode: "" },
+    { id: "c", vorname: "Cem", name: "Yilmaz", selbrCode: "XY12Z" },
+  ];
+  const topf = { punkte: { a: [8, "7.5", null], b: [10, 10, 10] }, rechte: { a: 1, c: 5 } };
+  const m = T.selbrMeldung(schueler, topf, 2026, 1, "noten", "Mathematik");
+  assert.equal(m.fach, "mathematik");
+  assert.equal(m.schuljahr, 2026);
+  assert.equal(m.halbjahr, 1);
+  assert.deepEqual(m.eintraege, [
+    { code: "SAZA3", punkte: [8, 7.5, null, null, null], rueckkauf: 1 },
+    { code: "XY12Z", punkte: [null, null, null, null, null], rueckkauf: 2 },
+  ]);
+  assert.ok(!JSON.stringify(m).includes("Anna"));
+});
+
+test("selbr-Meldung ohne einen einzigen Code ist null", () => {
+  assert.equal(T.selbrMeldung([{ id: "a", selbrCode: "" }], {}, 2026, 2, "noten"), null);
+});
+
+test("selbr-Meldung: ein Kurs ohne jede Eintragung meldet nichts", () => {
+  assert.equal(T.selbrMeldung([{ id: "a", selbrCode: "SAZA3" }], { punkte: {}, rechte: {} }, 2026, 1, "noten", "Physik"), null);
+});

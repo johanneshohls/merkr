@@ -3604,6 +3604,9 @@ window.__KB_checkrAlles = function(text){
   }
 
   const tue = checkrTueEintragen(Array.isArray(daten.tue) ? daten.tue : [], sj);
+  /* Nach "Jetzt holen" geht der ganze Stand des Halbjahres nach selbr, nicht nur
+     was gerade neu kam: so kommt auch an, was vorher von Hand eingetragen war. */
+  { const asj = aktivesSchuljahr(); if (asj) for (const kk of S.kurse.filter(x=>x.schuljahrId===asj.id)) tueNachSelbr(kk, aktuellesHalbjahr()); }
 
   S.einstellungen.checkrGeholt = new Date().toISOString();
   speichern(); zeichne();
@@ -6229,6 +6232,7 @@ function checkrTueEintragen(laeufe, sj){
       if (r.ergebnis === "behalten") st.behalten++;
       if (r.ergebnis !== "unveraendert")
         st.zeilen.push({wer:wer, klasse:l.klasse, datum:l.datum, nr:r.nr, wert:r.punkte[r.nr-1], ergebnis:r.ergebnis});
+      if (r.ergebnis === "neu" || r.ergebnis === "aktualisiert") tueNachSelbr(k, hj);
     }
   }
   return st;
@@ -6285,6 +6289,34 @@ function tueStand(k, hj, schuelerId){
   return a;
 }
 
+/* ---------- TÜ nach selbr ----------
+   Kind und Eltern sehen in selbr die TÜ-Punkte des Halbjahres, die Rückkauf-
+   rechte und welche Note mit der nächsten TÜ noch drin ist. Gemeldet wird von
+   selbst, sobald sich hier etwas ändert: ein Feld, ein Recht, ein Abruf aus
+   checkr. Je Kurs und Halbjahr einmal nach kurzer Ruhe, damit fünf Eingaben
+   hintereinander nicht fünf Aufrufe sind. Hinaus gehen nur selbr-Codes
+   (MerkrTue.selbrMeldung); den Weg geht planr, das den selbr-Schlüssel hat. */
+const tueSelbrWarten = {};
+function tueNachSelbr(k, hj){
+  if (!k || !planrBasis()) return;
+  const schluessel = k.id+"|"+hj;
+  clearTimeout(tueSelbrWarten[schluessel]);
+  tueSelbrWarten[schluessel] = setTimeout(()=>{
+    const sj = aktivesSchuljahr();
+    const jahr = sj && sj.beginn ? Number(String(sj.beginn).slice(0,4)) : NaN;
+    if (!jahr) return;
+    const m = MerkrTue.selbrMeldung(kursSchueler(k.id), tueTopf(k, hj), jahr, hj, notensystem(k).typ, k.fach || "");
+    if (!m) return;
+    sendeAnBridge({typ:"selbrTueMelden", url: planrBasis(), meldung: m});
+  }, 1500);
+}
+/* Antwort des Rahmens. Still, solange alles ankommt - eine Meldung bei jedem
+   Feld wäre Lärm. Laut nur, wenn etwas nicht ankam. */
+window.__KB_selbrTueAntwort = function(a){
+  if (!a || a.fehler){ toast("TÜ nicht nach selbr: " + ((a && a.fehler) || "unbekannter Fehler")); return; }
+  if (a.unbekannt && a.unbekannt.length) toast("selbr kennt diese Codes nicht: " + a.unbekannt.join(", "));
+};
+
 document.addEventListener("change", ev=>{
   const el = ev.target.closest('[data-a-change="tuePunkt"]');
   if (!el) return;
@@ -6297,6 +6329,7 @@ document.addEventListener("change", ev=>{
   liste[nr] = roh === "" ? null : Math.max(0, Math.min(MerkrTue.MAX_JE, Number(roh)));
   t.punkte[id] = liste;
   speichern(); zeichne();
+  tueNachSelbr(k, notenHalbjahr());
 });
 document.addEventListener("click", ev=>{
   const el = ev.target.closest('[data-a="tueRecht"]');
@@ -6306,6 +6339,7 @@ document.addEventListener("click", ev=>{
   const id = el.dataset.id;
   t.rechte[id] = ((Number(t.rechte[id]) || 0) + 1) % 3;
   speichern(); zeichne();
+  tueNachSelbr(k, notenHalbjahr());
 });
 
 /* ---------- Mitarbeit und TÜ zählen mit ---------- */
