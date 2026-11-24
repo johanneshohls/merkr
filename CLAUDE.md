@@ -260,6 +260,13 @@ Handeintrag gewinnt, fünf belegte Felder werden gemeldet statt überschrieben. 
 standen schon von Hand im Notenbuch. Im Browser mit pseudonymisierten Kursdaten geprüft, auf dem
 iPad nicht.
 
+**Seit 24.11.2026 holt merkr checkr von selbst** (`checkrAutomatik`, wie planr: beim Start, nach
+30 Minuten Pause, still). Vorher hing alles am Knopf "Jetzt holen"; das Serverlog zeigte den
+letzten Abruf vom iPad am 04.11., die 23 TÜ-Blätter vom 27.10.-11.11. waren nie angekommen. Der
+stille Abruf meldet nur, wenn etwas neu eingetragen wurde (Toast), und zeichnet nur bei freier
+Oberfläche neu. Geprüft im Chrome mit der echten Datendatei und der echten checkr-Antwort: 23 TÜ,
+27 Noten (Test 0214 8d), keine Doppel zu Handeinträgen (Verlauf in den Tagessicherungen geprüft).
+
 ## Mitarbeit im Gespräch statt je Stunde (seit 29.09.2026)
 
 Lutz schließt nicht jede Stunde mit Noten ab. Er notiert in der Stunde und gibt die Mitarbeitsnote

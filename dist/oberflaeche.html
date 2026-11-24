@@ -5893,6 +5893,21 @@ function checkrNotenHolen(still){
   sendeAnBridge({typ:"checkrAlles", url: checkrBasis()});
 }
 
+/* checkr von selbst, wie planr: beim Start, nach höchstens dreißig Minuten
+   Pause. Bis zum 24.11.2026 hing die Übernahme der TÜ zur Bewertung allein am
+   Knopf "Jetzt holen" im Reiter Noten - der wurde seit dem 04.11. nicht mehr
+   gedrückt, und 23 durchgesehene TÜ-Blätter lagen drei Wochen in checkr. */
+const CHECKR_PAUSE_MINUTEN = 30;
+(function checkrAutomatik(){
+  if (KB_MODE!=="scriptable" || !checkrDa || !checkrBasis()) return;
+  const zuletzt = S.einstellungen.checkrGeholt;
+  if (zuletzt){
+    const minuten = (Date.now() - new Date(zuletzt).getTime()) / 60000;
+    if (!(minuten >= CHECKR_PAUSE_MINUTEN)) return;
+  }
+  checkrNotenHolen(true);
+})();
+
 window.__KB_checkrAlles = function(text){
   let daten = null;
   try { daten = JSON.parse(text); } catch(e){ daten = null; }
@@ -5951,9 +5966,18 @@ window.__KB_checkrAlles = function(text){
   { const asj = aktivesSchuljahr(); if (asj) for (const kk of S.kurse.filter(x=>x.schuljahrId===asj.id)) tueNachSelbr(kk, aktuellesHalbjahr()); }
 
   S.einstellungen.checkrGeholt = new Date().toISOString();
-  speichern(); zeichne();
+  speichern();
+  if (checkrAllesStill) zeichneWennFrei(); else zeichne();
 
-  if (checkrAllesStill) return "ok";
+  if (checkrAllesStill){
+    /* Beim Start still - aber was neu ins Notenbuch kam, steht kurz unten,
+       damit niemand eine TÜ sucht, die schon eingetragen ist. */
+    const n = neu + aktualisiert + tue.neu + tue.aktualisiert + arbeiten;
+    if (n) toast("Aus checkr: "+(neu ? neu+" Noten" : "")+(neu && (tue.neu+tue.aktualisiert) ? ", " : "")+
+      ((tue.neu+tue.aktualisiert) ? (tue.neu+tue.aktualisiert)+" TÜ-Punkte" : "")+
+      (!neu && !(tue.neu+tue.aktualisiert) ? "Noten aktualisiert" : "")+" eingetragen");
+    return "ok";
+  }
   if (!daten.berichte.length && !tue.zeilen.length && !tue.offen.length){
     toast("In checkr liegt keine korrigierte Arbeit"); return "ok";
   }
